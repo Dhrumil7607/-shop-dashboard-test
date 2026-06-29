@@ -45,6 +45,18 @@
             radial-gradient(at 8% -10%, rgba(212, 175, 55, 0.07) 0px, transparent 50%),
             radial-gradient(at 92% 110%, rgba(139, 58, 58, 0.06) 0px, transparent 55%);
         background-attachment: fixed;
+        /* Silence any stray text nodes (e.g. CRA dev-mode template text)
+           that land directly on <body> outside #root.
+           font-size: 0 collapses them to invisible; #root restores it. */
+        font-size: 0;
+    }
+    /* Restore font size inside the app root */
+    #root {
+        font-size: 1rem;
+    }
+    /* Hide any stray element siblings of #root (not script/noscript) */
+    body > *:not(#root):not(script):not(noscript) {
+        display: none !important;
     }
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Cormorant Garamond', serif;

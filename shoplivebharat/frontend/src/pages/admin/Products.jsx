@@ -41,16 +41,24 @@ export default function AdminProducts() {
 
     const loadShops = async () => {
         try {
-            const data = await fetchShops({ active_only: true, limit: 500 });
-            if (data && Array.isArray(data)) {
+            console.log("Loading shops...");
+            const data = await fetchShops({ active_only: false, limit: 500 });
+            console.log("Shops loaded:", data);
+            if (data && Array.isArray(data) && data.length > 0) {
+                console.log(`✅ Loaded ${data.length} shops`);
                 setShops(data);
-            } else {
-                console.warn("Shops data is not an array:", data);
+            } else if (data && Array.isArray(data)) {
+                console.warn("⚠️ No shops available. Shops array is empty:", data);
                 setShops([]);
+                toast.error("No shops available. Create a shop first.");
+            } else {
+                console.warn("⚠️ Shops data is not an array:", data);
+                setShops([]);
+                toast.error("Invalid shops data format");
             }
         } catch (error) {
-            console.error("Failed to load shops:", error);
-            toast.error("Failed to load shops - using empty list");
+            console.error("❌ Failed to load shops:", error);
+            toast.error("Failed to load shops. Check backend connection.");
             setShops([]);
         }
     };
@@ -228,13 +236,18 @@ export default function AdminProducts() {
                                     className="w-full px-4 py-2 glass backdrop-blur-md bg-white/30 border border-white/40 rounded-lg focus:border-maroon focus:outline-none smooth-transition hover:bg-white/40"
                                     required
                                 >
-                                    <option value="">Select a shop</option>
+                                    <option value="">
+                                        {shops.length === 0 ? "No shops available - create one first" : "Select a shop"}
+                                    </option>
                                     {shops.map((shop) => (
                                         <option key={shop.id} value={shop.id}>
                                             {shop.name}
                                         </option>
                                     ))}
                                 </select>
+                                {shops.length === 0 && (
+                                    <p className="text-xs text-red-600 mt-1">⚠️ No shops found. Please create a shop in the Shops tab first.</p>
+                                )}
                             </motion.div>
 
                             {/* Product Name */}
@@ -553,21 +566,21 @@ export default function AdminProducts() {
                         <div>
                             <h2 className="text-xl font-bold text-espresso mb-6">All Products ({products.length})</h2>
                             <motion.div
-                                className="glass backdrop-blur-md bg-white/30 rounded-2xl border border-white/30 overflow-hidden shadow-glass-lg"
+                                className="glass backdrop-blur-md bg-white/30 rounded-2xl border border-white/30 overflow-x-auto shadow-glass-lg"
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
                             >
-                        <table className="w-full">
-                            <thead className="bg-gradient-to-r from-maroon/5 to-gold/5 border-b border-white/20 backdrop-blur-sm">
+                        <table className="w-full min-w-full">
+                            <thead className="bg-gradient-to-r from-maroon/5 to-gold/5 border-b border-white/20 backdrop-blur-sm sticky top-0">
                                 <tr>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-espresso">Name</th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-espresso">Shop</th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-espresso">Category</th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-espresso">Price</th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-espresso">Stock</th>
-                                    <th className="px-6 py-4 text-left text-sm font-semibold text-espresso">Status</th>
-                                    <th className="px-6 py-4 text-right text-sm font-semibold text-espresso">Actions</th>
+                                    <th className="px-4 sm:px-6 py-4 text-left text-xs sm:text-sm font-semibold text-espresso whitespace-nowrap">Name</th>
+                                    <th className="px-4 sm:px-6 py-4 text-left text-xs sm:text-sm font-semibold text-espresso whitespace-nowrap">Shop</th>
+                                    <th className="px-4 sm:px-6 py-4 text-left text-xs sm:text-sm font-semibold text-espresso whitespace-nowrap">Category</th>
+                                    <th className="px-4 sm:px-6 py-4 text-left text-xs sm:text-sm font-semibold text-espresso whitespace-nowrap">Price</th>
+                                    <th className="px-4 sm:px-6 py-4 text-left text-xs sm:text-sm font-semibold text-espresso whitespace-nowrap">Stock</th>
+                                    <th className="px-4 sm:px-6 py-4 text-left text-xs sm:text-sm font-semibold text-espresso whitespace-nowrap">Status</th>
+                                    <th className="px-4 sm:px-6 py-4 text-right text-xs sm:text-sm font-semibold text-espresso whitespace-nowrap">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -579,49 +592,49 @@ export default function AdminProducts() {
                                         transition={{ delay: idx * 0.02 }}
                                         className="border-b border-white/20 hover:bg-white/20 smooth-transition"
                                     >
-                                        <td className="px-6 py-4 text-sm text-espresso font-medium">{product.name}</td>
-                                        <td className="px-6 py-4 text-sm text-espresso/60">{product.shop_name || "N/A"}</td>
-                                        <td className="px-6 py-4 text-sm text-espresso/60">{product.category}</td>
-                                        <td className="px-6 py-4 text-sm font-medium text-maroon">
+                                        <td className="px-4 sm:px-6 py-4 text-xs sm:text-sm text-espresso font-medium whitespace-nowrap">{product.name}</td>
+                                        <td className="px-4 sm:px-6 py-4 text-xs sm:text-sm text-espresso/60 whitespace-nowrap">{product.shop_name || "N/A"}</td>
+                                        <td className="px-4 sm:px-6 py-4 text-xs sm:text-sm text-espresso/60 whitespace-nowrap">{product.category}</td>
+                                        <td className="px-4 sm:px-6 py-4 text-xs sm:text-sm font-medium text-maroon whitespace-nowrap">
                                             {product.currency} {product.price}
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-espresso">{product.stock}</td>
-                                        <td className="px-6 py-4 text-sm">
+                                        <td className="px-4 sm:px-6 py-4 text-xs sm:text-sm text-espresso whitespace-nowrap">{product.stock}</td>
+                                        <td className="px-4 sm:px-6 py-4 text-xs sm:text-sm">
                                             <motion.button
                                                 onClick={() => handleToggleActive(product.id, product.is_active)}
                                                 disabled={togglingId === product.id}
                                                 whileHover={{ scale: 1.02 }}
                                                 whileTap={{ scale: 0.95 }}
-                                                className={`px-3 py-2 rounded-lg font-medium text-xs smooth-transition flex items-center gap-2 ${
+                                                className={`px-2 sm:px-3 py-2 rounded-lg font-medium text-xs smooth-transition flex items-center gap-1 whitespace-nowrap ${
                                                     product.is_active
                                                         ? "bg-gradient-to-r from-green-200/50 to-green-100/50 text-green-700 hover:from-green-300/60 hover:to-green-200/60 border border-green-300/30"
                                                         : "bg-gradient-to-r from-gray-200/50 to-gray-100/50 text-gray-700 hover:from-gray-300/60 hover:to-gray-200/60 border border-gray-300/30"
                                                 } disabled:opacity-50`}
                                             >
                                                 {togglingId === product.id ? (
-                                                    <>⏳ Updating...</>
+                                                    <>⏳</>
                                                 ) : product.is_active ? (
                                                     <>
                                                         <Eye size={14} />
-                                                        LIVE
+                                                        <span className="hidden sm:inline">LIVE</span>
                                                     </>
                                                 ) : (
                                                     <>
                                                         <EyeOff size={14} />
-                                                        OFFLINE
+                                                        <span className="hidden sm:inline">OFF</span>
                                                     </>
                                                 )}
                                             </motion.button>
                                         </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-3">
+                                        <td className="px-4 sm:px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-2 sm:gap-3">
                                                 <motion.button
                                                     onClick={() => handleEdit(product)}
                                                     whileHover={{ scale: 1.15 }}
                                                     whileTap={{ scale: 0.9 }}
                                                     className="text-blue-600 hover:text-blue-700 smooth-transition"
                                                 >
-                                                    <Edit2 size={18} />
+                                                    <Edit2 size={16} />
                                                 </motion.button>
                                                 <motion.button
                                                     onClick={() => handleArchive(product.id)}
@@ -629,7 +642,7 @@ export default function AdminProducts() {
                                                     whileTap={{ scale: 0.9 }}
                                                     className="text-maroon hover:text-maroon/70 smooth-transition"
                                                 >
-                                                    <Archive size={18} />
+                                                    <Archive size={16} />
                                                 </motion.button>
                                             </div>
                                         </td>

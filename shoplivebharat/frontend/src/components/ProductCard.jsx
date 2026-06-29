@@ -1,117 +1,144 @@
 import { useNavigate } from "react-router-dom";
-import { ShoppingCart, Heart } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useState } from "react";
+import { ShoppingCart, Heart } from "lucide-react";
 
+/**
+ * Product card — pixel-matched to the reference site.
+ *
+ * Layout (top → bottom):
+ *   • Image with:  % OFF badge (top-left, white bg)
+ *                  READY TO SHIP badge (top-right, green)
+ *   • Store name   (tiny caps, maroon)
+ *   • Product name (serif)
+ *   • Price row    (sale price + strikethrough original)
+ *   • Color swatch label
+ *   • Add to Cart  (full-width dark button)
+ */
 export default function ProductCard({ product }) {
-    const navigate = useNavigate();
+    const navigate  = useNavigate();
     const { addToCart } = useCart();
-    const [isFavorite, setIsFavorite] = useState(false);
-
-    const handleAddToCart = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        addToCart(product);
-    };
+    const [fav, setFav] = useState(false);
 
     const discount = product.compare_at_price
         ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100)
         : 0;
 
+    // Strip "READY TO SHIP · " prefix for the store name display
+    const storeName = (product.badge || product.shop_name || "")
+        .replace(/^READY TO SHIP[·•\-\s]+/i, "")
+        .trim();
+
+    const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN");
+
     return (
         <div
+            className="group bg-white border border-[#e8e4df] rounded-xl overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow duration-300"
             onClick={() => navigate(`/product/${product.id}`)}
-            className="group cursor-pointer rounded-lg overflow-hidden border border-line-soft hover:shadow-lg transition"
         >
-            {/* Image Container */}
-            <div className="relative h-64 bg-gray-100 overflow-hidden">
+            {/* ── IMAGE ── */}
+            <div className="relative overflow-hidden bg-gray-50" style={{ aspectRatio: "3/4" }}>
                 <img
                     src={product.image_url}
                     alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=400&q=60"; }}
                 />
 
-                {/* Badge */}
-                {product.badge && (
-                    <div className="absolute top-4 left-4 px-3 py-1 bg-maroon text-ivory text-xs font-bold uppercase tracking-widest rounded">
-                        {product.badge}
-                    </div>
-                )}
-
-                {/* Discount Badge */}
+                {/* Discount badge — top left, white pill */}
                 {discount > 0 && (
-                    <div className="absolute top-4 right-4 px-3 py-1 bg-green-500 text-white text-xs font-bold rounded">
-                        -{discount}%
-                    </div>
+                    <span className="absolute top-3 left-3 bg-white text-[#0a0a0a] text-[10px] font-black px-2.5 py-1 rounded shadow-sm tracking-wide">
+                        {discount}% OFF
+                    </span>
                 )}
 
-                {/* Hover Actions */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-end justify-between p-4 opacity-0 group-hover:opacity-100">
-                    <button
-                        onClick={handleAddToCart}
-                        disabled={!product.is_active}
-                        className="flex items-center gap-2 px-4 py-2 bg-ivory text-espresso rounded-lg font-medium hover:bg-opacity-90 transition disabled:opacity-50"
-                    >
-                        <ShoppingCart size={16} />
-                        Add to Cart
-                    </button>
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setIsFavorite(!isFavorite);
-                        }}
-                        className={`p-2 rounded-lg transition ${
-                            isFavorite
-                                ? "bg-maroon text-ivory"
-                                : "bg-ivory text-maroon hover:bg-maroon/10"
-                        }`}
-                    >
-                        <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
-                    </button>
-                </div>
+                {/* Ready to ship — top right, green pill */}
+                {(product.ready_to_ship || (product.badge || "").toLowerCase().includes("ready")) && (
+                    <span className="absolute top-3 right-3 bg-[#1a7a3c] text-white text-[9px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">
+                        READY TO SHIP
+                    </span>
+                )}
 
-                {/* Out of Stock Overlay */}
+                {/* Wishlist — appears on hover */}
+                <button
+                    aria-label={fav ? "Remove from wishlist" : "Add to wishlist"}
+                    onClick={e => { e.stopPropagation(); setFav(v => !v); }}
+                    className="absolute bottom-3 right-3 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
+                >
+                    <Heart
+                        size={15}
+                        className={fav ? "text-red-500 fill-red-500" : "text-gray-400"}
+                    />
+                </button>
+
+                {/* Out of stock overlay */}
                 {!product.is_active && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <span className="text-ivory font-bold text-sm">Out of Stock</span>
+                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
+                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Out of Stock</span>
                     </div>
                 )}
             </div>
 
-            {/* Product Info */}
-            <div className="p-4">
-                {/* Category */}
-                <p className="text-xs uppercase tracking-widest text-maroon mb-2 font-medium">
-                    {product.category}
+            {/* ── INFO ── */}
+            <div className="p-4 flex flex-col flex-1 gap-1.5">
+                {/* Store name */}
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-maroon leading-none truncate">
+                    {storeName}
                 </p>
 
-                {/* Name */}
-                <h3 className="font-serif text-lg text-espresso mb-3 group-hover:text-maroon transition line-clamp-2">
+                {/* Product name */}
+                <h3 className="font-serif text-[15px] text-[#0a0a0a] line-clamp-2 leading-snug">
                     {product.name}
                 </h3>
 
-                {/* Price */}
-                <div className="flex items-baseline gap-2">
-                    <span className="font-serif text-xl font-bold text-maroon">
-                        {product.currency} {product.price.toLocaleString()}
-                    </span>
+                {/* Price row */}
+                <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="font-bold text-[#0a0a0a] text-sm">{fmt(product.price)}</span>
                     {product.compare_at_price && (
-                        <span className="text-sm text-espresso/50 line-through">
-                            {product.currency} {product.compare_at_price.toLocaleString()}
-                        </span>
+                        <span className="text-xs text-gray-400 line-through">{fmt(product.compare_at_price)}</span>
                     )}
                 </div>
 
-                {/* Stock Status */}
-                <p
-                    className={`text-xs mt-2 font-medium ${
-                        product.stock > 0 ? "text-green-600" : "text-red-600"
-                    }`}
+                {/* Color swatches */}
+                {product.color && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                        <span
+                            className="inline-block w-3.5 h-3.5 rounded-full border border-gray-200 flex-shrink-0"
+                            style={{ backgroundColor: COLOR_MAP[product.color] || "#ccc" }}
+                        />
+                        <span className="text-[10px] text-gray-500">{product.color}</span>
+                    </div>
+                )}
+
+                {/* Add to cart */}
+                <button
+                    type="button"
+                    disabled={!product.is_active}
+                    onClick={e => { e.stopPropagation(); addToCart(product); }}
+                    className="mt-auto w-full py-2.5 bg-[#0a0a0a] text-white text-xs font-semibold rounded-lg hover:bg-maroon transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                 >
-                    {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
-                </p>
+                    <ShoppingCart size={13} />
+                    Add to Cart
+                </button>
             </div>
         </div>
     );
 }
+
+// Map colour name → approximate CSS colour for the swatch dot
+const COLOR_MAP = {
+    "Ivory":       "#FAF8F5",
+    "Gold":        "#D4AF37",
+    "Maroon":      "#8B3A3A",
+    "Crimson":     "#DC143C",
+    "Navy":        "#1B2A6B",
+    "Rani Pink":   "#E8417A",
+    "Pastel Pink": "#FFB7C5",
+    "Cream":       "#F5F0E8",
+    "Yellow":      "#FFD700",
+    "Green":       "#2D6A4F",
+    "White":       "#FFFFFF",
+    "Black":       "#0a0a0a",
+};

@@ -1,453 +1,360 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { 
-    ArrowRight, 
-    ShoppingBag, 
-    Globe, 
-    Video, 
-    Package, 
-    Star, 
-    Heart,
-    Zap,
-    Users,
-    Award,
-    Truck,
-    Headphones,
-    MapPin,
-    CheckCircle
-} from "lucide-react";
-import { toast } from "sonner";
+import { ArrowRight } from "lucide-react";
+import { motion } from "framer-motion";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
-import { fetchMarketplaceStats, fetchShops } from "@/lib/api";
-import { MOCK_SHOPS, MOCK_PRODUCTS } from "@/lib/testData";
+import { useCart } from "@/contexts/CartContext";
 
-export default function HomePage() {
-    const [stats, setStats] = useState(null);
-    const [shops, setShops] = useState([]);
-    const [featuredProducts, setFeaturedProducts] = useState([]);
+/* ─── Data ───────────────────────────────────────────────────── */
+const CATEGORIES = [
+    { label: "Sarees",            img: "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=800&q=80" },
+    { label: "Lehengas",          img: "https://images.unsplash.com/photo-1503160865267-af4660ce7bf2?w=800&q=80" },
+    { label: "Kurtas",            img: "https://images.unsplash.com/photo-1744551358303-46edae8b374b?w=800&q=80" },
+    { label: "Sherwanis",         img: "https://images.unsplash.com/photo-1760080838961-4208536db385?w=800&q=80" },
+    { label: "Chaniya Choli",     img: "https://images.unsplash.com/photo-1668371679302-a8ec781e876e?w=800&q=80" },
+    { label: "Kids Traditional",  img: "https://images.unsplash.com/photo-1605292356183-a77d0a9c9d1d?w=800&q=80" },
+    { label: "Wedding Collection",img: "https://images.unsplash.com/photo-1703045199207-5312874d9e54?w=800&q=80" },
+    { label: "Festival Collection",img:"https://images.unsplash.com/photo-1468234847176-28606331216a?w=800&q=80" },
+];
 
-    useEffect(() => {
-        loadData();
-    }, []);
+const FEATURED_PRODUCTS = [
+    { id:"fp1", badge:"31% OFF", tag:"HERITAGE COUTURE", name:"Couple Matching Set — Ivory & Gold", price:44999, original:64999, color:"Ivory", img:"https://images.unsplash.com/photo-1656402356161-cf01c632c1bc?w=900&q=85" },
+    { id:"fp2", badge:"28% OFF", tag:"ROYAL THREADS JAIPUR", name:"Ivory Royal Sherwani with Gold Embroidery", price:27999, original:38999, color:"Ivory", img:"https://images.unsplash.com/photo-1760080838961-4208536db385?w=900&q=85" },
+    { id:"fp3", badge:"29% OFF", tag:"READY TO SHIP · BANARASI SILKS CO.", name:"Ivory Tissue Saree with Real Zari", price:24999, original:34999, color:"Ivory", img:"https://images.unsplash.com/photo-1727430228383-aa1fb59db8bf?w=900&q=85" },
+    { id:"fp4", badge:"30% OFF", tag:"READY TO SHIP · HERITAGE COUTURE", name:"Pastel Pink Embroidered Lehenga Set", price:39999, original:56999, color:"Pastel Pink", img:"https://images.unsplash.com/photo-1668371459824-094a960a227d?w=900&q=85" },
+    { id:"fp5", badge:"31% OFF", tag:"READY TO SHIP · ROYAL THREADS JAIPUR", name:"Navy Silk Kurta with Mirror Work", price:8999, original:12999, color:"Navy", img:"https://images.unsplash.com/photo-1727835523545-70ee992b5763?w=900&q=85" },
+    { id:"fp6", badge:"31% OFF", tag:"READY TO SHIP · BANARASI SILKS CO.", name:"Royal Banarasi Silk Saree — Maroon & Gold", price:19999, original:28999, color:"Maroon", img:"https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=900&q=85" },
+    { id:"fp7", badge:"28% OFF", tag:"HERITAGE COUTURE", name:"Maharani Bridal Lehenga — Crimson Velvet", price:64999, original:89999, color:"Crimson", img:"https://images.unsplash.com/photo-1503160865267-af4660ce7bf2?w=900&q=85" },
+    { id:"fp8", badge:"38% OFF", tag:"READY TO SHIP · GARBA TRENDS SURAT", name:"Navratri Rani Pink Chaniya Choli", price:9999, original:15999, color:"Rani Pink", img:"https://images.unsplash.com/photo-1668371679302-a8ec781e876e?w=900&q=85" },
+];
 
-    const loadData = async () => {
-        try {
-            const [statsData, shopsData] = await Promise.all([
-                fetchMarketplaceStats(),
-                fetchShops({ active_only: true, limit: 6 })
-            ]);
-            setStats(statsData);
-            setShops(shopsData?.length > 0 ? shopsData : MOCK_SHOPS.slice(0, 6));
-            setFeaturedProducts(MOCK_PRODUCTS.filter(p => p.is_featured).slice(0, 6));
-        } catch (error) {
-            setShops(MOCK_SHOPS.slice(0, 6));
-            setFeaturedProducts(MOCK_PRODUCTS.filter(p => p.is_featured).slice(0, 6));
-        }
+const HOW_IT_WORKS = [
+    { n:"01", title:"Browse",           desc:"Discover from local Indian stores." },
+    { n:"02", title:"Add to Cart",      desc:"Pick your favourites." },
+    { n:"03", title:"Pay Securely",     desc:"Razorpay, PayPal, cards & UPI." },
+    { n:"04", title:"We Verify",        desc:"ShopLiveBharat checks each order." },
+    { n:"05", title:"Packed Safely",    desc:"Premium packaging for your treasure." },
+    { n:"06", title:"Delivered Worldwide", desc:"To your doorstep, beautifully." },
+];
+
+const NEW_ARRIVALS = [
+    { id:"na1", badge:"33% OFF", tag:"READY TO SHIP · ROYAL THREADS JAIPUR", name:"Cream Linen Kurta Pyjama Set", price:5999, original:8999, color:"Cream", img:"https://images.unsplash.com/photo-1744551358303-46edae8b374b?w=900&q=85" },
+    { id:"na2", badge:"38% OFF", tag:"READY TO SHIP · GARBA TRENDS SURAT", name:"Navratri Rani Pink Chaniya Choli", price:9999, original:15999, color:"Rani Pink", img:"https://images.unsplash.com/photo-1668371679302-a8ec781e876e?w=900&q=85" },
+    { id:"na3", badge:"30% OFF", tag:"READY TO SHIP · HERITAGE COUTURE", name:"Pastel Pink Embroidered Lehenga Set", price:39999, original:56999, color:"Pastel Pink", img:"https://images.unsplash.com/photo-1668371459824-094a960a227d?w=900&q=85" },
+    { id:"na4", badge:"30% OFF", tag:"READY TO SHIP · ROYAL THREADS JAIPUR", name:"Maroon Velvet Bandhgala Sherwani", price:22999, original:32999, color:"Maroon", img:"https://images.unsplash.com/photo-1681717055630-c62333c22fec?w=900&q=85" },
+    { id:"na5", badge:"39% OFF", tag:"READY TO SHIP · GARBA TRENDS SURAT", name:"Yellow Cotton Chaniya Choli — Garba Special", price:5499, original:8999, color:"Yellow", img:"https://images.pexels.com/photos/20158862/pexels-photo-20158862.jpeg?w=900" },
+    { id:"na6", badge:"28% OFF", tag:"HERITAGE COUTURE", name:"Maharani Bridal Lehenga — Crimson Velvet", price:64999, original:89999, color:"Crimson", img:"https://images.unsplash.com/photo-1503160865267-af4660ce7bf2?w=900&q=85" },
+    { id:"na7", badge:"31% OFF", tag:"READY TO SHIP · ROYAL THREADS JAIPUR", name:"Navy Silk Kurta with Mirror Work", price:8999, original:12999, color:"Navy", img:"https://images.unsplash.com/photo-1727835523545-70ee992b5763?w=900&q=85" },
+    { id:"na8", badge:"29% OFF", tag:"READY TO SHIP · BANARASI SILKS CO.", name:"Ivory Tissue Saree with Real Zari", price:24999, original:34999, color:"Ivory", img:"https://images.unsplash.com/photo-1727430228383-aa1fb59db8bf?w=900&q=85" },
+];
+
+const TICKER_ITEMS = [
+    "FREE WORLDWIDE SHIPPING OVER ₹15,000",
+    "100% AUTHENTIC FROM LOCAL INDIAN STORES",
+    "SECURE PAYMENTS — RAZORPAY, PAYPAL, STRIPE",
+    "RETURNS & REFUNDS — EASY & TRANSPARENT",
+];
+
+const WHY_US = [
+    { title:"Authentic & Direct", desc:"Sourced straight from trusted Indian local stores — no middlemen, no fakes." },
+    { title:"Worldwide Shipping", desc:"USA, UK, Canada, Australia, UAE — we deliver to 50+ countries." },
+    { title:"Secure & Easy", desc:"Razorpay, PayPal, international cards. Encrypted, never stored." },
+    { title:"Wedding-Ready", desc:"Bridal, groom and family collections crafted for life's big days." },
+    { title:"Festival Collections", desc:"Diwali, Navratri, Eid, Onam — be ready every season." },
+    { title:"Easy Returns", desc:"Transparent refunds and customer support that listens." },
+];
+
+function fmt(n) { return "₹" + n.toLocaleString("en-IN"); }
+
+/* ─── Product card (HomePage inline version — delegates to shared component) ── */
+function ProductCard({ product }) {
+    const { addToCart } = useCart();
+
+    const discount = product.original
+        ? Math.round(((product.original - product.price) / product.original) * 100)
+        : 0;
+
+    const storeName = (product.tag || "")
+        .replace(/^READY TO SHIP[·•\-\s]+/i, "")
+        .trim();
+
+    const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN");
+
+    const COLOR_HEX = {
+        "Ivory":"#FAF8F5","Gold":"#D4AF37","Maroon":"#8B3A3A","Crimson":"#DC143C",
+        "Navy":"#1B2A6B","Rani Pink":"#E8417A","Pastel Pink":"#FFB7C5",
+        "Cream":"#F5F0E8","Yellow":"#FFD700",
     };
 
     return (
+        <div className="group bg-white border border-[#e8e4df] rounded-xl overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow duration-300">
+            {/* Image */}
+            <div className="relative overflow-hidden bg-gray-50" style={{ aspectRatio: "3/4" }}>
+                <img src={product.img} alt={product.name} loading="lazy" decoding="async"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=400&q=60"; }}
+                />
+                {/* Discount badge — white pill top-left */}
+                {discount > 0 && (
+                    <span className="absolute top-3 left-3 bg-white text-[#0a0a0a] text-[10px] font-black px-2.5 py-1 rounded shadow-sm tracking-wide">
+                        {discount}% OFF
+                    </span>
+                )}
+                {/* Ready to ship — green pill top-right */}
+                {product.tag && product.tag.includes("READY TO SHIP") && (
+                    <span className="absolute top-3 right-3 bg-[#1a7a3c] text-white text-[9px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">
+                        READY TO SHIP
+                    </span>
+                )}
+            </div>
+
+            {/* Info */}
+            <div className="p-4 flex flex-col flex-1 gap-1.5">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-maroon leading-none truncate">
+                    {storeName}
+                </p>
+                <h3 className="font-serif text-[15px] text-[#0a0a0a] line-clamp-2 leading-snug flex-1">
+                    {product.name}
+                </h3>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="font-bold text-[#0a0a0a] text-sm">{fmt(product.price)}</span>
+                    {product.original && (
+                        <span className="text-xs text-gray-400 line-through">{fmt(product.original)}</span>
+                    )}
+                </div>
+                {product.color && (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="inline-block w-3.5 h-3.5 rounded-full border border-gray-200 flex-shrink-0"
+                            style={{ backgroundColor: COLOR_HEX[product.color] || "#ccc" }} />
+                        <span className="text-[10px] text-gray-500">{product.color}</span>
+                    </div>
+                )}
+                <button type="button"
+                    onClick={e => { e.stopPropagation(); addToCart({ id: product.id, name: product.name, price: product.price, image_url: product.img }); }}
+                    className="mt-auto w-full py-2.5 bg-[#0a0a0a] text-white text-xs font-semibold rounded-lg hover:bg-maroon transition-colors duration-200 flex items-center justify-center gap-1.5">
+                    Add to Cart
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/* ─── Ticker ─────────────────────────────────────────────────── */
+function Ticker() {
+    const items = [...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS];
+    return (
+        <div className="bg-maroon text-ivory overflow-hidden py-3">
+            <div className="flex whitespace-nowrap animate-[marquee_30s_linear_infinite] w-max">
+                {items.map((t, i) => (
+                    <span key={i} className="inline-flex items-center gap-6 px-8 text-xs font-semibold tracking-widest uppercase">
+                        {t}
+                        <span className="text-ivory/40">✦</span>
+                    </span>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/* ─── Main Page ──────────────────────────────────────────────── */
+export default function HomePage() {
+    return (
         <MarketplaceLayout>
-            {/* Hero Section */}
-            <div className="bg-gradient-to-b from-maroon/10 to-transparent pt-12 pb-24 px-6 md:px-12">
-                <div className="max-w-6xl mx-auto">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-                        {/* Left Content */}
-                        <div className="space-y-8">
-                            <div>
-                                <p className="text-maroon text-sm uppercase tracking-widest font-semibold mb-3">
-                                    Welcome to ShopLiveBharat
-                                </p>
-                                <h1 className="font-serif text-5xl md:text-6xl text-espresso leading-tight">
-                                    Discover Traditional Indian Fashion
-                                </h1>
-                            </div>
 
-                            <p className="text-lg text-espresso/70 leading-relaxed">
-                                Explore handcrafted traditional clothing from the finest artisans and designers across India. 
-                                Shop directly from local boutiques with real-time video guidance, worldwide shipping, and professional 
-                                packing videos included in every order.
-                            </p>
-
-                            <div className="flex flex-col sm:flex-row gap-4">
-                                <Link
-                                    to="/marketplace"
-                                    className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-maroon text-ivory rounded-lg hover:bg-maroon/90 transition font-semibold"
-                                >
-                                    Shop Now
-                                    <ArrowRight size={20} />
-                                </Link>
-                                <Link
-                                    to="/live-shopping"
-                                    className="inline-flex items-center justify-center gap-2 px-8 py-4 border-2 border-maroon text-maroon rounded-lg hover:bg-maroon/5 transition font-semibold"
-                                >
-                                    <Video size={20} />
-                                    Book Live Session
-                                </Link>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 pt-4">
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle className="text-maroon" size={24} />
-                                    <div>
-                                        <p className="font-semibold text-espresso">100% Authentic</p>
-                                        <p className="text-sm text-espresso/60">Verified artisans</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <CheckCircle className="text-maroon" size={24} />
-                                    <div>
-                                        <p className="font-semibold text-espresso">Worldwide Shipping</p>
-                                        <p className="text-sm text-espresso/60">Free above ₹5,000</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Image */}
-                        <div className="hidden lg:block">
-                            <div className="rounded-lg overflow-hidden bg-gradient-to-br from-maroon/20 to-maroon/5 h-96 flex items-center justify-center border-4 border-maroon/10">
-                                <div className="text-center">
-                                    <ShoppingBag size={80} className="text-maroon/30 mx-auto mb-4" />
-                                    <p className="text-maroon/40 text-lg">Traditional Fashion Marketplace</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            {/* ── HERO ── */}
+            <section className="relative min-h-[92vh] flex items-center overflow-hidden bg-[#0a0a0a]">
+                {/* Background image */}
+                <div className="absolute inset-0">
+                    <img
+                        src="https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=1600&q=85"
+                        alt=""
+                        aria-hidden="true"
+                        className="w-full h-full object-cover opacity-30"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent" />
                 </div>
-            </div>
 
-            {/* Stats Section */}
-            <div className="bg-espresso text-ivory py-16 px-6 md:px-12">
-                <div className="max-w-6xl mx-auto">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-                        <div className="text-center">
-                            <p className="text-4xl font-bold mb-2">{stats?.shops || 50}+</p>
-                            <p className="text-ivory/70">Exclusive Shops</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-4xl font-bold mb-2">{stats?.products || 250}+</p>
-                            <p className="text-ivory/70">Curated Products</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-4xl font-bold mb-2">{stats?.waitlist_members?.toLocaleString() || "10,000"}+</p>
-                            <p className="text-ivory/70">Happy Customers</p>
-                        </div>
-                        <div className="text-center">
-                            <p className="text-4xl font-bold mb-2">150+</p>
-                            <p className="text-ivory/70">Countries</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Key Features */}
-            <div className="py-24 px-6 md:px-12">
-                <div className="max-w-6xl mx-auto">
-                    <h2 className="font-serif text-4xl md:text-5xl text-center text-espresso mb-16">
-                        Why Choose ShopLiveBharat
-                    </h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {/* Feature 1 */}
-                        <div className="bg-white rounded-lg border border-line-soft p-8 hover:shadow-lg transition">
-                            <div className="h-16 w-16 bg-maroon/10 rounded-lg flex items-center justify-center mb-6">
-                                <Video className="text-maroon" size={32} />
-                            </div>
-                            <h3 className="text-xl font-bold text-espresso mb-3">Live Shopping Experience</h3>
-                            <p className="text-espresso/70 mb-4">
-                                Book personalized video sessions with expert teams. Get real-time guidance while shopping and see products live.
-                            </p>
-                            <Link to="/live-shopping" className="text-maroon font-semibold hover:text-maroon/70 transition flex items-center gap-2">
-                                Learn More <ArrowRight size={18} />
+                <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-24">
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.8 }}
+                        className="max-w-2xl"
+                    >
+                        <p className="text-maroon text-xs font-bold uppercase tracking-[0.3em] mb-5">
+                            INDIA TO THE WORLD
+                        </p>
+                        <h1 className="font-serif text-5xl md:text-7xl text-white leading-[1.05] mb-6">
+                            Shop Authentic<br />Indian Fashion<br />
+                            <span className="text-champagne">From Anywhere<br />In The World</span>
+                        </h1>
+                        <p className="text-white/70 text-lg leading-relaxed mb-10 max-w-lg">
+                            Buy sarees, lehengas, kurtas, sherwanis, chaniya choli and wedding outfits
+                            directly from trusted local stores in India, with worldwide delivery.
+                        </p>
+                        <div className="flex flex-wrap gap-4 mb-12">
+                            <Link to="/marketplace" className="inline-flex items-center gap-2 px-8 py-4 bg-maroon text-ivory rounded-lg hover:bg-maroon/90 transition font-semibold text-sm">
+                                Shop Now <ArrowRight size={18} />
+                            </Link>
+                            <Link to="/shops" className="inline-flex items-center gap-2 px-8 py-4 border-2 border-white/30 text-white rounded-lg hover:border-white/60 transition font-semibold text-sm">
+                                Explore Stores
+                            </Link>
+                            <Link to="/become-a-seller" className="inline-flex items-center gap-2 px-8 py-4 border-2 border-champagne/50 text-champagne rounded-lg hover:border-champagne transition font-semibold text-sm">
+                                Become a Seller
                             </Link>
                         </div>
-
-                        {/* Feature 2 */}
-                        <div className="bg-white rounded-lg border border-line-soft p-8 hover:shadow-lg transition">
-                            <div className="h-16 w-16 bg-maroon/10 rounded-lg flex items-center justify-center mb-6">
-                                <Package className="text-maroon" size={32} />
-                            </div>
-                            <h3 className="text-xl font-bold text-espresso mb-3">Professional Packing Videos</h3>
-                            <p className="text-espresso/70 mb-4">
-                                Every order includes a professional packing video. Watch how your items are carefully packaged with care.
-                            </p>
-                            <p className="text-maroon font-semibold">Included in every order</p>
+                        <div className="flex flex-wrap gap-x-8 gap-y-3">
+                            {["Worldwide Shipping","Trusted Indian Stores","Secure Payments","Authentic Local Fashion"].map(f => (
+                                <div key={f} className="flex items-center gap-2 text-white/60 text-xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-maroon flex-shrink-0" />
+                                    {f}
+                                </div>
+                            ))}
                         </div>
-
-                        {/* Feature 3 */}
-                        <div className="bg-white rounded-lg border border-line-soft p-8 hover:shadow-lg transition">
-                            <div className="h-16 w-16 bg-maroon/10 rounded-lg flex items-center justify-center mb-6">
-                                <Globe className="text-maroon" size={32} />
-                            </div>
-                            <h3 className="text-xl font-bold text-espresso mb-3">Worldwide Shipping</h3>
-                            <p className="text-espresso/70 mb-4">
-                                Ship to 150+ countries worldwide. We handle all international logistics securely and reliably.
-                            </p>
-                            <p className="text-maroon font-semibold">Fast & Affordable</p>
-                        </div>
-
-                        {/* Feature 4 */}
-                        <div className="bg-white rounded-lg border border-line-soft p-8 hover:shadow-lg transition">
-                            <div className="h-16 w-16 bg-maroon/10 rounded-lg flex items-center justify-center mb-6">
-                                <Award className="text-maroon" size={32} />
-                            </div>
-                            <h3 className="text-xl font-bold text-espresso mb-3">100% Authentic</h3>
-                            <p className="text-espresso/70 mb-4">
-                                Every piece is sourced directly from verified artisans and designers. We guarantee authenticity.
-                            </p>
-                            <p className="text-maroon font-semibold">Direct from makers</p>
-                        </div>
-
-                        {/* Feature 5 */}
-                        <div className="bg-white rounded-lg border border-line-soft p-8 hover:shadow-lg transition">
-                            <div className="h-16 w-16 bg-maroon/10 rounded-lg flex items-center justify-center mb-6">
-                                <Truck className="text-maroon" size={32} />
-                            </div>
-                            <h3 className="text-xl font-bold text-espresso mb-3">Free Shipping</h3>
-                            <p className="text-espresso/70 mb-4">
-                                Free shipping on orders above ₹5,000. Reliable delivery across India and worldwide.
-                            </p>
-                            <p className="text-maroon font-semibold">No hidden charges</p>
-                        </div>
-
-                        {/* Feature 6 */}
-                        <div className="bg-white rounded-lg border border-line-soft p-8 hover:shadow-lg transition">
-                            <div className="h-16 w-16 bg-maroon/10 rounded-lg flex items-center justify-center mb-6">
-                                <Headphones className="text-maroon" size={32} />
-                            </div>
-                            <h3 className="text-xl font-bold text-espresso mb-3">24/7 Customer Support</h3>
-                            <p className="text-espresso/70 mb-4">
-                                Our dedicated support team is always ready to help. Contact us anytime for assistance.
-                            </p>
-                            <Link to="/contact" className="text-maroon font-semibold hover:text-maroon/70 transition flex items-center gap-2">
-                                Contact Us <ArrowRight size={18} />
-                            </Link>
-                        </div>
-                    </div>
+                    </motion.div>
                 </div>
-            </div>
+            </section>
 
-            {/* Featured Shops */}
-            <div className="bg-gray-50 py-24 px-6 md:px-12">
-                <div className="max-w-6xl mx-auto">
-                    <div className="flex items-center justify-between mb-12">
-                        <div>
-                            <p className="text-maroon text-sm uppercase tracking-widest font-semibold mb-2">Our Partners</p>
-                            <h2 className="font-serif text-4xl md:text-5xl text-espresso">Featured Shops</h2>
-                        </div>
-                        <Link
-                            to="/shops"
-                            className="hidden md:flex items-center gap-2 text-maroon font-semibold hover:text-maroon/70 transition"
-                        >
-                            View All <ArrowRight size={20} />
+            {/* ── TICKER ── */}
+            <Ticker />
+
+            {/* ── CATEGORIES ── */}
+            <section className="py-20 px-6 md:px-12 bg-ivory">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-12">
+                        <p className="text-xs uppercase tracking-[0.3em] text-maroon font-semibold mb-3">CURATED COLLECTIONS</p>
+                        <h2 className="font-serif text-4xl md:text-5xl text-espresso">Shop by Category</h2>
+                        <p className="text-espresso/60 mt-3 text-sm">From the streets of Banaras to the heart of Jaipur — explore India's finest traditional wear.</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {CATEGORIES.map(cat => (
+                            <Link key={cat.label} to={`/marketplace?category=${encodeURIComponent(cat.label)}`}
+                                className="group relative aspect-square overflow-hidden rounded-xl bg-gray-100">
+                                <img src={cat.img} alt={cat.label} loading="lazy" decoding="async"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=400&q=60"; }}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                                <div className="absolute bottom-0 left-0 right-0 p-4">
+                                    <p className="text-white text-[9px] uppercase tracking-widest font-semibold mb-0.5 opacity-70">DISCOVER</p>
+                                    <p className="text-white font-semibold text-sm">{cat.label}</p>
+                                    <span className="inline-flex items-center gap-1 text-white/70 text-xs mt-1 group-hover:text-white transition">
+                                        Explore <ArrowRight size={10} />
+                                    </span>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                    <div className="text-center mt-8">
+                        <Link to="/marketplace" className="inline-flex items-center gap-2 text-maroon font-semibold hover:text-maroon/70 transition text-sm">
+                            View All Collections <ArrowRight size={16} />
                         </Link>
                     </div>
+                </div>
+            </section>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                        {shops.slice(0, 6).map((shop) => (
-                            <div
-                                key={shop.id}
-                                className="bg-white rounded-lg border border-line-soft overflow-hidden hover:shadow-lg transition"
+            {/* ── FEATURED PRODUCTS ── */}
+            <section className="py-20 px-6 md:px-12 bg-[#faf8f5]">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-12">
+                        <p className="text-xs uppercase tracking-[0.3em] text-maroon font-semibold mb-3">EDITOR'S PICKS</p>
+                        <h2 className="font-serif text-4xl md:text-5xl text-espresso">Featured This Season</h2>
+                        <p className="text-espresso/60 mt-3 text-sm">Hand-selected pieces from India's most loved local stores.</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                        {FEATURED_PRODUCTS.map(p => <ProductCard key={p.id} product={p} />)}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── HOW IT WORKS ── */}
+            <section className="py-20 px-6 md:px-12 bg-espresso text-ivory">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-14">
+                        <p className="text-xs uppercase tracking-[0.3em] text-champagne font-semibold mb-3">THE PROCESS</p>
+                        <h2 className="font-serif text-4xl md:text-5xl">How ShopLiveBharat Works</h2>
+                        <p className="text-ivory/60 mt-3 text-sm">From a local store in India to your doorstep, anywhere in the world.</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+                        {HOW_IT_WORKS.map((step, i) => (
+                            <motion.div
+                                key={step.n}
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: i * 0.08, duration: 0.5 }}
+                                className="text-center"
                             >
-                                <div className="h-40 bg-gray-100 overflow-hidden">
-                                    <img
-                                        src={shop.image_url}
-                                        alt={shop.name}
-                                        className="w-full h-full object-cover hover:scale-105 transition"
-                                        onError={(e) => { e.target.src = "/shop-assets/banner-1.jpg"; }}
-                                    />
+                                <div className="w-14 h-14 rounded-full border-2 border-champagne/40 flex items-center justify-center mx-auto mb-4">
+                                    <span className="font-serif text-champagne text-xl font-bold">{step.n}</span>
                                 </div>
-                                <div className="p-4">
-                                    <h3 className="font-bold text-lg text-espresso mb-1">{shop.name}</h3>
-                                    <p className="text-sm text-maroon font-semibold mb-2">{shop.specialty}</p>
-                                    <p className="text-xs text-espresso/60 mb-4">{shop.description}</p>
-                                    <div className="flex items-center gap-2 text-xs text-espresso/70 mb-4">
-                                        <MapPin size={14} />
-                                        {shop.city}, {shop.country}
-                                    </div>
-                                    <Link
-                                        to="/shops"
-                                        className="text-maroon text-sm font-semibold hover:text-maroon/70 transition"
-                                    >
-                                        Explore Shop →
-                                    </Link>
-                                </div>
-                            </div>
+                                <h3 className="font-semibold text-sm text-ivory mb-1">{step.title}</h3>
+                                <p className="text-ivory/50 text-xs leading-relaxed">{step.desc}</p>
+                            </motion.div>
                         ))}
                     </div>
+                </div>
+            </section>
 
-                    <div className="text-center md:hidden">
-                        <Link
-                            to="/shops"
-                            className="inline-flex items-center gap-2 text-maroon font-semibold hover:text-maroon/70 transition"
-                        >
-                            View All Shops <ArrowRight size={20} />
-                        </Link>
+            {/* ── NEW ARRIVALS ── */}
+            <section className="py-20 px-6 md:px-12 bg-ivory">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-12">
+                        <p className="text-xs uppercase tracking-[0.3em] text-maroon font-semibold mb-3">JUST IN</p>
+                        <h2 className="font-serif text-4xl md:text-5xl text-espresso">New Arrivals</h2>
+                        <p className="text-espresso/60 mt-3 text-sm">Fresh from India's couture houses and family-run stores.</p>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+                        {NEW_ARRIVALS.map(p => <ProductCard key={p.id} product={p} />)}
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* How It Works */}
-            <div className="py-24 px-6 md:px-12">
-                <div className="max-w-6xl mx-auto">
-                    <h2 className="font-serif text-4xl md:text-5xl text-center text-espresso mb-16">
-                        How It Works
-                    </h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                        {[
-                            {
-                                step: "01",
-                                title: "Browse Shops",
-                                description: "Explore our curated collection of artisan shops from across India"
-                            },
-                            {
-                                step: "02",
-                                title: "Book Live Session",
-                                description: "Optional: Schedule a video call with experts for personal guidance"
-                            },
-                            {
-                                step: "03",
-                                title: "Shop & Checkout",
-                                description: "Add products to cart and proceed to secure checkout"
-                            },
-                            {
-                                step: "04",
-                                title: "Receive & Enjoy",
-                                description: "Get your order with professional packing video and worldwide tracking"
-                            }
-                        ].map((item, idx) => (
-                            <div key={idx} className="relative">
-                                <div className="text-center">
-                                    <div className="h-16 w-16 bg-maroon text-ivory rounded-full flex items-center justify-center font-bold text-xl mx-auto mb-4">
-                                        {item.step}
-                                    </div>
-                                    <h3 className="font-bold text-lg text-espresso mb-2">{item.title}</h3>
-                                    <p className="text-espresso/70 text-sm">{item.description}</p>
-                                </div>
-                                {idx < 3 && (
-                                    <div className="hidden md:block absolute top-8 -right-6 text-maroon/30">
-                                        <ArrowRight size={32} />
-                                    </div>
-                                )}
+            {/* ── WHY SHOPLIVEBHARAT ── */}
+            <section className="py-20 px-6 md:px-12 bg-[#faf8f5]">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-12">
+                        <p className="text-xs uppercase tracking-[0.3em] text-maroon font-semibold mb-3">WHY SHOPLIVEBHARAT</p>
+                        <h2 className="font-serif text-4xl md:text-5xl text-espresso">Crafted for the Indian Diaspora</h2>
+                        <p className="text-espresso/60 mt-3 text-sm">The home you carry in your heart — now in your wardrobe.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {WHY_US.map(item => (
+                            <div key={item.title} className="bg-white border border-line-soft rounded-xl p-6 hover:shadow-md transition">
+                                <h3 className="font-semibold text-espresso mb-2">{item.title}</h3>
+                                <p className="text-espresso/60 text-sm leading-relaxed">{item.desc}</p>
                             </div>
                         ))}
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* Testimonials */}
-            <div className="bg-maroon/5 py-24 px-6 md:px-12">
-                <div className="max-w-6xl mx-auto">
-                    <h2 className="font-serif text-4xl md:text-5xl text-center text-espresso mb-16">
-                        What Our Customers Say
-                    </h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {[
-                            {
-                                name: "Anjali Desai",
-                                location: "USA",
-                                text: "Finally found authentic Indian clothing from home. The video shopping session was amazing and the packing video gave me so much confidence.",
-                                rating: 5
-                            },
-                            {
-                                name: "Rohit Patel",
-                                location: "UK",
-                                text: "ShopLiveBharat brings the essence of Indian fashion to my doorstep. Quality and authenticity guaranteed. Highly recommend!",
-                                rating: 5
-                            },
-                            {
-                                name: "Priya Sharma",
-                                location: "Australia",
-                                text: "The live shopping experience is incredible. I got personalized guidance and received beautiful products with professional packing.",
-                                rating: 5
-                            }
-                        ].map((testimonial, idx) => (
-                            <div key={idx} className="bg-white rounded-lg p-8 border border-line-soft">
-                                <div className="flex items-center gap-1 mb-4">
-                                    {[...Array(testimonial.rating)].map((_, i) => (
-                                        <Star key={i} size={18} className="fill-maroon text-maroon" />
-                                    ))}
-                                </div>
-                                <p className="text-espresso/70 mb-6 italic">"{testimonial.text}"</p>
-                                <div>
-                                    <p className="font-bold text-espresso">{testimonial.name}</p>
-                                    <p className="text-sm text-espresso/60">{testimonial.location}</p>
-                                </div>
-                            </div>
-                        ))}
+            {/* ── SELLER CTA ── */}
+            <section className="py-20 px-6 md:px-12 bg-espresso text-ivory">
+                <div className="max-w-7xl mx-auto">
+                    <div className="grid md:grid-cols-2 gap-12 items-center">
+                        <div>
+                            <p className="text-xs uppercase tracking-[0.3em] text-champagne font-semibold mb-4">FOR INDIAN RETAILERS</p>
+                            <h2 className="font-serif text-4xl md:text-5xl mb-5">Grow Your Clothing Business Worldwide</h2>
+                            <p className="text-ivory/70 text-base leading-relaxed mb-8">
+                                Register your store on ShopLiveBharat and sell Indian traditional clothes to
+                                customers across the world.
+                            </p>
+                            <Link to="/become-a-seller"
+                                className="inline-flex items-center gap-2 px-8 py-4 bg-maroon text-ivory rounded-lg hover:bg-maroon/90 transition font-semibold text-sm">
+                                Register Your Store <ArrowRight size={18} />
+                            </Link>
+                        </div>
+                        <div className="hidden md:block">
+                            <img
+                                src="https://images.unsplash.com/photo-1571908599407-cdb918ed83bf?w=1200&q=85"
+                                alt="Indian retailer"
+                                className="rounded-2xl w-full h-80 object-cover opacity-80"
+                            />
+                        </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            {/* Call to Action */}
-            <div className="bg-gradient-to-r from-maroon to-maroon/80 text-ivory py-24 px-6 md:px-12">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="font-serif text-4xl md:text-5xl mb-6">
-                        Ready to Experience Indian Fashion?
-                    </h2>
-                    <p className="text-lg text-ivory/80 mb-8 max-w-2xl mx-auto">
-                        Join thousands of customers worldwide discovering authentic, handcrafted traditional clothing. 
-                        Shop now with confidence.
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                        <Link
-                            to="/marketplace"
-                            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-ivory text-maroon rounded-lg hover:bg-opacity-90 transition font-semibold"
-                        >
-                            Start Shopping
-                            <ArrowRight size={20} />
-                        </Link>
-                        <Link
-                            to="/live-shopping"
-                            className="inline-flex items-center justify-center gap-2 px-8 py-4 border-2 border-ivory text-ivory rounded-lg hover:bg-ivory/10 transition font-semibold"
-                        >
-                            <Video size={20} />
-                            Book Live Session - ₹1,500
-                        </Link>
-                    </div>
-                </div>
-            </div>
-
-            {/* FAQ Section */}
-            <div className="py-24 px-6 md:px-12">
-                <div className="max-w-4xl mx-auto">
-                    <h2 className="font-serif text-4xl md:text-5xl text-center text-espresso mb-16">
-                        Frequently Asked Questions
-                    </h2>
-
-                    <div className="space-y-6">
-                        {[
-                            {
-                                q: "Do you ship worldwide?",
-                                a: "Yes! We ship to 150+ countries. Shipping costs vary by location and are calculated at checkout."
-                            },
-                            {
-                                q: "Are all products authentic?",
-                                a: "Absolutely. We source directly from verified artisans and designers. Every product comes with authenticity guarantee."
-                            },
-                            {
-                                q: "What is the live shopping session?",
-                                a: "A personalized video call with our experts (₹1,500). Get real-time guidance while shopping, see products live, and receive professional packing video for your order."
-                            },
-                            {
-                                q: "Is free shipping available?",
-                                a: "Yes! Free shipping on orders above ₹5,000. Worldwide shipping with reliable tracking."
-                            },
-                            {
-                                q: "How long does delivery take?",
-                                a: "Within India: 5-7 business days. International: 10-15 business days depending on location."
-                            }
-                        ].map((item, idx) => (
-                            <div key={idx} className="bg-white rounded-lg border border-line-soft p-6">
-                                <h3 className="font-bold text-lg text-espresso mb-3">{item.q}</h3>
-                                <p className="text-espresso/70">{item.a}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
         </MarketplaceLayout>
     );
 }

@@ -4,11 +4,14 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { fetchShops } from "@/lib/api";
 import { MOCK_SHOPS } from "@/lib/testData";
+import { setMetaTags } from "@/lib/seo";
 
 export default function LiveShopping() {
     const navigate = useNavigate();
+    const { formatPrice } = useCurrency();
     const [shops, setShops] = useState([]);
     const [bookingData, setBookingData] = useState({
         date: "",
@@ -23,6 +26,14 @@ export default function LiveShopping() {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
+        // Set SEO meta tags for live shopping page
+        setMetaTags({
+            title: "Book Live Shopping Session | Premium Guidance | ShopLive Bharat",
+            description: "Personalized video shopping session with expert consultants from India's finest boutiques. Book your private consultation and discover luxury collections.",
+            keywords: "live shopping session, video shopping, personal consultant, Indian fashion experts, luxury consultation",
+            url: "https://shoplivebharat.com/live-shopping",
+            type: "website",
+        });
         loadShops();
     }, []);
 
@@ -41,18 +52,8 @@ export default function LiveShopping() {
     };
 
     const indianCities = [
-        "Mumbai",
-        "Delhi",
-        "Bangalore",
-        "Hyderabad",
         "Ahmedabad",
-        "Chennai",
-        "Kolkata",
-        "Pune",
-        "Jaipur",
-        "Lucknow",
-        "Chandigarh",
-        "Kochi"
+        "Surat"
     ];
 
     const handleInputChange = (e) => {
@@ -72,17 +73,10 @@ export default function LiveShopping() {
             // Simulate API call
             await new Promise(resolve => setTimeout(resolve, 1000));
             
-            toast.success("Live Shopping Session Booked! We'll contact you shortly.");
-            setBookingData({
-                date: "",
-                time: "",
-                city: "",
-                customerName: "",
-                email: "",
-                phone: "",
-                preferredProducts: ""
+            // Navigate to booking confirmation page with booking data
+            navigate("/booking-confirmation", { 
+                state: { bookingData }
             });
-            setBookingStep(1);
         } catch (error) {
             toast.error("Failed to book session. Please try again.");
         } finally {
@@ -118,7 +112,15 @@ export default function LiveShopping() {
                             </div>
                         </div>
                         <div className="text-2xl font-bold text-maroon">
-                            ₹1,500 per Video Call Session
+                            <motion.span
+                                key={`price-1500`}
+                                initial={{ opacity: 0.5, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0.5, scale: 0.8 }}
+                                transition={{ duration: 0.4, ease: "easeInOut" }}
+                            >
+                                {formatPrice(1500)} per Video Call Session
+                            </motion.span>
                         </div>
                         <p className="text-sm text-espresso/60 mt-2">
                             Valid whether you purchase or not
@@ -420,7 +422,15 @@ export default function LiveShopping() {
                                                 <p><span className="font-semibold">Time:</span> {bookingData.time}</p>
                                                 <p><span className="font-semibold">City:</span> {bookingData.city}</p>
                                                 <p className="pt-2 border-t border-maroon/20 text-espresso font-semibold mt-2">
-                                                    Session Fee: ₹1,500
+                                                    Session Fee: <motion.span
+                                                        key={`session-fee`}
+                                                        initial={{ opacity: 0.5 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0.5 }}
+                                                        transition={{ duration: 0.4 }}
+                                                    >
+                                                        {formatPrice(1500)}
+                                                    </motion.span>
                                                 </p>
                                             </div>
                                         </div>
@@ -484,10 +494,10 @@ export default function LiveShopping() {
                         </div>
 
                         <div className="bg-white rounded-lg border border-line-soft p-6">
-                            <h3 className="font-bold text-espresso mb-2">Is the ₹1,500 charge refundable?</h3>
+                            <h3 className="font-bold text-espresso mb-2">Is the session charge refundable?</h3>
                             <p className="text-espresso/70">
-                                The ₹1,500 session fee is non-refundable. However, if you make a purchase during or within 7 days of your session, 
-                                ₹500 will be credited to your account.
+                                The {formatPrice(1500)} session fee is non-refundable. However, if you make a purchase during or within 7 days of your session, 
+                                {formatPrice(500)} will be credited to your account.
                             </p>
                         </div>
 

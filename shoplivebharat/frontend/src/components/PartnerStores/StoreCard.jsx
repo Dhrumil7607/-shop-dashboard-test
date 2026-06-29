@@ -98,37 +98,46 @@ const StoreCard = memo(function StoreCard({
                     {/* Overlay Gradient on Hover */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                    {/* Badges */}
-                    <div className="absolute top-4 right-4 flex flex-wrap gap-2 justify-end">
-                        {badges.map((badge, idx) => (
-                            <motion.div
-                                key={idx}
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: idx * 0.1 }}
-                                className={`px-3 py-1 rounded-full text-xs font-bold ${badge.color} backdrop-blur-md border border-white/30 shadow-lg`}
-                            >
-                                {badge.label}
-                            </motion.div>
-                        ))}
-                    </div>
-
-                    {/* Favorite Button */}
-                    <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={handleFavoriteClick}
-                        className="absolute top-4 left-4 p-2 rounded-full bg-white/80 backdrop-blur-md hover:bg-white transition-colors"
-                        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                    >
-                        <svg
-                            className={`w-6 h-6 ${isFavorite ? "fill-maroon text-maroon" : "text-espresso/40"}`}
-                            fill="currentColor"
-                            viewBox="0 0 24 24"
+                    {/* Top bar: favorite (left) + badges (right). justify-between keeps
+                        them from ever overlapping; badges stack vertically so a narrow
+                        card never pushes them under the heart button. */}
+                    <div className="absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3 md:p-4">
+                        {/* Favorite Button */}
+                        <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleFavoriteClick}
+                            className="flex-shrink-0 grid h-9 w-9 place-items-center rounded-full bg-white/80 backdrop-blur-md hover:bg-white transition-colors shadow-sm"
+                            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                            aria-pressed={isFavorite}
                         >
-                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-                        </svg>
-                    </motion.button>
+                            <svg
+                                className={`h-5 w-5 ${isFavorite ? "fill-maroon text-maroon" : "text-espresso/40"}`}
+                                fill="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                            </svg>
+                        </motion.button>
+
+                        {/* Badges */}
+                        {badges.length > 0 && (
+                            <div className="flex flex-col items-end gap-1.5">
+                                {badges.map((badge, idx) => (
+                                    <motion.span
+                                        key={badge.label}
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: idx * 0.08 }}
+                                        className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-none ${badge.color} backdrop-blur-md border border-white/30 shadow-lg`}
+                                    >
+                                        {badge.label}
+                                    </motion.span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Content Section */}
@@ -152,33 +161,35 @@ const StoreCard = memo(function StoreCard({
                         </p>
                     )}
 
-                    {/* Stats Grid - Rating, Followers, Products */}
-                    <div className="grid grid-cols-3 gap-3 mb-4 py-4 border-t border-b border-maroon/10">
+                    {/* Stats Grid - Rating, Followers, Products.
+                        Each stat is vertically centered so icons and (variable-width)
+                        numbers stay aligned across all three columns and never collide. */}
+                    <div className="grid grid-cols-3 gap-2 mb-4 py-4 border-t border-b border-maroon/10">
                         {/* Rating */}
-                        <div className="flex items-center gap-1.5">
-                            <Star size={16} className="text-yellow-500 fill-yellow-500 flex-shrink-0" />
-                            <div className="flex flex-col">
-                                <span className="font-bold text-espresso text-sm">{rating}</span>
-                                <span className="text-xs text-espresso/50">Rating</span>
+                        <div className="flex flex-col items-center gap-1 text-center">
+                            <div className="flex items-center gap-1.5">
+                                <Star size={15} className="text-yellow-500 fill-yellow-500 flex-shrink-0" aria-hidden="true" />
+                                <span className="font-bold text-espresso text-sm tabular-nums">{rating}</span>
                             </div>
+                            <span className="text-xs text-espresso/50">Rating</span>
                         </div>
 
                         {/* Followers */}
-                        <div className="flex items-center gap-1.5">
-                            <Users size={16} className="text-blue-500 flex-shrink-0" />
-                            <div className="flex flex-col">
-                                <span className="font-bold text-espresso text-sm">{humanizedFollowers}</span>
-                                <span className="text-xs text-espresso/50">Follow</span>
+                        <div className="flex flex-col items-center gap-1 text-center">
+                            <div className="flex items-center gap-1.5">
+                                <Users size={15} className="text-blue-500 flex-shrink-0" aria-hidden="true" />
+                                <span className="font-bold text-espresso text-sm tabular-nums">{humanizedFollowers}</span>
                             </div>
+                            <span className="text-xs text-espresso/50">Followers</span>
                         </div>
 
                         {/* Products */}
-                        <div className="flex items-center gap-1.5">
-                            <ShoppingBag size={16} className="text-purple-500 flex-shrink-0" />
-                            <div className="flex flex-col">
-                                <span className="font-bold text-espresso text-sm">{productCount}</span>
-                                <span className="text-xs text-espresso/50">Items</span>
+                        <div className="flex flex-col items-center gap-1 text-center">
+                            <div className="flex items-center gap-1.5">
+                                <ShoppingBag size={15} className="text-purple-500 flex-shrink-0" aria-hidden="true" />
+                                <span className="font-bold text-espresso text-sm tabular-nums">{productCount}</span>
                             </div>
+                            <span className="text-xs text-espresso/50">Items</span>
                         </div>
                     </div>
 

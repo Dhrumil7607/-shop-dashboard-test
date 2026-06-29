@@ -33,27 +33,27 @@ const containerVariants = {
     visible: {
         opacity: 1,
         transition: {
-            staggerChildren: 0.15,
-            delayChildren: 0.1,
+            staggerChildren: 0.08,  // Reduced from 0.15
+            delayChildren: 0.05,    // Reduced from 0.1
         },
     },
 };
 
 const cardVariants = {
-    hidden: { opacity: 0, y: 40, scale: 0.95 },
+    hidden: { opacity: 0, y: 20, scale: 0.95 },
     visible: {
         opacity: 1,
         y: 0,
         scale: 1,
         transition: {
-            duration: 0.8,
-            ease: [0.34, 1.56, 0.64, 1],
+            duration: 0.6,
+            ease: "easeOut",
         },
     },
     hover: {
-        y: -12,
+        y: -8,
         transition: {
-            duration: 0.4,
+            duration: 0.3,
             ease: "easeOut",
         },
     },
@@ -62,33 +62,8 @@ const cardVariants = {
 export default function HowItWorks() {
     return (
         <section id="how" data-testid="how-it-works" className="relative py-24 md:py-36 px-6 md:px-12 lg:px-20 overflow-hidden">
-            {/* Animated gradient background */}
-            <div className="absolute inset-0 -z-10 opacity-30">
-                <motion.div
-                    className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-br from-maroon/20 to-transparent rounded-full blur-3xl"
-                    animate={{
-                        y: [0, 50, 0],
-                        x: [0, 30, 0],
-                    }}
-                    transition={{
-                        duration: 15,
-                        ease: "easeInOut",
-                        repeat: Infinity,
-                    }}
-                />
-                <motion.div
-                    className="absolute bottom-20 left-10 w-72 h-72 bg-gradient-to-tr from-gold/10 to-transparent rounded-full blur-3xl"
-                    animate={{
-                        y: [0, -40, 0],
-                        x: [0, -20, 0],
-                    }}
-                    transition={{
-                        duration: 18,
-                        ease: "easeInOut",
-                        repeat: Infinity,
-                    }}
-                />
-            </div>
+            {/* Optimized gradient background - using CSS gradients instead of infinite animations */}
+            <div className="absolute inset-0 -z-10 opacity-30 bg-gradient-to-br from-maroon/10 via-transparent to-gold/5" />
 
             <div className="max-w-7xl mx-auto">
                 {/* Header Section */}

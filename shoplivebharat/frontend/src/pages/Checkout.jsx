@@ -4,11 +4,14 @@ import { ArrowLeft, Loader, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { handleRazorpayPayment } from "@/lib/razorpay";
+import { setMetaTags } from "@/lib/seo";
 
 export default function Checkout() {
     const navigate = useNavigate();
     const { cartItems, getTotalPrice, clearCart } = useCart();
+    const { formatPrice } = useCurrency();
     const [step, setStep] = useState("shipping"); // shipping, payment, confirmation
     const [loading, setLoading] = useState(false);
     const [razorpayReady, setRazorpayReady] = useState(false);
@@ -29,6 +32,15 @@ export default function Checkout() {
     const [orderData, setOrderData] = useState(null);
 
     useEffect(() => {
+        // Set SEO meta tags for checkout page
+        setMetaTags({
+            title: "Checkout | Secure Payment | ShopLive Bharat",
+            description: "Complete your purchase securely. Fast checkout process with multiple payment options for your luxury fashion items.",
+            keywords: "checkout, payment, secure shopping, delivery",
+            url: "https://shoplivebharat.com/checkout",
+            type: "website",
+        });
+
         // Check if Razorpay script is available
         const script = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
         if (script) {
@@ -165,7 +177,7 @@ export default function Checkout() {
                                         </p>
                                     </div>
                                     <p className="font-medium text-maroon">
-                                        INR {(item.price * item.quantity).toLocaleString()}
+                                        {formatPrice(item.price * item.quantity)}
                                     </p>
                                 </div>
                             ))}
@@ -174,23 +186,23 @@ export default function Checkout() {
                         <div className="space-y-2 mb-6">
                             <div className="flex justify-between text-espresso">
                                 <span>Subtotal</span>
-                                <span>INR {orderData.subtotal.toLocaleString()}</span>
+                                <span>{formatPrice(orderData.subtotal)}</span>
                             </div>
                             <div className="flex justify-between text-espresso">
                                 <span>Shipping</span>
                                 <span>
                                     {orderData.shipping === 0
                                         ? "Free"
-                                        : `INR ${orderData.shipping}`}
+                                        : formatPrice(orderData.shipping)}
                                 </span>
                             </div>
                             <div className="flex justify-between text-espresso">
                                 <span>Tax</span>
-                                <span>INR {orderData.tax.toLocaleString()}</span>
+                                <span>{formatPrice(orderData.tax)}</span>
                             </div>
                             <div className="flex justify-between font-serif text-xl text-maroon">
                                 <span>Total</span>
-                                <span>INR {orderData.total.toLocaleString()}</span>
+                                <span>{formatPrice(orderData.total)}</span>
                             </div>
                         </div>
                     </div>
@@ -412,19 +424,19 @@ export default function Checkout() {
                                     <div className="space-y-2 text-sm text-espresso/80">
                                         <div className="flex justify-between">
                                             <span>Subtotal</span>
-                                            <span>INR {subtotal.toLocaleString()}</span>
+                                            <span>{formatPrice(subtotal)}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span>Shipping</span>
-                                            <span>{shipping === 0 ? "Free" : `INR ${shipping}`}</span>
+                                            <span>{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span>Tax (18%)</span>
-                                            <span>INR {tax.toLocaleString()}</span>
+                                            <span>{formatPrice(tax)}</span>
                                         </div>
                                         <div className="border-t border-green-200 pt-2 mt-2 flex justify-between font-bold text-espresso">
                                             <span>Total Amount</span>
-                                            <span>INR {total.toLocaleString()}</span>
+                                            <span>{formatPrice(total)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -435,7 +447,7 @@ export default function Checkout() {
                                     className="w-full py-4 bg-maroon text-white rounded-lg font-semibold hover:bg-maroon/90 transition disabled:opacity-50 flex items-center justify-center gap-2 text-lg"
                                 >
                                     {loading && <Loader size={20} className="animate-spin" />}
-                                    {loading ? "Processing..." : `Pay INR ${total.toLocaleString()} with Razorpay`}
+                                    {loading ? "Processing..." : `Pay ${formatPrice(total)} with Razorpay`}
                                 </button>
 
                                 <p className="text-xs text-espresso/60 text-center mt-4">
@@ -462,7 +474,7 @@ export default function Checkout() {
                                             {item.name} x {item.quantity}
                                         </span>
                                         <span className="text-espresso font-medium">
-                                            INR {(item.price * item.quantity).toLocaleString()}
+                                            {formatPrice(item.price * item.quantity)}
                                         </span>
                                     </div>
                                 ))}
@@ -472,19 +484,19 @@ export default function Checkout() {
                                 <div className="flex justify-between text-espresso">
                                     <span className="text-sm">Subtotal</span>
                                     <span className="font-medium">
-                                        INR {subtotal.toLocaleString()}
+                                        {formatPrice(subtotal)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-espresso">
                                     <span className="text-sm">Shipping</span>
                                     <span className="font-medium">
-                                        {shipping === 0 ? "Free" : `INR ${shipping}`}
+                                        {shipping === 0 ? "Free" : formatPrice(shipping)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-espresso">
                                     <span className="text-sm">Tax</span>
                                     <span className="font-medium">
-                                        INR {tax.toLocaleString()}
+                                        {formatPrice(tax)}
                                     </span>
                                 </div>
                             </div>
@@ -493,7 +505,7 @@ export default function Checkout() {
                                 <div className="flex justify-between font-serif text-xl">
                                     <span className="text-espresso">Total</span>
                                     <span className="text-maroon font-bold">
-                                        INR {total.toLocaleString()}
+                                        {formatPrice(total)}
                                     </span>
                                 </div>
                             </div>

@@ -1,11 +1,26 @@
+import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from "lucide-react";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { setMetaTags } from "@/lib/seo";
 
 export default function Cart() {
     const navigate = useNavigate();
     const { cartItems, removeFromCart, updateQuantity, getTotalPrice, getTotalItems } = useCart();
+    const { formatPrice } = useCurrency();
+
+    useEffect(() => {
+        // Set SEO meta tags for cart page
+        setMetaTags({
+            title: "Shopping Cart | ShopLive Bharat",
+            description: "Review your shopping cart with premium Indian fashion and jewelry items. Proceed to secure checkout.",
+            keywords: "shopping cart, my items, checkout, luxury fashion",
+            url: "https://shoplivebharat.com/cart",
+            type: "website",
+        });
+    }, []);
 
     if (cartItems.length === 0) {
         return (
@@ -77,7 +92,7 @@ export default function Cart() {
                                             {item.category}
                                         </p>
                                         <p className="font-serif text-xl font-bold text-maroon">
-                                            {item.currency} {item.price.toLocaleString()}
+                                            {formatPrice(item.price)}
                                         </p>
                                     </div>
 
@@ -135,7 +150,7 @@ export default function Cart() {
                                 <div className="flex justify-between text-espresso">
                                     <span>Subtotal ({getTotalItems()} items)</span>
                                     <span className="font-medium">
-                                        INR {subtotal.toLocaleString()}
+                                        {formatPrice(subtotal)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-espresso">
@@ -144,26 +159,26 @@ export default function Cart() {
                                         {shipping === 0 ? (
                                             <span className="text-green-600">Free</span>
                                         ) : (
-                                            `INR ${shipping}`
+                                            formatPrice(shipping)
                                         )}
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-espresso">
                                     <span>Tax (18%)</span>
-                                    <span className="font-medium">INR {tax.toLocaleString()}</span>
+                                    <span className="font-medium">{formatPrice(tax)}</span>
                                 </div>
                             </div>
 
                             <div className="flex justify-between mb-6">
                                 <span className="font-serif text-xl text-espresso">Total</span>
                                 <span className="font-serif text-2xl font-bold text-maroon">
-                                    INR {total.toLocaleString()}
+                                    {formatPrice(total)}
                                 </span>
                             </div>
 
                             {shipping > 0 && (
                                 <p className="text-xs text-espresso/60 mb-4 text-center">
-                                    Free shipping on orders above INR 5,000
+                                    Free shipping on orders above {formatPrice(5000)}
                                 </p>
                             )}
 

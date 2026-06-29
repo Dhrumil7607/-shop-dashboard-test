@@ -4,12 +4,15 @@ import { Star, ShoppingCart, Share2, ChevronLeft } from "lucide-react";
 import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { fetchProducts, fetchShops } from "@/lib/api";
+import { setMetaTags, injectStructuredData } from "@/lib/seo";
 
 export default function ProductDetail() {
     const { productId } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { formatPrice } = useCurrency();
     const [product, setProduct] = useState(null);
     const [shop, setShop] = useState(null);
     const [quantity, setQuantity] = useState(1);
@@ -28,6 +31,28 @@ export default function ProductDetail() {
                 }
                 setProduct(found);
 
+                // Set SEO meta tags for product detail
+                setMetaTags({
+                    title: `${found.name} | Premium ${found.category || "Fashion"} | ShopLive Bharat`,
+                    description: `${found.name} - Premium ${found.category || "Fashion"} from India. Authentic, high-quality pieces with worldwide delivery. Starting at ${formatPrice(found.base_price)}.`,
+                    keywords: `${found.name}, ${found.category}, luxury fashion, Indian jewelry, ethnic wear`,
+                    image: found.images?.[0]?.url || found.image_url,
+                    url: `https://shoplivebharat.com/product/${productId}`,
+                    type: "product",
+                });
+
+                // Inject product schema for search engines
+                injectStructuredData("Product", {
+                    name: found.name,
+                    description: found.description || "",
+                    image: found.images?.[0]?.url || found.image_url,
+                    sku: found.sku || productId,
+                    price: found.base_price,
+                    currency: "INR",
+                    inStock: found.stock_count > 0,
+                    url: `https://shoplivebharat.com/product/${productId}`,
+                });
+
                 // Load shop info
                 const shops = await fetchShops({ limit: 100 });
                 const shopInfo = shops.find((s) => s.id === found.shop_id);
@@ -40,7 +65,7 @@ export default function ProductDetail() {
             }
         };
         loadProduct();
-    }, [productId, navigate]);
+    }, [productId, navigate, formatPrice]);
 
     const handleAddToCart = () => {
         for (let i = 0; i < quantity; i++) {
@@ -151,12 +176,12 @@ export default function ProductDetail() {
                         <div className="mb-6">
                             <div className="flex items-baseline gap-3">
                                 <span className="font-serif text-3xl font-bold text-espresso">
-                                    {product.currency} {product.price.toLocaleString()}
+                                    {formatPrice(product.price)}
                                 </span>
                                 {product.compare_at_price && (
                                     <>
                                         <span className="text-lg text-espresso/50 line-through">
-                                            {product.currency} {product.compare_at_price.toLocaleString()}
+                                            {formatPrice(product.compare_at_price)}
                                         </span>
                                         <span className="text-sm font-medium text-maroon">
                                             Save {discount}%
@@ -266,7 +291,7 @@ export default function ProductDetail() {
                                         Similar Product
                                     </p>
                                     <p className="text-sm text-maroon font-bold mt-2">
-                                        {product.currency} {(Math.random() * 10000).toFixed(0)}
+                                        {formatPrice(Math.random() * 10000)}
                                     </p>
                                 </div>
                             </div>

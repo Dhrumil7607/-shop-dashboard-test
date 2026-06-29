@@ -1,32 +1,54 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Save, AlertCircle } from "lucide-react";
 import AdminLayout from "@/layouts/AdminLayout";
 import { toast } from "sonner";
 
+const DEFAULT_SETTINGS = {
+    storeName: "ShopLiveBharat",
+    storeEmail: "support@shoplivebharat.com",
+    storePhone: "+91 98765 43210",
+    storeLocation: "Worldwide",
+    shippingCost: "Free above ₹5,000",
+    videoCallRate: "₹1,500",
+    videoCallCredit: "₹500 on purchase",
+    maintenanceMode: false,
+    enableNewsletter: true,
+    enableLiveChat: true,
+    maxProductsPerPage: 12,
+    defaultCurrency: "INR",
+    adminId: "admin",
+    adminPassword: "admin123",
+    confirmPassword: "admin123"
+};
+
 export default function AdminSettings() {
-    const [settings, setSettings] = useState({
-        storeName: "ShopLiveBharat",
-        storeEmail: "support@shoplivebharat.com",
-        storePhone: "+91 98765 43210",
-        storeLocation: "Worldwide",
-        shippingCost: "Free above ₹5,000",
-        videoCallRate: "₹1,500",
-        videoCallCredit: "₹500 on purchase",
-        maintenanceMode: false,
-        enableNewsletter: true,
-        enableLiveChat: true,
-        maxProductsPerPage: 12,
-        defaultCurrency: "INR",
-        adminId: "admin",
-        adminPassword: "admin123",
-        confirmPassword: "admin123"
+    const [settings, setSettings] = useState(() => {
+        // Load from localStorage or use defaults
+        try {
+            const saved = localStorage.getItem("slb_admin_settings");
+            return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+        } catch (error) {
+            console.error("Error loading settings:", error);
+            return DEFAULT_SETTINGS;
+        }
     });
 
     const [isSaving, setIsSaving] = useState(false);
     const [passwordChanged, setPasswordChanged] = useState(false);
 
+    // Ensure maintenance mode is explicitly false on load
+    useEffect(() => {
+        if (settings.maintenanceMode === undefined || settings.maintenanceMode === null) {
+            setSettings(prev => ({
+                ...prev,
+                maintenanceMode: false
+            }));
+        }
+    }, [settings.maintenanceMode]);
+
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
+        console.log(`Setting ${name}:`, type === "checkbox" ? checked : value);
         setSettings({
             ...settings,
             [name]: type === "checkbox" ? checked : value
@@ -37,10 +59,17 @@ export default function AdminSettings() {
         e.preventDefault();
         setIsSaving(true);
         try {
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            toast.success("Settings saved successfully!");
+            // Save to localStorage
+            localStorage.setItem("slb_admin_settings", JSON.stringify(settings));
+            console.log("✅ Settings saved:", settings);
+            
+            // In production, also send to backend API
+            // await api.post("/admin/settings", settings);
+            
+            toast.success("✅ Settings saved successfully!");
+            setPasswordChanged(false);
         } catch (error) {
+            console.error("❌ Failed to save settings:", error);
             toast.error("Failed to save settings");
         } finally {
             setIsSaving(false);
@@ -312,7 +341,7 @@ export default function AdminSettings() {
                         <div className="flex items-start gap-4 mb-6">
                             <AlertCircle className="text-amber-600 flex-shrink-0 mt-1" size={24} />
                             <div>
-                                <h2 className="text-2xl font-bold text-amber-900 mb-2">System Settings</h2>
+                                <h1 className="text-2xl font-bold text-amber-900 mb-2">System Settings</h1>
                                 <p className="text-sm text-amber-800">Dangerous operations - use with caution</p>
                             </div>
                         </div>
@@ -321,15 +350,32 @@ export default function AdminSettings() {
                             <input
                                 type="checkbox"
                                 name="maintenanceMode"
-                                checked={settings.maintenanceMode}
+                                checked={settings.maintenanceMode === true}
                                 onChange={handleInputChange}
                                 className="w-4 h-4 accent-amber-600 cursor-pointer"
                             />
-                            <div>
+                            <div className="flex-grow">
                                 <p className="font-semibold text-amber-900">Maintenance Mode</p>
                                 <p className="text-sm text-amber-700">Disable storefront during maintenance</p>
                             </div>
                         </label>
+
+                        {settings.maintenanceMode && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    console.log("🔧 Disabling maintenance mode");
+                                    setSettings(prev => ({
+                                        ...prev,
+                                        maintenanceMode: false
+                                    }));
+                                    toast.info("Maintenance mode disabled - click Save to confirm");
+                                }}
+                                className="mt-4 w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
+                            >
+                                ⚠️ Disable Maintenance Mode Now
+                            </button>
+                        )}
                     </div>
 
                     {/* Save Button */}
