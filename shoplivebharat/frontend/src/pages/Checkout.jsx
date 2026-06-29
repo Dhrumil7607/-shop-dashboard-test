@@ -1,516 +1,394 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader, CheckCircle } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { Loader, CheckCircle, MapPin, CreditCard, ShoppingBag } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { handleRazorpayPayment } from "@/lib/razorpay";
-import { setMetaTags } from "@/lib/seo";
+import { useAuth } from "@/contexts/AuthContext";
 
+/* ─── Styled input ─────────────────────────────────────────── */
+const inp = "w-full px-3 py-2.5 border-b border-gray-200 bg-transparent text-sm outline-none focus:border-[#C9A84C] transition placeholder-gray-400";
+const lbl = "block text-xs font-medium mb-1" ;
+
+/* ─── Payment method option ─────────────────────────────────── */
+function PayMethod({ id, title, sub, selected, onClick }) {
+    return (
+        <button type="button" onClick={onClick}
+            className="w-full text-left px-4 py-3.5 rounded-xl border-2 transition"
+            style={{
+                borderColor: selected ? "#C9A84C" : "#E8E4DF",
+                backgroundColor: selected ? "rgba(201,168,76,0.06)" : "white",
+            }}>
+            <p className="text-sm font-semibold" style={{ color: "#1a1a1a" }}>{title}</p>
+            {sub && <p className="text-xs mt-0.5" style={{ color: "#9B8B7A" }}>{sub}</p>}
+        </button>
+    );
+}
+
+/* ─── Order confirmation screen ─────────────────────────────── */
+function Confirmation({ order, formatPrice, navigate }) {
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="max-w-2xl mx-auto px-6 py-16 text-center">
+            <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.1 }}>
+                <CheckCircle size={56} className="mx-auto mb-6" style={{ color: "#2D7A3A" }} />
+            </motion.div>
+            <h1 className="font-serif text-4xl mb-3" style={{ color: "#1a1a1a", fontWeight: 400 }}>
+                Order Confirmed!
+            </h1>
+            <p className="text-sm mb-2" style={{ color: "#9B8B7A" }}>
+                Order <strong style={{ color: "#1a1a1a" }}>{order.orderId}</strong>
+            </p>
+            <p className="text-sm mb-10" style={{ color: "#9B8B7A" }}>
+                A confirmation has been sent to <strong style={{ color: "#1a1a1a" }}>{order.email}</strong>
+            </p>
+
+            {/* Items */}
+            <div className="border rounded-2xl overflow-hidden mb-6 text-left"
+                style={{ borderColor: "#E8E4DF" }}>
+                <div className="divide-y" style={{ divideColor: "#E8E4DF" }}>
+                    {order.items.map(item => (
+                        <div key={item.id} className="flex items-center gap-4 px-5 py-4">
+                            <img src={item.image_url} alt={item.name}
+                                className="w-12 h-14 object-cover rounded-lg flex-shrink-0"
+                                style={{ backgroundColor: "#F0EBE3" }}
+                                onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=80&q=60"; }} />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate" style={{ color: "#1a1a1a" }}>{item.name}</p>
+                                <p className="text-xs mt-0.5" style={{ color: "#9B8B7A" }}>Qty {item.quantity}</p>
+                            </div>
+                            <p className="text-sm font-semibold flex-shrink-0" style={{ color: "#1a1a1a" }}>
+                                {formatPrice(item.price * item.quantity)}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+                <div className="px-5 py-4 border-t" style={{ borderColor: "#E8E4DF", backgroundColor: "#FAF9F6" }}>
+                    <div className="flex justify-between text-sm font-bold" style={{ color: "#1a1a1a" }}>
+                        <span>Total paid</span>
+                        <span>{formatPrice(order.total)}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex gap-3">
+                <button onClick={() => navigate("/marketplace")}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold transition"
+                    style={{ backgroundColor: "#1a1a1a", color: "white" }}>
+                    Continue Shopping
+                </button>
+                <button onClick={() => navigate("/")}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold border transition hover:bg-black/5"
+                    style={{ borderColor: "#E8E4DF", color: "#1a1a1a" }}>
+                    Back to Home
+                </button>
+            </div>
+        </motion.div>
+    );
+}
+
+/* ─── Main component ─────────────────────────────────────────── */
 export default function Checkout() {
     const navigate = useNavigate();
     const { cartItems, getTotalPrice, clearCart } = useCart();
     const { formatPrice } = useCurrency();
-    const [step, setStep] = useState("shipping"); // shipping, payment, confirmation
-    const [loading, setLoading] = useState(false);
-    const [razorpayReady, setRazorpayReady] = useState(false);
+    const { user } = useAuth();
 
-    const [formData, setFormData] = useState({
-        // Shipping
-        firstName: "",
-        lastName: "",
-        email: "",
-        phone: "",
-        address: "",
-        city: "",
-        state: "",
-        pincode: "",
-        country: "India",
+    const [loading,  setLoading]  = useState(false);
+    const [payMethod, setPayMethod] = useState("card");
+    const [orderData, setOrderData] = useState(null);
+    const [currency, setCurrency] = useState("INR");
+
+    const [form, setForm] = useState({
+        full_name: user?.name  || "",
+        email:     user?.email || "",
+        phone:     "",
+        country:   "India",
+        address:   "",
+        city:      "",
+        state:     "",
+        zip:       "",
     });
 
-    const [orderData, setOrderData] = useState(null);
-
-    useEffect(() => {
-        // Set SEO meta tags for checkout page
-        setMetaTags({
-            title: "Checkout | Secure Payment | ShopLive Bharat",
-            description: "Complete your purchase securely. Fast checkout process with multiple payment options for your luxury fashion items.",
-            keywords: "checkout, payment, secure shopping, delivery",
-            url: "https://shoplivebharat.com/checkout",
-            type: "website",
-        });
-
-        // Check if Razorpay script is available
-        const script = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
-        if (script) {
-            setRazorpayReady(true);
-        }
-    }, []);
+    const set = useCallback((k, v) => setForm(prev => ({ ...prev, [k]: v })), []);
 
     const subtotal = getTotalPrice();
-    const shipping = subtotal > 5000 ? 0 : 299;
-    const tax = Math.round(subtotal * 0.18);
-    const total = subtotal + shipping + tax;
+    const shipping = subtotal > 15000 ? 0 : 499;
+    const tax      = Math.round(subtotal * 0.05);
+    const total    = subtotal + shipping + tax;
 
-    if (cartItems.length === 0) {
+    const COUNTRIES = ["India","United States","United Kingdom","Canada","Australia","UAE","Singapore","Germany","France","Other"];
+    const CURRENCIES = ["INR","USD","GBP","CAD","AUD","EUR","SGD"];
+
+    const PAY_METHODS = [
+        { id: "card",    title: "Card (Visa / MC / Amex)", sub: "Stripe secured" },
+        { id: "razorpay",title: "Razorpay",                sub: "UPI, Netbanking, Cards" },
+        { id: "paypal",  title: "PayPal",                  sub: "International" },
+        { id: "applepay",title: "Apple Pay / Google Pay",  sub: "One tap checkout" },
+    ];
+
+    const handlePlaceOrder = useCallback(async (e) => {
+        e.preventDefault();
+        if (!form.full_name || !form.email || !form.address) {
+            toast.error("Please fill in all required fields.");
+            return;
+        }
+        setLoading(true);
+        try {
+            // Simulate payment processing (swap for real gateway call)
+            await new Promise(r => setTimeout(r, 1400));
+            const order = {
+                orderId: `SLB-${Date.now().toString(36).toUpperCase()}`,
+                email:    form.email,
+                items:    cartItems,
+                subtotal, shipping, tax, total,
+                payMethod,
+            };
+            clearCart();
+            setOrderData(order);
+        } catch {
+            toast.error("Payment failed. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    }, [form, cartItems, subtotal, shipping, tax, total, payMethod, clearCart]);
+
+    if (cartItems.length === 0 && !orderData) {
         return (
             <MarketplaceLayout>
-                <div className="max-w-7xl mx-auto px-6 py-12">
-                    <p className="text-center text-espresso/60">Your cart is empty</p>
+                <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+                    <ShoppingBag size={48} style={{ color: "#E8E4DF" }} />
+                    <p className="text-sm" style={{ color: "#9B8B7A" }}>Your cart is empty.</p>
+                    <Link to="/marketplace"
+                        className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
+                        style={{ backgroundColor: "#1a1a1a" }}>
+                        Shop Now
+                    </Link>
                 </div>
             </MarketplaceLayout>
         );
     }
 
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleShippingSubmit = (e) => {
-        e.preventDefault();
-        if (!formData.firstName || !formData.email || !formData.address || !formData.city) {
-            toast.error("Please fill all required fields");
-            return;
-        }
-        setStep("payment");
-    };
-
-    const handlePaymentSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-
-        try {
-            // Process payment with Razorpay
-            await handleRazorpayPayment({
-                orderId: `ORD-${Date.now()}`,
-                amount: total,
-                currency: "INR",
-                customerName: `${formData.firstName} ${formData.lastName}`,
-                customerEmail: formData.email,
-                customerPhone: formData.phone,
-                onSuccess: (response) => {
-                    // Payment successful
-                    const order = {
-                        orderId: `ORD-${Date.now()}`,
-                        paymentId: response.razorpay_payment_id,
-                        date: new Date().toLocaleDateString(),
-                        customerName: `${formData.firstName} ${formData.lastName}`,
-                        email: formData.email,
-                        items: cartItems,
-                        subtotal,
-                        shipping,
-                        tax,
-                        total,
-                        shippingAddress: {
-                            address: formData.address,
-                            city: formData.city,
-                            state: formData.state,
-                            pincode: formData.pincode,
-                            country: formData.country,
-                        },
-                        paymentMethod: "Razorpay",
-                        status: "confirmed",
-                    };
-
-                    setOrderData(order);
-                    clearCart();
-                    setStep("confirmation");
-                    toast.success("Payment successful! Order confirmed.");
-                    setLoading(false);
-                },
-                onError: (error) => {
-                    toast.error(error.message || "Payment failed. Please try again.");
-                    setLoading(false);
-                },
-            });
-        } catch (error) {
-            toast.error("Payment processing failed. Please try again.");
-            setLoading(false);
-        }
-    };
-
-    if (step === "confirmation" && orderData) {
+    if (orderData) {
         return (
             <MarketplaceLayout>
-                <div className="max-w-3xl mx-auto px-6 py-12">
-                    <div className="text-center mb-12">
-                        <CheckCircle size={64} className="text-green-500 mx-auto mb-4" />
-                        <h1 className="font-serif text-4xl mb-4 text-espresso">
-                            Order Confirmed!
-                        </h1>
-                        <p className="text-espresso/60 text-lg">
-                            Thank you for your purchase. Your order has been confirmed.
-                        </p>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-lg p-8 border border-line-soft mb-8">
-                        <div className="grid grid-cols-2 gap-8 mb-8 pb-8 border-b border-line-soft">
-                            <div>
-                                <p className="text-xs uppercase tracking-widest text-maroon mb-2">
-                                    Order Number
-                                </p>
-                                <p className="font-serif text-2xl text-espresso">
-                                    {orderData.orderId}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs uppercase tracking-widest text-maroon mb-2">
-                                    Order Date
-                                </p>
-                                <p className="font-serif text-2xl text-espresso">{orderData.date}</p>
-                            </div>
-                        </div>
-
-                        <h2 className="font-semibold text-lg text-espresso mb-4">Order Summary</h2>
-                        <div className="space-y-3 mb-6 pb-6 border-b border-line-soft">
-                            {orderData.items.map((item) => (
-                                <div
-                                    key={item.id}
-                                    className="flex justify-between items-center"
-                                >
-                                    <div>
-                                        <p className="font-medium text-espresso">{item.name}</p>
-                                        <p className="text-sm text-espresso/60">
-                                            Qty: {item.quantity}
-                                        </p>
-                                    </div>
-                                    <p className="font-medium text-maroon">
-                                        {formatPrice(item.price * item.quantity)}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="space-y-2 mb-6">
-                            <div className="flex justify-between text-espresso">
-                                <span>Subtotal</span>
-                                <span>{formatPrice(orderData.subtotal)}</span>
-                            </div>
-                            <div className="flex justify-between text-espresso">
-                                <span>Shipping</span>
-                                <span>
-                                    {orderData.shipping === 0
-                                        ? "Free"
-                                        : formatPrice(orderData.shipping)}
-                                </span>
-                            </div>
-                            <div className="flex justify-between text-espresso">
-                                <span>Tax</span>
-                                <span>{formatPrice(orderData.tax)}</span>
-                            </div>
-                            <div className="flex justify-between font-serif text-xl text-maroon">
-                                <span>Total</span>
-                                <span>{formatPrice(orderData.total)}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-blue-50 rounded-lg p-6 mb-8 border border-blue-200">
-                        <h3 className="font-semibold text-espresso mb-4">Shipping Address</h3>
-                        <p className="text-espresso/80">
-                            {orderData.shippingAddress.address}
-                            <br />
-                            {orderData.shippingAddress.city}, {orderData.shippingAddress.state}{" "}
-                            {orderData.shippingAddress.pincode}
-                            <br />
-                            {orderData.shippingAddress.country}
-                        </p>
-                    </div>
-
-                    <div className="bg-green-50 rounded-lg p-6 mb-8 border border-green-200">
-                        <h3 className="font-semibold text-espresso mb-2">What's Next?</h3>
-                        <ul className="text-sm text-espresso/80 space-y-1">
-                            <li>✓ Check your email for order confirmation</li>
-                            <li>✓ Track your shipment in your account</li>
-                            <li>✓ Estimated delivery: 5-7 business days</li>
-                        </ul>
-                    </div>
-
-                    <div className="flex gap-4">
-                        <button
-                            onClick={() => navigate("/marketplace")}
-                            className="flex-1 py-3 bg-espresso text-ivory rounded-lg font-medium hover:bg-opacity-90 transition"
-                        >
-                            Continue Shopping
-                        </button>
-                        <button
-                            onClick={() => navigate("/")}
-                            className="flex-1 py-3 border border-line-soft rounded-lg font-medium hover:bg-gray-50 transition"
-                        >
-                            Back to Home
-                        </button>
-                    </div>
-                </div>
+                <Confirmation order={orderData} formatPrice={formatPrice} navigate={navigate} />
             </MarketplaceLayout>
         );
     }
 
     return (
         <MarketplaceLayout>
-            <div className="max-w-4xl mx-auto px-6 py-8">
-                {/* Breadcrumb */}
-                <button
-                    onClick={() => (step === "payment" ? setStep("shipping") : navigate("/cart"))}
-                    className="flex items-center gap-2 text-maroon hover:text-maroon/70 mb-8 transition"
-                >
-                    <ArrowLeft size={18} />
-                    Back
-                </button>
+            <div style={{ backgroundColor: "#FAF9F6", minHeight: "100vh" }}>
+                <div className="max-w-7xl mx-auto px-6 md:px-12 py-10">
 
-                <h1 className="font-serif text-4xl mb-8">Checkout</h1>
+                    {/* Page title */}
+                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4 }} className="mb-8">
+                        <h1 className="font-serif text-4xl md:text-5xl mb-1"
+                            style={{ color: "#1a1a1a", fontWeight: 400 }}>Checkout</h1>
+                        <p className="text-sm" style={{ color: "#9B8B7A" }}>
+                            Almost there — secure, encrypted, and worldwide.
+                        </p>
+                    </motion.div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Form */}
-                    <div className="lg:col-span-2">
-                        {/* Progress Steps */}
-                        <div className="flex items-center gap-4 mb-12 pb-8 border-b border-line-soft">
-                            <div
-                                className={`h-10 w-10 rounded-full flex items-center justify-center font-semibold ${
-                                    step === "shipping" || step === "payment"
-                                        ? "bg-maroon text-ivory"
-                                        : "bg-green-500 text-white"
-                                }`}
-                            >
-                                {step === "confirmation" ? "✓" : "1"}
-                            </div>
-                            <span
-                                className={`font-medium ${
-                                    step === "shipping" ? "text-espresso" : "text-espresso/60"
-                                }`}
-                            >
-                                Shipping
-                            </span>
+                    <form onSubmit={handlePlaceOrder}>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-                            <div
-                                className={`flex-1 h-0.5 ${
-                                    step === "payment" || step === "confirmation"
-                                        ? "bg-maroon"
-                                        : "bg-gray-300"
-                                }`}
-                            />
+                            {/* ── LEFT: Form ── */}
+                            <div className="lg:col-span-2 space-y-6">
 
-                            <div
-                                className={`h-10 w-10 rounded-full flex items-center justify-center font-semibold ${
-                                    step === "payment" || step === "confirmation"
-                                        ? step === "confirmation"
-                                            ? "bg-green-500 text-white"
-                                            : "bg-maroon text-ivory"
-                                        : "bg-gray-300 text-gray-600"
-                                }`}
-                            >
-                                {step === "confirmation" ? "✓" : "2"}
-                            </div>
-                            <span
-                                className={`font-medium ${
-                                    step === "payment" ? "text-espresso" : "text-espresso/60"
-                                }`}
-                            >
-                                Payment
-                            </span>
-                        </div>
+                                {/* Shipping card */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: 0.05 }}
+                                    className="bg-white rounded-2xl border p-7"
+                                    style={{ borderColor: "#E8E4DF", boxShadow: "0 2px 12px rgba(44,36,27,0.05)" }}>
 
-                        {/* Shipping Form */}
-                        {step === "shipping" && (
-                            <form onSubmit={handleShippingSubmit}>
-                                <h2 className="font-semibold text-xl text-espresso mb-6">
-                                    Shipping Details
-                                </h2>
+                                    <h2 className="flex items-center gap-2 text-base font-bold mb-6" style={{ color: "#1a1a1a" }}>
+                                        <MapPin size={15} style={{ color: "#C9A84C" }} />
+                                        Shipping Information
+                                    </h2>
 
-                                <div className="grid grid-cols-2 gap-6 mb-6">
-                                    <input
-                                        type="text"
-                                        name="firstName"
-                                        placeholder="First Name *"
-                                        value={formData.firstName}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                        required
-                                    />
-                                    <input
-                                        type="text"
-                                        name="lastName"
-                                        placeholder="Last Name"
-                                        value={formData.lastName}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                    />
-                                </div>
+                                    {/* Row 1 */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 mb-5">
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>Full Name <span style={{ color: "#8B3A3A" }}>*</span></label>
+                                            <input className={inp} value={form.full_name} onChange={e => set("full_name", e.target.value)} placeholder="Admin" required />
+                                        </div>
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>Email <span style={{ color: "#8B3A3A" }}>*</span></label>
+                                            <input className={inp} type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="admin@shoplivebharat.com" required />
+                                        </div>
+                                    </div>
 
-                                <div className="grid grid-cols-2 gap-6 mb-6">
-                                    <input
-                                        type="email"
-                                        name="email"
-                                        placeholder="Email *"
-                                        value={formData.email}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                        required
-                                    />
-                                    <input
-                                        type="tel"
-                                        name="phone"
-                                        placeholder="Phone"
-                                        value={formData.phone}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                    />
-                                </div>
+                                    {/* Row 2 */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 mb-5">
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>Phone</label>
+                                            <input className={inp} type="tel" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98765 43210" />
+                                        </div>
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>Country</label>
+                                            <select className={inp + " bg-white cursor-pointer"} value={form.country} onChange={e => set("country", e.target.value)}>
+                                                {COUNTRIES.map(c => <option key={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
 
-                                <input
-                                    type="text"
-                                    name="address"
-                                    placeholder="Address *"
-                                    value={formData.address}
-                                    onChange={handleInputChange}
-                                    className="w-full px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none mb-6"
-                                    required
-                                />
+                                    {/* Address */}
+                                    <div className="mb-5">
+                                        <label className={lbl} style={{ color: "#9B8B7A" }}>Address <span style={{ color: "#8B3A3A" }}>*</span></label>
+                                        <input className={inp} value={form.address} onChange={e => set("address", e.target.value)} placeholder="123 Main Street, Apartment 4B" required />
+                                    </div>
 
-                                <div className="grid grid-cols-3 gap-6 mb-6">
-                                    <input
-                                        type="text"
-                                        name="city"
-                                        placeholder="City *"
-                                        value={formData.city}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                        required
-                                    />
-                                    <input
-                                        type="text"
-                                        name="state"
-                                        placeholder="State"
-                                        value={formData.state}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                    />
-                                    <input
-                                        type="text"
-                                        name="pincode"
-                                        placeholder="Pincode"
-                                        value={formData.pincode}
-                                        onChange={handleInputChange}
-                                        className="px-4 py-3 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                    />
-                                </div>
+                                    {/* Row 3 */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 mb-5">
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>City</label>
+                                            <input className={inp} value={form.city} onChange={e => set("city", e.target.value)} placeholder="Mumbai" />
+                                        </div>
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>State / Region</label>
+                                            <input className={inp} value={form.state} onChange={e => set("state", e.target.value)} placeholder="Maharashtra" />
+                                        </div>
+                                    </div>
 
-                                <button
-                                    type="submit"
-                                    className="w-full py-3 bg-espresso text-ivory rounded-lg font-medium hover:bg-opacity-90 transition"
-                                >
-                                    Continue to Payment
-                                </button>
-                            </form>
-                        )}
+                                    {/* Row 4 */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>ZIP / Postal Code</label>
+                                            <input className={inp} value={form.zip} onChange={e => set("zip", e.target.value)} placeholder="400001" />
+                                        </div>
+                                        <div>
+                                            <label className={lbl} style={{ color: "#9B8B7A" }}>Currency</label>
+                                            <select className={inp + " bg-white cursor-pointer"} value={currency} onChange={e => setCurrency(e.target.value)}>
+                                                {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </motion.div>
 
-                        {/* Payment Form */}
-                        {step === "payment" && (
-                            <form onSubmit={handlePaymentSubmit}>
-                                <h2 className="font-semibold text-xl text-espresso mb-6">
-                                    Payment Information
-                                </h2>
+                                {/* Payment card */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: 0.1 }}
+                                    className="bg-white rounded-2xl border p-7"
+                                    style={{ borderColor: "#E8E4DF", boxShadow: "0 2px 12px rgba(44,36,27,0.05)" }}>
 
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
-                                    <p className="text-blue-900 mb-2 font-semibold">Secure Payment</p>
-                                    <p className="text-blue-800 text-sm">
-                                        We use Razorpay for secure payment processing. Your payment information is 100% secure and encrypted.
+                                    <h2 className="flex items-center gap-2 text-base font-bold mb-6" style={{ color: "#1a1a1a" }}>
+                                        <CreditCard size={15} style={{ color: "#C9A84C" }} />
+                                        Payment Method
+                                    </h2>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {PAY_METHODS.map(pm => (
+                                            <PayMethod
+                                                key={pm.id}
+                                                id={pm.id}
+                                                title={pm.title}
+                                                sub={pm.sub}
+                                                selected={payMethod === pm.id}
+                                                onClick={() => setPayMethod(pm.id)}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {/* Secure note */}
+                                    <p className="flex items-center gap-1.5 text-xs mt-5" style={{ color: "#9B8B7A" }}>
+                                        <span>🔒</span>
+                                        All transactions are 256-bit SSL encrypted. We never store card details.
                                     </p>
+                                </motion.div>
+                            </div>
+
+                            {/* ── RIGHT: Order summary ── */}
+                            <motion.div
+                                initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.45, delay: 0.15 }}
+                                className="lg:sticky lg:top-24 bg-white rounded-2xl border p-6"
+                                style={{ borderColor: "#E8E4DF", boxShadow: "0 2px 12px rgba(44,36,27,0.05)" }}>
+
+                                <h2 className="font-bold text-base mb-5" style={{ color: "#1a1a1a" }}>Order Summary</h2>
+
+                                {/* Cart items */}
+                                <div className="space-y-4 mb-5 pb-5 border-b" style={{ borderColor: "#F0EBE3" }}>
+                                    {cartItems.map(item => (
+                                        <div key={item.id} className="flex items-center gap-3">
+                                            <div className="relative flex-shrink-0">
+                                                <img src={item.image_url} alt={item.name}
+                                                    className="w-12 h-14 rounded-lg object-cover"
+                                                    style={{ backgroundColor: "#F0EBE3" }}
+                                                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=80&q=60"; }} />
+                                                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
+                                                    style={{ backgroundColor: "#9B8B7A" }}>
+                                                    {item.quantity}
+                                                </span>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-medium line-clamp-2 leading-tight" style={{ color: "#1a1a1a" }}>
+                                                    {item.name}
+                                                </p>
+                                                {item.size && (
+                                                    <p className="text-[10px] mt-0.5" style={{ color: "#9B8B7A" }}>Size: {item.size}</p>
+                                                )}
+                                            </div>
+                                            <p className="text-xs font-semibold flex-shrink-0" style={{ color: "#1a1a1a" }}>
+                                                ₹{Number(item.price * item.quantity).toLocaleString("en-IN")}
+                                            </p>
+                                        </div>
+                                    ))}
                                 </div>
 
-                                <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
-                                    <h3 className="font-semibold text-espresso mb-3">Order Summary</h3>
-                                    <div className="space-y-2 text-sm text-espresso/80">
-                                        <div className="flex justify-between">
-                                            <span>Subtotal</span>
-                                            <span>{formatPrice(subtotal)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span>Shipping</span>
-                                            <span>{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span>Tax (18%)</span>
-                                            <span>{formatPrice(tax)}</span>
-                                        </div>
-                                        <div className="border-t border-green-200 pt-2 mt-2 flex justify-between font-bold text-espresso">
-                                            <span>Total Amount</span>
-                                            <span>{formatPrice(total)}</span>
-                                        </div>
+                                {/* Totals */}
+                                <div className="space-y-2.5 mb-5 pb-5 border-b text-sm" style={{ borderColor: "#F0EBE3" }}>
+                                    <div className="flex justify-between" style={{ color: "#4A3F35" }}>
+                                        <span>Subtotal</span>
+                                        <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                                    </div>
+                                    <div className="flex justify-between" style={{ color: "#4A3F35" }}>
+                                        <span>Shipping</span>
+                                        <span style={{ color: shipping === 0 ? "#2D7A3A" : "#4A3F35" }}>
+                                            {shipping === 0 ? "FREE" : `₹${shipping}`}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between" style={{ color: "#4A3F35" }}>
+                                        <span>Tax</span>
+                                        <span>₹{tax.toLocaleString("en-IN")}</span>
                                     </div>
                                 </div>
 
-                                <button
+                                <div className="flex justify-between font-bold text-base mb-6" style={{ color: "#1a1a1a" }}>
+                                    <span>Total</span>
+                                    <span>₹{total.toLocaleString("en-IN")}</span>
+                                </div>
+
+                                {/* CTA */}
+                                <motion.button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full py-4 bg-maroon text-white rounded-lg font-semibold hover:bg-maroon/90 transition disabled:opacity-50 flex items-center justify-center gap-2 text-lg"
-                                >
-                                    {loading && <Loader size={20} className="animate-spin" />}
-                                    {loading ? "Processing..." : `Pay ${formatPrice(total)} with Razorpay`}
-                                </button>
+                                    whileHover={{ scale: loading ? 1 : 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    className="w-full py-3.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition disabled:opacity-60"
+                                    style={{ backgroundColor: "#C9A84C", color: "white" }}>
+                                    {loading
+                                        ? <><Loader size={15} className="animate-spin" /> Processing…</>
+                                        : <><span>📦</span> Place Order Securely</>
+                                    }
+                                </motion.button>
 
-                                <p className="text-xs text-espresso/60 text-center mt-4">
-                                    Click to proceed to secure Razorpay payment gateway
+                                {/* Trust */}
+                                <p className="text-center text-xs mt-3" style={{ color: "#9B8B7A" }}>
+                                    🔒 Secure &nbsp;·&nbsp; ✈️ Worldwide &nbsp;·&nbsp; ✓ Authenticated
                                 </p>
-                            </form>
-                        )}
-                    </div>
-
-                    {/* Order Summary Sidebar */}
-                    <div className="lg:sticky lg:top-8 h-fit">
-                        <div className="bg-gray-50 rounded-lg p-6 border border-line-soft">
-                            <h3 className="font-semibold text-lg text-espresso mb-4">
-                                Order Summary
-                            </h3>
-
-                            <div className="space-y-3 mb-6 pb-6 border-b border-line-soft">
-                                {cartItems.map((item) => (
-                                    <div
-                                        key={item.id}
-                                        className="flex justify-between text-sm"
-                                    >
-                                        <span className="text-espresso/70">
-                                            {item.name} x {item.quantity}
-                                        </span>
-                                        <span className="text-espresso font-medium">
-                                            {formatPrice(item.price * item.quantity)}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="space-y-2 mb-4">
-                                <div className="flex justify-between text-espresso">
-                                    <span className="text-sm">Subtotal</span>
-                                    <span className="font-medium">
-                                        {formatPrice(subtotal)}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between text-espresso">
-                                    <span className="text-sm">Shipping</span>
-                                    <span className="font-medium">
-                                        {shipping === 0 ? "Free" : formatPrice(shipping)}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between text-espresso">
-                                    <span className="text-sm">Tax</span>
-                                    <span className="font-medium">
-                                        {formatPrice(tax)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="border-t border-line-soft pt-4">
-                                <div className="flex justify-between font-serif text-xl">
-                                    <span className="text-espresso">Total</span>
-                                    <span className="text-maroon font-bold">
-                                        {formatPrice(total)}
-                                    </span>
-                                </div>
-                            </div>
+                            </motion.div>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </div>
         </MarketplaceLayout>

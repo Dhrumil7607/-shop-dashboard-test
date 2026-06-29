@@ -1,275 +1,110 @@
 import { useEffect, useState } from "react";
-import { MapPin, Instagram, ArrowRight, Search } from "lucide-react";
+import { ArrowRight, Loader } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
-import ProductCard from "@/components/ProductCard";
 import { fetchShops, fetchProducts } from "@/lib/api";
 import { MOCK_SHOPS, MOCK_PRODUCTS } from "@/lib/testData";
 
 export default function ShopsDirectory() {
     const navigate = useNavigate();
-    const [shops, setShops] = useState([]);
+    const [shops,    setShops]    = useState([]);
     const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedShop, setSelectedShop] = useState(null);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [loading,  setLoading]  = useState(true);
 
     useEffect(() => {
-        loadData();
+        (async () => {
+            try {
+                const [sh, pr] = await Promise.all([
+                    fetchShops({ active_only: true, limit: 100 }).catch(() => MOCK_SHOPS),
+                    fetchProducts({ active_only: true, limit: 200 }).catch(() => MOCK_PRODUCTS),
+                ]);
+                setShops(sh?.length ? sh : MOCK_SHOPS);
+                setProducts(pr?.length ? pr : MOCK_PRODUCTS);
+            } catch {
+                setShops(MOCK_SHOPS);
+                setProducts(MOCK_PRODUCTS);
+            } finally {
+                setLoading(false);
+            }
+        })();
     }, []);
 
-    const loadData = async () => {
-        try {
-            const [shopsData, productsData] = await Promise.all([
-                fetchShops({ active_only: true, limit: 100 }),
-                fetchProducts({ active_only: true, limit: 200 }),
-            ]);
-
-            if (shopsData && shopsData.length > 0) {
-                setShops(shopsData);
-                setSelectedShop(shopsData[0]?.id || null);
-            } else {
-                setShops(MOCK_SHOPS);
-                setSelectedShop(MOCK_SHOPS[0]?.id || null);
-            }
-
-            if (productsData && productsData.length > 0) {
-                setProducts(productsData);
-            } else {
-                setProducts(MOCK_PRODUCTS);
-            }
-
-            console.log("✓ Loaded shops data");
-        } catch (error) {
-            console.error("❌ API Error - Using mock data:", error.message);
-            toast.error("Backend not available - showing sample data");
-            setShops(MOCK_SHOPS);
-            setProducts(MOCK_PRODUCTS);
-            setSelectedShop(MOCK_SHOPS[0]?.id || null);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Get products for selected shop
-    const shopProducts = selectedShop
-        ? products.filter((p) => p.shop_id === selectedShop)
-        : [];
-
-    // Get selected shop details
-    const currentShop = shops.find((s) => s.id === selectedShop);
-
-    // Filter shops by search
-    const filteredShops = shops.filter(
-        (shop) =>
-            shop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            shop.specialty.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            shop.city.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    if (loading) {
-        return (
-            <MarketplaceLayout>
-                <div className="flex items-center justify-center min-h-screen">
-                    <p className="text-espresso/60">Loading shops...</p>
-                </div>
-            </MarketplaceLayout>
-        );
-    }
+    const countFor = (shopId) => products.filter(p => p.shop_id === shopId).length;
 
     return (
         <MarketplaceLayout>
-            <div className="max-w-7xl mx-auto px-6 py-8">
-                {/* Header */}
-                <div className="mb-12">
-                    <h1 className="font-serif text-5xl md:text-6xl mb-4 text-espresso">
-                        Ahmedabad Shops
+            <div style={{ backgroundColor: "#FAF9F6" }}>
+                <div className="max-w-7xl mx-auto px-6 md:px-12 py-10">
+
+                    {/* Header */}
+                    <h1 className="font-serif text-4xl md:text-5xl mb-2" style={{ color: "#1a1a1a", fontWeight: 400 }}>
+                        Trusted Indian Stores
                     </h1>
-                    <p className="text-lg text-espresso/70">
-                        Explore traditional clothing shops from Ahmedabad and discover authentic handcrafted pieces
-                        from local artisans and designers.
+                    <p className="text-sm mb-10" style={{ color: "#9B8B7A" }}>
+                        Family-run, generations-old, lovingly curated.
                     </p>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Shops Sidebar */}
-                    <div className="lg:col-span-1">
-                        <div className="bg-white rounded-lg border border-line-soft p-6 sticky top-20">
-                            {/* Search */}
-                            <div className="mb-6">
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-3 text-espresso/40" size={18} />
-                                    <input
-                                        type="text"
-                                        placeholder="Search shops..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none text-sm"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Shops List */}
-                            <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
-                                {filteredShops.length === 0 ? (
-                                    <p className="text-sm text-espresso/60 text-center py-8">
-                                        No shops found
-                                    </p>
-                                ) : (
-                                    filteredShops.map((shop) => (
-                                        <button
-                                            key={shop.id}
-                                            onClick={() => setSelectedShop(shop.id)}
-                                            className={`w-full text-left p-4 rounded-lg transition border-2 ${
-                                                selectedShop === shop.id
-                                                    ? "border-maroon bg-maroon/5"
-                                                    : "border-line-soft hover:border-maroon/50 hover:bg-gray-50"
-                                            }`}
-                                        >
-                                            <h3 className="font-semibold text-espresso mb-1">
-                                                {shop.name}
-                                            </h3>
-                                            <p className="text-xs text-espresso/60 mb-2">
-                                                {shop.specialty}
-                                            </p>
-                                            <div className="flex items-center gap-1 text-xs text-espresso/50">
-                                                <MapPin size={14} />
-                                                {shop.city}
-                                            </div>
-                                        </button>
-                                    ))
-                                )}
-                            </div>
+                    {loading ? (
+                        <div className="flex items-center justify-center py-24">
+                            <Loader size={28} className="animate-spin" style={{ color: "#C9A84C" }} />
                         </div>
-                    </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {shops.map(shop => (
+                                <div key={shop.id}
+                                    className="rounded-xl overflow-hidden border"
+                                    style={{ backgroundColor: "white", borderColor: "#E8E4DF" }}>
 
-                    {/* Main Content */}
-                    <div className="lg:col-span-2">
-                        {currentShop ? (
-                            <>
-                                {/* Shop Detail Card */}
-                                <div className="bg-white rounded-lg border border-line-soft overflow-hidden mb-8">
-                                    {/* Shop Image */}
-                                    <div className="h-64 bg-gray-100 overflow-hidden">
+                                    {/* Shop image */}
+                                    <div className="relative overflow-hidden" style={{ height: "200px", backgroundColor: "#F0EBE3" }}>
                                         <img
-                                            src={currentShop.image_url}
-                                            alt={currentShop.name}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => {
-                                                e.target.src = "/shop-assets/banner-1.jpg";
-                                            }}
+                                            src={shop.image_url}
+                                            alt={shop.name}
+                                            loading="lazy"
+                                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
+                                            onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=600&q=60"; }}
                                         />
                                     </div>
 
-                                    {/* Shop Info */}
-                                    <div className="p-8">
-                                        <div className="flex items-start justify-between mb-6">
-                                            <div>
-                                                <h2 className="font-serif text-4xl text-espresso mb-2">
-                                                    {currentShop.name}
-                                                </h2>
-                                                <p className="text-lg text-maroon font-semibold mb-4">
-                                                    {currentShop.specialty}
+                                    {/* Shop info */}
+                                    <div className="p-5">
+                                        <div className="flex items-start gap-3 mb-3">
+                                            {/* Avatar */}
+                                            <img
+                                                src={shop.image_url}
+                                                alt={shop.name}
+                                                className="w-10 h-10 rounded-full object-cover flex-shrink-0 border"
+                                                style={{ borderColor: "#E8E4DF" }}
+                                                onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=80&q=60"; }}
+                                            />
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-sm truncate" style={{ color: "#1a1a1a" }}>{shop.name}</p>
+                                                <p className="text-xs" style={{ color: "#9B8B7A" }}>
+                                                    {shop.city}, {shop.country || "India"}
                                                 </p>
                                             </div>
-                                            {currentShop.instagram_url && (
-                                                <a
-                                                    href={currentShop.instagram_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-2 px-4 py-2 border border-maroon text-maroon rounded-lg hover:bg-maroon hover:text-ivory transition"
-                                                >
-                                                    <Instagram size={18} />
-                                                    Follow
-                                                </a>
-                                            )}
                                         </div>
 
-                                        {/* Shop Description */}
-                                        <p className="text-espresso/70 mb-6 leading-relaxed">
-                                            {currentShop.description}
+                                        <p className="text-xs leading-relaxed mb-4" style={{ color: "#6B5E52" }}>
+                                            {shop.description}
                                         </p>
 
-                                        {/* Shop Details Grid */}
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-line-soft">
-                                            <div>
-                                                <p className="text-xs uppercase tracking-widest text-maroon font-semibold mb-2">
-                                                    Owner
-                                                </p>
-                                                <p className="text-espresso font-medium">
-                                                    {currentShop.owner_name}
-                                                </p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs uppercase tracking-widest text-maroon font-semibold mb-2">
-                                                    Location
-                                                </p>
-                                                <div className="flex items-center gap-2 text-espresso">
-                                                    <MapPin size={16} className="text-maroon" />
-                                                    {currentShop.city}, {currentShop.country}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs uppercase tracking-widest text-maroon font-semibold mb-2">
-                                                    Email
-                                                </p>
-                                                <a
-                                                    href={`mailto:${currentShop.owner_email}`}
-                                                    className="text-maroon hover:text-maroon/70 transition"
-                                                >
-                                                    {currentShop.owner_email}
-                                                </a>
-                                            </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs" style={{ color: "#9B8B7A" }}>
+                                                {countFor(shop.id)} products
+                                            </span>
+                                            <button
+                                                onClick={() => navigate(`/marketplace?shop=${shop.id}`)}
+                                                className="flex items-center gap-1.5 text-xs font-semibold transition hover:opacity-70"
+                                                style={{ color: "#1a1a1a" }}>
+                                                Visit <ArrowRight size={13} />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
-
-                                {/* Products Section */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-6">
-                                        <h3 className="text-2xl font-bold text-espresso">
-                                            Featured Products
-                                        </h3>
-                                        <button
-                                            onClick={() =>
-                                                navigate(
-                                                    `/marketplace?shop=${currentShop.id}`
-                                                )
-                                            }
-                                            className="flex items-center gap-2 text-maroon hover:text-maroon/70 transition font-medium"
-                                        >
-                                            View All
-                                            <ArrowRight size={18} />
-                                        </button>
-                                    </div>
-
-                                    {shopProducts.length === 0 ? (
-                                        <div className="text-center py-12 bg-gray-50 rounded-lg border border-line-soft">
-                                            <p className="text-espresso/60">
-                                                No products from this shop yet. Check back soon!
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {shopProducts.slice(0, 6).map((product) => (
-                                                <ProductCard
-                                                    key={product.id}
-                                                    product={product}
-                                                />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        ) : (
-                            <div className="text-center py-12">
-                                <p className="text-espresso/60">
-                                    No shops available
-                                </p>
-                            </div>
-                        )}
-                    </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </MarketplaceLayout>

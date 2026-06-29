@@ -41,23 +41,16 @@ export default function AdminProducts() {
 
     const loadShops = async () => {
         try {
-            console.log("Loading shops...");
             const data = await fetchShops({ active_only: false, limit: 500 });
-            console.log("Shops loaded:", data);
-            if (data && Array.isArray(data) && data.length > 0) {
-                console.log(`✅ Loaded ${data.length} shops`);
+            if (Array.isArray(data) && data.length > 0) {
                 setShops(data);
-            } else if (data && Array.isArray(data)) {
-                console.warn("⚠️ No shops available. Shops array is empty:", data);
+            } else if (Array.isArray(data)) {
                 setShops([]);
                 toast.error("No shops available. Create a shop first.");
             } else {
-                console.warn("⚠️ Shops data is not an array:", data);
                 setShops([]);
-                toast.error("Invalid shops data format");
             }
-        } catch (error) {
-            console.error("❌ Failed to load shops:", error);
+        } catch {
             toast.error("Failed to load shops. Check backend connection.");
             setShops([]);
         }
@@ -112,41 +105,23 @@ export default function AdminProducts() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (!formData.shop_id) {
-                toast.error("Please select a shop");
-                return;
-            }
-            if (!formData.price || formData.price <= 0) {
-                toast.error("Price must be greater than 0");
-                return;
-            }
-            if (!formData.image_url) {
-                toast.error("Please enter an image URL");
-                return;
-            }
-            if (formData.description.length < 10) {
-                toast.error("Description must be at least 10 characters");
-                return;
-            }
+            if (!formData.shop_id) { toast.error("Please select a shop"); return; }
+            if (!formData.price || formData.price <= 0) { toast.error("Price must be greater than 0"); return; }
+            if (!formData.image_url) { toast.error("Please enter an image URL"); return; }
+            if (formData.description.length < 10) { toast.error("Description must be at least 10 characters"); return; }
 
             if (isEditing && editingId) {
                 await updateProduct(editingId, formData, adminKey);
-                // Update local state immediately
                 setProducts(products.map(p => p.id === editingId ? formData : p));
-                toast.success("✅ Product updated successfully!");
+                toast.success("Product updated successfully!");
             } else {
                 const newProduct = await createProduct(formData, adminKey);
-                // Add new product to local state immediately
-                if (newProduct && newProduct.id) {
+                if (newProduct?.id) {
                     setProducts([newProduct, ...products]);
-                    toast.success("✅ Product is now LIVE!");
+                    toast.success("Product is now LIVE!");
                 }
             }
-            setShowForm(false);
-            setIsEditing(false);
-            setEditingId(null);
-            setFormData(emptyProduct);
-            // Reload to ensure data consistency
+            setShowForm(false); setIsEditing(false); setEditingId(null); setFormData(emptyProduct);
             loadProducts();
         } catch (error) {
             toast.error(error?.response?.data?.detail || "Failed to save product");

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Loader, Edit2, Save, X } from "lucide-react";
 import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
@@ -6,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { updateUserProfile } from "@/lib/api";
 
 export default function Account() {
+    const navigate = useNavigate();
     const { isLoggedIn, user } = useAuth();
     const [editing, setEditing] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -18,9 +20,9 @@ export default function Account() {
 
     useEffect(() => {
         if (!isLoggedIn) {
-            window.location.href = "/login";
+            navigate("/login", { replace: true });
         }
-    }, [isLoggedIn]);
+    }, [isLoggedIn, navigate]);
 
     const handleUpdate = async () => {
         setLoading(true);

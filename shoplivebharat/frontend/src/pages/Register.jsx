@@ -1,258 +1,317 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, Loader, Check, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Link, useNavigate } from "react-router-dom";
+import { Eye, EyeOff, ArrowRight, AlertCircle, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import Logo from "@/components/Logo";
+import MarketplaceLayout from "@/layouts/MarketplaceLayout";
+
+const IMAGE_URL =
+    "https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=900&q=85";
+
+function getStrength(pwd) {
+    let s = 0;
+    if (pwd.length >= 8)           s++;
+    if (/[A-Z]/.test(pwd))         s++;
+    if (/[a-z]/.test(pwd))         s++;
+    if (/[0-9]/.test(pwd))         s++;
+    if (/[^A-Za-z0-9]/.test(pwd))  s++;
+    return s;
+}
+const STRENGTH_LABEL = ["Weak", "Fair", "Good", "Strong", "Very Strong"];
+const STRENGTH_COLOR = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#16a34a"];
 
 export default function Register() {
-    const [name, setName] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
-    const [showPassword, setShowPassword] = useState(false);
-    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
     const navigate = useNavigate();
     const { registerUser } = useAuth();
 
-    // Password strength checker
-    const getPasswordStrength = (pwd) => {
-        let strength = 0;
-        if (pwd.length >= 8) strength++;
-        if (/[A-Z]/.test(pwd)) strength++;
-        if (/[a-z]/.test(pwd)) strength++;
-        if (/[0-9]/.test(pwd)) strength++;
-        if (/[^A-Za-z0-9]/.test(pwd)) strength++;
-        return strength;
-    };
+    const [name,            setName]            = useState("");
+    const [email,           setEmail]           = useState("");
+    const [password,        setPassword]        = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
+    const [showPass,        setShowPass]        = useState(false);
+    const [showConfirm,     setShowConfirm]     = useState(false);
+    const [loading,         setLoading]         = useState(false);
+    const [error,           setError]           = useState("");
 
-    const passwordStrength = getPasswordStrength(password);
-    const strengthLabel = ["Weak", "Fair", "Good", "Strong", "Very Strong"][passwordStrength - 1] || "";
-    const strengthColor = {
-        1: "bg-red-500",
-        2: "bg-orange-500",
-        3: "bg-yellow-500",
-        4: "bg-green-500",
-        5: "bg-green-600",
-    }[passwordStrength] || "bg-gray-300";
+    const strength = getStrength(password);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
         setLoading(true);
-
         try {
-            // Validation
-            if (!name || !email || !password || !confirmPassword) {
+            if (!name || !email || !password || !confirmPassword)
                 throw new Error("Please fill in all fields");
-            }
-
-            if (name.length < 2) {
+            if (name.length < 2)
                 throw new Error("Name must be at least 2 characters");
-            }
-
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                throw new Error("Please enter a valid email");
-            }
-
-            if (password.length < 8) {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+                throw new Error("Enter a valid email address");
+            if (password.length < 8)
                 throw new Error("Password must be at least 8 characters");
-            }
-
-            if (password !== confirmPassword) {
+            if (password !== confirmPassword)
                 throw new Error("Passwords do not match");
-            }
-
-            // Register
             await registerUser(name, email, password);
-            toast.success("Account created successfully!");
+            toast.success("Account created! Welcome to ShopLiveBharat 🎉");
             navigate("/");
         } catch (err) {
-            const errorMsg = err.message || "Registration failed. Please try again.";
-            setError(errorMsg);
-            toast.error(errorMsg);
+            const msg = err.message || "Registration failed. Please try again.";
+            setError(msg);
+            toast.error(msg);
         } finally {
             setLoading(false);
         }
     };
 
+    const focusStyle = (e) => {
+        e.target.style.borderColor = "#A2466B";
+        e.target.style.boxShadow   = "0 0 0 3px rgba(162,70,107,0.09)";
+    };
+    const blurStyle = (e, hasErr) => {
+        e.target.style.borderColor = hasErr ? "#ef4444" : "#E8E4DF";
+        e.target.style.boxShadow   = "none";
+    };
+
     return (
-        <div className="min-h-screen bg-ivory text-espresso flex flex-col">
-            {/* Header */}
-            <header className="sticky top-0 z-40 bg-ivory border-b border-line-soft">
-                <div className="max-w-7xl mx-auto px-6 py-4">
-                    <Logo />
-                </div>
-            </header>
+        <MarketplaceLayout hideFooter>
+            <div
+                className="flex items-center justify-center py-12 px-4"
+                style={{ backgroundColor: "#EDE8E0", minHeight: "calc(100vh - 64px)" }}
+            >
+                <div className="w-full max-w-5xl flex flex-col lg:flex-row items-center justify-center gap-12">
 
-            {/* Main Content */}
-            <div className="flex-1 flex items-center justify-center px-6 py-12">
-                <div className="w-full max-w-md">
-                    {/* Page Title */}
-                    <div className="mb-12 text-center">
-                        <h1 className="font-serif text-4xl md:text-5xl mb-4 text-espresso">
-                            Create Account
-                        </h1>
-                        <p className="text-espresso/70">
-                            Join ShopLiveBharat and start shopping
-                        </p>
-                    </div>
-
-                    {/* Form */}
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Name */}
-                        <div>
-                            <label className="block text-sm font-medium text-espresso mb-2">
-                                Full Name
-                            </label>
-                            <input
-                                type="text"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="Your name"
-                                className="w-full px-4 py-3 border border-line-soft rounded-lg focus:border-maroon focus:ring-1 focus:ring-maroon outline-none transition text-espresso placeholder:text-espresso/40"
-                            />
-                        </div>
-
-                        {/* Email */}
-                        <div>
-                            <label className="block text-sm font-medium text-espresso mb-2">
-                                Email Address
-                            </label>
-                            <input
-                                type="email"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
-                                className="w-full px-4 py-3 border border-line-soft rounded-lg focus:border-maroon focus:ring-1 focus:ring-maroon outline-none transition text-espresso placeholder:text-espresso/40"
-                            />
-                        </div>
-
-                        {/* Password */}
-                        <div>
-                            <label className="block text-sm font-medium text-espresso mb-2">
-                                Password
-                            </label>
-                            <div className="relative mb-2">
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full px-4 py-3 border border-line-soft rounded-lg focus:border-maroon focus:ring-1 focus:ring-maroon outline-none transition text-espresso placeholder:text-espresso/40"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-espresso/60 hover:text-espresso transition"
-                                >
-                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                </button>
-                            </div>
-
-                            {/* Password Strength */}
-                            {password && (
-                                <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full transition-all ${strengthColor}`}
-                                                style={{ width: `${(passwordStrength / 5) * 100}%` }}
-                                            ></div>
-                                        </div>
-                                        <span className="text-espresso/60">{strengthLabel}</span>
-                                    </div>
-                                    <p className="text-xs text-espresso/60">
-                                        Password should be at least 8 characters with uppercase, lowercase, numbers, and symbols
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Confirm Password */}
-                        <div>
-                            <label className="block text-sm font-medium text-espresso mb-2">
-                                Confirm Password
-                            </label>
-                            <div className="relative">
-                                <input
-                                    type={showConfirmPassword ? "text" : "password"}
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    placeholder="••••••••"
-                                    className="w-full px-4 py-3 border border-line-soft rounded-lg focus:border-maroon focus:ring-1 focus:ring-maroon outline-none transition text-espresso placeholder:text-espresso/40"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-espresso/60 hover:text-espresso transition"
-                                >
-                                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                </button>
-
-                                {/* Match indicator */}
-                                {confirmPassword && (
-                                    <div className="absolute right-12 top-1/2 -translate-y-1/2">
-                                        {password === confirmPassword ? (
-                                            <Check size={18} className="text-green-500" />
-                                        ) : (
-                                            <X size={18} className="text-red-500" />
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Error Message */}
-                        {error && (
-                            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                                <p className="text-sm text-red-700">{error}</p>
-                            </div>
-                        )}
-
-                        {/* Submit Button */}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="w-full py-3 px-4 bg-maroon text-ivory rounded-lg font-semibold hover:bg-maroon/90 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                            {loading && <Loader size={18} className="animate-spin" />}
-                            {loading ? "Creating Account..." : "Create Account"}
-                        </button>
-                    </form>
-
-                    {/* Divider */}
-                    <div className="my-8 flex items-center gap-4">
-                        <div className="flex-1 h-px bg-line-soft"></div>
-                        <span className="text-sm text-espresso/60">Already have an account?</span>
-                        <div className="flex-1 h-px bg-line-soft"></div>
-                    </div>
-
-                    {/* Login Link */}
-                    <Link
-                        to="/login"
-                        className="w-full py-3 px-4 border border-maroon text-maroon rounded-lg font-semibold hover:bg-maroon/5 transition text-center block"
+                    {/* ── LEFT: Image Card ── */}
+                    <motion.div
+                        initial={{ opacity: 0, x: -40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.65, ease: [0.23, 1, 0.32, 1] }}
+                        className="hidden lg:block flex-shrink-0 w-[300px]"
                     >
-                        Sign In
-                    </Link>
+                        <div
+                            className="relative rounded-[2.2rem] overflow-hidden shadow-2xl"
+                            style={{ height: 560 }}
+                        >
+                            <img
+                                src={IMAGE_URL}
+                                alt="Indian fashion"
+                                className="w-full h-full object-cover object-center"
+                                loading="eager"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
 
-                    {/* Back to Home */}
-                    <div className="text-center mt-6">
-                        <Link to="/" className="text-sm text-espresso/70 hover:text-espresso transition">
-                            ← Back to Home
-                        </Link>
-                    </div>
+                            <motion.div
+                                animate={{ y: [0, -7, 0] }}
+                                transition={{ delay: 0.6, duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute bottom-6 left-5 right-5 rounded-2xl p-4"
+                                style={{
+                                    background: "rgba(255,255,255,0.92)",
+                                    backdropFilter: "blur(14px)",
+                                    WebkitBackdropFilter: "blur(14px)",
+                                }}
+                            >
+                                <p className="text-[10px] font-bold uppercase tracking-[0.26em] mb-1"
+                                    style={{ color: "#C9A84C" }}>
+                                    ShopLiveBharat
+                                </p>
+                                <p className="font-serif text-sm font-semibold" style={{ color: "#2C241B" }}>
+                                    Join Our Community
+                                </p>
+                                <p className="text-xs mt-0.5" style={{ color: "#8B8680" }}>
+                                    Discover Authentic Indian Fashion
+                                </p>
+                            </motion.div>
+                        </div>
+                    </motion.div>
+
+                    {/* ── RIGHT: Form Card ── */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.65, delay: 0.12, ease: [0.23, 1, 0.32, 1] }}
+                        className="w-full max-w-[430px]"
+                    >
+                        <div
+                            className="rounded-3xl p-8 md:p-10"
+                            style={{
+                                background: "rgba(255,255,255,0.88)",
+                                backdropFilter: "blur(22px)",
+                                WebkitBackdropFilter: "blur(22px)",
+                                boxShadow: "0 16px 48px rgba(44,36,27,0.13)",
+                                border: "1px solid rgba(255,255,255,0.65)",
+                            }}
+                        >
+                            {/* Brand + Title */}
+                            <div className="text-center mb-7">
+                                <div className="inline-flex items-center gap-1.5 mb-4">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                        stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+                                        <line x1="3" y1="6" x2="21" y2="6"/>
+                                        <path d="M16 10a4 4 0 01-8 0"/>
+                                    </svg>
+                                    <span className="font-bold text-sm" style={{ color: "#C9A84C" }}>ShopLive</span>
+                                    <span className="font-bold text-sm" style={{ color: "#2C241B" }}>Bharat</span>
+                                </div>
+                                <h1 className="font-serif leading-none mb-2" style={{ fontSize: "2.2rem", color: "#2C241B" }}>
+                                    Create{" "}
+                                    <span style={{ fontStyle: "italic", color: "#A2466B" }}>Account</span>
+                                </h1>
+                                <p className="text-sm" style={{ color: "#8B8680" }}>
+                                    Join thousands shopping authentic Indian fashion
+                                </p>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                {/* Global error */}
+                                <AnimatePresence>
+                                    {error && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                                            className="flex items-center gap-2 p-3 rounded-xl text-xs text-red-700 bg-red-50 border border-red-200"
+                                        >
+                                            <AlertCircle size={13} className="flex-shrink-0" /> {error}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+
+                                {/* Full Name */}
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                        style={{ color: "#8B8680" }}>Full Name</label>
+                                    <input
+                                        type="text" value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        placeholder="Your full name"
+                                        className="w-full py-3.5 px-4 rounded-xl outline-none text-sm"
+                                        style={{ border: "1.5px solid #E8E4DF", background: "#FAFAF9", color: "#2C241B", transition: "border-color 0.2s, box-shadow 0.2s" }}
+                                        onFocus={focusStyle} onBlur={(e) => blurStyle(e, false)}
+                                    />
+                                </div>
+
+                                {/* Email */}
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                        style={{ color: "#8B8680" }}>Email Address</label>
+                                    <input
+                                        type="email" value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="you@example.com"
+                                        className="w-full py-3.5 px-4 rounded-xl outline-none text-sm"
+                                        style={{ border: "1.5px solid #E8E4DF", background: "#FAFAF9", color: "#2C241B", transition: "border-color 0.2s, box-shadow 0.2s" }}
+                                        onFocus={focusStyle} onBlur={(e) => blurStyle(e, false)}
+                                    />
+                                </div>
+
+                                {/* Password */}
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                        style={{ color: "#8B8680" }}>Password</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPass ? "text" : "password"} value={password}
+                                            onChange={(e) => setPassword(e.target.value)}
+                                            placeholder="Min. 8 characters"
+                                            className="w-full py-3.5 pl-4 pr-11 rounded-xl outline-none text-sm"
+                                            style={{ border: "1.5px solid #E8E4DF", background: "#FAFAF9", color: "#2C241B", transition: "border-color 0.2s, box-shadow 0.2s" }}
+                                            onFocus={focusStyle} onBlur={(e) => blurStyle(e, false)}
+                                        />
+                                        <button type="button" onClick={() => setShowPass((v) => !v)}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2"
+                                            style={{ color: "#C9A4B0" }} aria-label="Toggle password">
+                                            {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                    {password && (
+                                        <div className="mt-2 flex items-center gap-2">
+                                            <div className="flex flex-1 gap-1">
+                                                {[1, 2, 3, 4, 5].map((i) => (
+                                                    <motion.div key={i} className="h-1 flex-1 rounded-full"
+                                                        animate={{ backgroundColor: i <= strength ? (STRENGTH_COLOR[strength - 1] || "#E8E4DF") : "#E8E4DF" }}
+                                                        transition={{ duration: 0.3 }} />
+                                                ))}
+                                            </div>
+                                            <span className="text-[10px] font-semibold w-20 text-right"
+                                                style={{ color: STRENGTH_COLOR[strength - 1] || "#8B8680" }}>
+                                                {STRENGTH_LABEL[strength - 1] || ""}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Confirm Password */}
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                        style={{ color: "#8B8680" }}>Confirm Password</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showConfirm ? "text" : "password"} value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="••••••••"
+                                            className="w-full py-3.5 pl-4 pr-16 rounded-xl outline-none text-sm"
+                                            style={{
+                                                border: `1.5px solid ${confirmPassword && password !== confirmPassword ? "#ef4444" : "#E8E4DF"}`,
+                                                background: "#FAFAF9", color: "#2C241B",
+                                                transition: "border-color 0.2s, box-shadow 0.2s",
+                                            }}
+                                            onFocus={focusStyle}
+                                            onBlur={(e) => blurStyle(e, confirmPassword && password !== confirmPassword)}
+                                        />
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                            {confirmPassword && (
+                                                password === confirmPassword
+                                                    ? <Check size={14} className="text-green-500" />
+                                                    : <X size={14} className="text-red-400" />
+                                            )}
+                                            <button type="button" onClick={() => setShowConfirm((v) => !v)}
+                                                style={{ color: "#C9A4B0" }} aria-label="Toggle confirm">
+                                                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Submit */}
+                                <motion.button
+                                    type="submit" disabled={loading}
+                                    whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.975 }}
+                                    className="w-full py-4 rounded-xl font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-2.5 mt-1"
+                                    style={{ background: "#A2466B", color: "#FFF8F0" }}
+                                >
+                                    {loading ? (
+                                        <motion.div animate={{ rotate: 360 }}
+                                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                            className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full" />
+                                    ) : (
+                                        <>Create Account <ArrowRight size={16} strokeWidth={2.5} /></>
+                                    )}
+                                </motion.button>
+
+                                {/* Divider */}
+                                <div className="relative my-1" style={{ height: 1, background: "#E8E4DF" }}>
+                                    <span className="absolute left-1/2 -translate-x-1/2 -top-3 px-3 text-xs"
+                                        style={{ background: "rgba(255,255,255,0.88)", color: "#8B8680" }}>
+                                        Already have an account?
+                                    </span>
+                                </div>
+
+                                <Link to="/login" className="block">
+                                    <motion.div
+                                        whileHover={{ background: "#F5F1ED" }} whileTap={{ scale: 0.975 }}
+                                        className="w-full py-4 rounded-xl font-bold uppercase tracking-widest text-sm text-center"
+                                        style={{ border: "1.5px solid #E8E4DF", color: "#2C241B", background: "transparent" }}
+                                    >
+                                        Sign In Instead
+                                    </motion.div>
+                                </Link>
+                            </form>
+
+                            <p className="text-center mt-6 text-xs" style={{ color: "#8B8680" }}>
+                                <Link to="/" className="hover:underline">← Back to Home</Link>
+                            </p>
+                        </div>
+                    </motion.div>
                 </div>
             </div>
-
-            {/* Footer */}
-            <footer className="border-t border-line-soft mt-12">
-                <div className="max-w-7xl mx-auto px-6 py-8 text-center text-sm text-espresso/60">
-                    <p>© {new Date().getFullYear()} ShopLiveBharat. All rights reserved.</p>
-                </div>
-            </footer>
-        </div>
+        </MarketplaceLayout>
     );
 }

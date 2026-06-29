@@ -48,7 +48,6 @@ export default function AdminSettings() {
 
     const handleInputChange = (e) => {
         const { name, value, type, checked } = e.target;
-        console.log(`Setting ${name}:`, type === "checkbox" ? checked : value);
         setSettings({
             ...settings,
             [name]: type === "checkbox" ? checked : value
@@ -59,17 +58,10 @@ export default function AdminSettings() {
         e.preventDefault();
         setIsSaving(true);
         try {
-            // Save to localStorage
             localStorage.setItem("slb_admin_settings", JSON.stringify(settings));
-            console.log("✅ Settings saved:", settings);
-            
-            // In production, also send to backend API
-            // await api.post("/admin/settings", settings);
-            
-            toast.success("✅ Settings saved successfully!");
+            toast.success("Settings saved successfully!");
             setPasswordChanged(false);
-        } catch (error) {
-            console.error("❌ Failed to save settings:", error);
+        } catch {
             toast.error("Failed to save settings");
         } finally {
             setIsSaving(false);
@@ -360,16 +352,12 @@ export default function AdminSettings() {
                             </div>
                         </label>
 
-                        {settings.maintenanceMode && (
+        {settings.maintenanceMode && (
                             <button
                                 type="button"
                                 onClick={() => {
-                                    console.log("🔧 Disabling maintenance mode");
-                                    setSettings(prev => ({
-                                        ...prev,
-                                        maintenanceMode: false
-                                    }));
-                                    toast.info("Maintenance mode disabled - click Save to confirm");
+                                    setSettings(prev => ({ ...prev, maintenanceMode: false }));
+                                    toast.info("Maintenance mode disabled — click Save to confirm");
                                 }}
                                 className="mt-4 w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium"
                             >

@@ -1,144 +1,170 @@
+import { memo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useCart } from "@/contexts/CartContext";
-import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Heart } from "lucide-react";
+import { useCart } from "@/contexts/CartContext";
 
-/**
- * Product card — pixel-matched to the reference site.
- *
- * Layout (top → bottom):
- *   • Image with:  % OFF badge (top-left, white bg)
- *                  READY TO SHIP badge (top-right, green)
- *   • Store name   (tiny caps, maroon)
- *   • Product name (serif)
- *   • Price row    (sale price + strikethrough original)
- *   • Color swatch label
- *   • Add to Cart  (full-width dark button)
- */
-export default function ProductCard({ product }) {
-    const navigate  = useNavigate();
+const COLOR_MAP = {
+    "Ivory":"#FAF8F5","Gold":"#D4AF37","Maroon":"#8B3A3A","Crimson":"#DC143C",
+    "Navy":"#1B2A6B","Rani Pink":"#E8417A","Pastel Pink":"#FFB7C5",
+    "Cream":"#F5F0E8","Yellow":"#FFD700","Green":"#2D6A4F","White":"#FFF","Black":"#000","Pink":"#E8417A",
+};
+
+function fmt(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
+
+const ProductCard = memo(function ProductCard({ product, index = 0 }) {
+    const navigate = useNavigate();
     const { addToCart } = useCart();
-    const [fav, setFav] = useState(false);
+    const [fav,      setFav]      = useState(false);
+    const [imgError, setImgError] = useState(false);
+    const [hovering, setHovering] = useState(false);
 
     const discount = product.compare_at_price
         ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100)
         : 0;
 
-    // Strip "READY TO SHIP · " prefix for the store name display
     const storeName = (product.badge || product.shop_name || "")
-        .replace(/^READY TO SHIP[·•\-\s]+/i, "")
-        .trim();
+        .replace(/^READY TO SHIP[·•\-\s]+/i, "").trim();
 
-    const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN");
+    const handleClick  = useCallback(() => navigate(`/product/${product.id}`), [navigate, product.id]);
+    const handleCart   = useCallback((e) => { e.stopPropagation(); addToCart(product); }, [addToCart, product]);
+    const handleFav    = useCallback((e) => { e.stopPropagation(); setFav(v => !v); }, []);
 
     return (
-        <div
-            className="group bg-white border border-[#e8e4df] rounded-xl overflow-hidden flex flex-col cursor-pointer hover:shadow-lg transition-shadow duration-300"
-            onClick={() => navigate(`/product/${product.id}`)}
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.05, 0.35) }}
+            onClick={handleClick}
+            onHoverStart={() => setHovering(true)}
+            onHoverEnd={() => setHovering(false)}
+            className="group cursor-pointer flex flex-col"
+            style={{ willChange: "transform" }}
         >
             {/* ── IMAGE ── */}
-            <div className="relative overflow-hidden bg-gray-50" style={{ aspectRatio: "3/4" }}>
-                <img
-                    src={product.image_url}
+            <motion.div
+                animate={hovering
+                    ? { y: -5, boxShadow: "0 16px 40px rgba(44,36,27,0.13)" }
+                    : { y: 0,  boxShadow: "0 2px 8px rgba(44,36,27,0.06)" }
+                }
+                transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
+                className="relative overflow-hidden rounded-xl mb-3"
+                style={{ aspectRatio: "3/4", backgroundColor: "#F0EBE3" }}
+            >
+                <motion.img
+                    src={imgError ? "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=400&q=60" : product.image_url}
                     alt={product.name}
                     loading="lazy"
                     decoding="async"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=400&q=60"; }}
+                    animate={hovering ? { scale: 1.07 } : { scale: 1 }}
+                    transition={{ duration: 0.55, ease: [0.22, 0.61, 0.36, 1] }}
+                    className="w-full h-full object-cover"
+                    style={{ willChange: "transform" }}
+                    onError={() => setImgError(true)}
                 />
 
-                {/* Discount badge — top left, white pill */}
+                {/* Soft scrim on hover */}
+                <motion.div
+                    animate={{ opacity: hovering ? 1 : 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ background: "linear-gradient(to top, rgba(26,10,10,0.15) 0%, transparent 60%)" }}
+                />
+
+                {/* Discount badge */}
                 {discount > 0 && (
-                    <span className="absolute top-3 left-3 bg-white text-[#0a0a0a] text-[10px] font-black px-2.5 py-1 rounded shadow-sm tracking-wide">
+                    <motion.span
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 20, delay: index * 0.05 }}
+                        className="absolute top-2.5 left-2.5 text-white text-[10px] font-bold px-2 py-0.5 rounded-md"
+                        style={{ backgroundColor: "#1a1a1a" }}
+                    >
                         {discount}% OFF
-                    </span>
+                    </motion.span>
                 )}
 
-                {/* Ready to ship — top right, green pill */}
+                {/* Ready to ship */}
                 {(product.ready_to_ship || (product.badge || "").toLowerCase().includes("ready")) && (
-                    <span className="absolute top-3 right-3 bg-[#1a7a3c] text-white text-[9px] font-bold px-2.5 py-1 rounded uppercase tracking-wider">
+                    <span
+                        className="absolute top-2.5 right-2.5 text-white text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide"
+                        style={{ backgroundColor: "#2D7A3A" }}
+                    >
                         READY TO SHIP
                     </span>
                 )}
 
-                {/* Wishlist — appears on hover */}
-                <button
-                    aria-label={fav ? "Remove from wishlist" : "Add to wishlist"}
-                    onClick={e => { e.stopPropagation(); setFav(v => !v); }}
-                    className="absolute bottom-3 right-3 w-8 h-8 bg-white rounded-full shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50"
-                >
-                    <Heart
-                        size={15}
-                        className={fav ? "text-red-500 fill-red-500" : "text-gray-400"}
-                    />
-                </button>
-
-                {/* Out of stock overlay */}
-                {!product.is_active && (
-                    <div className="absolute inset-0 bg-white/70 flex items-center justify-center">
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Out of Stock</span>
-                    </div>
-                )}
-            </div>
+                {/* Hover action row */}
+                <AnimatePresence>
+                    {hovering && (
+                        <motion.div
+                            key="actions"
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 4 }}
+                            transition={{ duration: 0.18 }}
+                            className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between"
+                        >
+                            <motion.button
+                                onClick={handleCart}
+                                disabled={!product.is_active}
+                                whileTap={{ scale: 0.93 }}
+                                className="w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center disabled:opacity-30"
+                                aria-label="Add to cart"
+                            >
+                                <ShoppingCart size={13} style={{ color: "#1a1a1a" }} />
+                            </motion.button>
+                            <motion.button
+                                onClick={handleFav}
+                                whileTap={{ scale: 0.9 }}
+                                className="w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center"
+                                aria-label={fav ? "Remove" : "Wishlist"}
+                            >
+                                <Heart size={13} className={fav ? "fill-red-500 text-red-500" : "text-gray-400"} />
+                            </motion.button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </motion.div>
 
             {/* ── INFO ── */}
-            <div className="p-4 flex flex-col flex-1 gap-1.5">
-                {/* Store name */}
-                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-maroon leading-none truncate">
+            <div className="flex flex-col gap-1 flex-1 px-0.5">
+                <p className="text-[9px] font-bold uppercase tracking-[0.15em] truncate"
+                    style={{ color: "#C9A84C" }}>
                     {storeName}
                 </p>
 
-                {/* Product name */}
-                <h3 className="font-serif text-[15px] text-[#0a0a0a] line-clamp-2 leading-snug">
+                <motion.h3
+                    animate={{ opacity: hovering ? 0.65 : 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="text-sm leading-snug line-clamp-2"
+                    style={{ color: "#1a1a1a", fontFamily: "'Cormorant Garamond', serif", fontWeight: 400 }}
+                >
                     {product.name}
-                </h3>
+                </motion.h3>
 
-                {/* Price row */}
                 <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="font-bold text-[#0a0a0a] text-sm">{fmt(product.price)}</span>
+                    <span className="text-sm font-semibold" style={{ color: "#1a1a1a" }}>{fmt(product.price)}</span>
                     {product.compare_at_price && (
-                        <span className="text-xs text-gray-400 line-through">{fmt(product.compare_at_price)}</span>
+                        <span className="text-xs line-through" style={{ color: "#9B8B7A" }}>{fmt(product.compare_at_price)}</span>
                     )}
                 </div>
 
-                {/* Color swatches */}
                 {product.color && (
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                            className="inline-block w-3.5 h-3.5 rounded-full border border-gray-200 flex-shrink-0"
-                            style={{ backgroundColor: COLOR_MAP[product.color] || "#ccc" }}
-                        />
-                        <span className="text-[10px] text-gray-500">{product.color}</span>
+                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                        {product.color.split(",").map(c => c.trim()).filter(Boolean).map(c => (
+                            <span key={c} title={c}
+                                className="w-3.5 h-3.5 rounded-full border border-black/10 flex-shrink-0 inline-block"
+                                style={{ backgroundColor: COLOR_MAP[c] || "#ccc",
+                                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.5)" }}
+                            />
+                        ))}
                     </div>
                 )}
-
-                {/* Add to cart */}
-                <button
-                    type="button"
-                    disabled={!product.is_active}
-                    onClick={e => { e.stopPropagation(); addToCart(product); }}
-                    className="mt-auto w-full py-2.5 bg-[#0a0a0a] text-white text-xs font-semibold rounded-lg hover:bg-maroon transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                >
-                    <ShoppingCart size={13} />
-                    Add to Cart
-                </button>
             </div>
-        </div>
+        </motion.div>
     );
-}
+});
 
-// Map colour name → approximate CSS colour for the swatch dot
-const COLOR_MAP = {
-    "Ivory":       "#FAF8F5",
-    "Gold":        "#D4AF37",
-    "Maroon":      "#8B3A3A",
-    "Crimson":     "#DC143C",
-    "Navy":        "#1B2A6B",
-    "Rani Pink":   "#E8417A",
-    "Pastel Pink": "#FFB7C5",
-    "Cream":       "#F5F0E8",
-    "Yellow":      "#FFD700",
-    "Green":       "#2D6A4F",
-    "White":       "#FFFFFF",
-    "Black":       "#0a0a0a",
-};
+ProductCard.displayName = "ProductCard";
+export default ProductCard;

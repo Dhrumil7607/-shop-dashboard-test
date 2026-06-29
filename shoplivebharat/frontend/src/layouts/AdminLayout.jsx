@@ -1,6 +1,7 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Search, Heart, ShoppingBag, UserCircle } from "lucide-react";
+import { Search, Heart, ShoppingBag } from "lucide-react";
+import { motion } from "framer-motion";
 
 /**
  * Admin layout — matches the reference screenshot exactly:
@@ -100,18 +101,23 @@ export default function AdminLayout({ children }) {
             {/* ── Tab bar ── */}
             <div className="bg-white border-b border-gray-200">
                 <div className="max-w-7xl mx-auto px-6">
-                    <div className="flex items-center gap-0.5">
+                    <div className="flex items-center gap-0.5 relative">
                         {NAV_TABS.map(tab => {
                             const isActive = location.pathname === tab.path ||
                                 (tab.path === "/admin/seller-applications" && location.pathname === "/admin/shops");
                             return (
                                 <Link key={tab.path} to={tab.path}
-                                    className={`px-5 py-3.5 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
-                                        isActive
-                                            ? "border-[#1a1a1a] text-[#1a1a1a]"
-                                            : "border-transparent text-gray-500 hover:text-[#1a1a1a] hover:border-gray-300"
-                                    }`}>
+                                    className="relative px-5 py-3.5 text-sm font-semibold transition whitespace-nowrap"
+                                    style={{ color: isActive ? "#1a1a1a" : "#9B8B7A" }}>
                                     {tab.label}
+                                    {isActive && (
+                                        <motion.span
+                                            layoutId="admin-tab-indicator"
+                                            className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full"
+                                            style={{ backgroundColor: "#1a1a1a" }}
+                                            transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                                        />
+                                    )}
                                 </Link>
                             );
                         })}
@@ -120,9 +126,15 @@ export default function AdminLayout({ children }) {
             </div>
 
             {/* ── Page content ── */}
-            <main className="max-w-7xl mx-auto px-6 py-8">
+            <motion.main
+                key={location.pathname}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="max-w-7xl mx-auto px-6 py-8"
+            >
                 {children}
-            </main>
+            </motion.main>
         </div>
     );
 }

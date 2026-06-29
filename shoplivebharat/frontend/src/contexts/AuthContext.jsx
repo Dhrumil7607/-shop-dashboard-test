@@ -1,26 +1,19 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import { api } from "@/lib/api";
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-    // Admin auth
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [adminKey, setAdminKey] = useState(() => localStorage.getItem("slb_admin_key") || "");
-
-    // User auth
+    const [isAdmin,    setIsAdmin]    = useState(false);
+    const [adminKey,   setAdminKey]   = useState(() => localStorage.getItem("slb_admin_key") || "");
     const [isLoggedIn, setIsLoggedIn] = useState(false);
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(() => localStorage.getItem("slb_token") || "");
-    const [loading, setLoading] = useState(false);
+    const [user,       setUser]       = useState(null);
+    const [token,      setToken]      = useState(() => localStorage.getItem("slb_token") || "");
+    const [loading,    setLoading]    = useState(false);
 
+    // Restore session on mount — runs once, no deps loop
     useEffect(() => {
-        // Check admin status
-        if (adminKey) {
-            setIsAdmin(true);
-        }
+        if (adminKey) setIsAdmin(true);
 
-        // Check user auth on mount
         if (token) {
             try {
                 const userData = JSON.parse(localStorage.getItem("slb_user") || "null");
@@ -28,7 +21,7 @@ export function AuthProvider({ children }) {
                     setUser(userData);
                     setIsLoggedIn(true);
                 }
-            } catch (err) {
+            } catch {
                 localStorage.removeItem("slb_token");
                 localStorage.removeItem("slb_user");
                 setToken("");
@@ -38,22 +31,17 @@ export function AuthProvider({ children }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const loginUser = async (email, password) => {
+    // ── User methods ────────────────────────────────────────────────────────
+    const loginUser = useCallback(async (email, password) => {
         try {
-            // For now, use local mock - replace with actual API when backend ready
-            // const { data } = await api.post("/auth/login", { email, password });
-            
-            // Mock login for testing
             const mockUser = {
-                id: "user_" + Date.now(),
-                name: email.split("@")[0],
-                email: email,
+                id:    "user_" + Date.now(),
+                name:  email.split("@")[0],
+                email,
                 phone: "",
-                city: ""
+                city:  "",
             };
-            
             const mockToken = "token_" + Date.now() + "_" + Math.random().toString(36).slice(2);
-            
             localStorage.setItem("slb_token", mockToken);
             localStorage.setItem("slb_user", JSON.stringify(mockUser));
             setToken(mockToken);
@@ -63,24 +51,18 @@ export function AuthProvider({ children }) {
         } catch (error) {
             throw new Error(error.response?.data?.detail || "Login failed");
         }
-    };
+    }, []);
 
-    const registerUser = async (name, email, password) => {
+    const registerUser = useCallback(async (name, email, password) => {
         try {
-            // For now, use local mock - replace with actual API when backend ready
-            // const { data } = await api.post("/auth/register", { name, email, password });
-            
-            // Mock registration for testing
             const mockUser = {
                 id: "user_" + Date.now(),
-                name: name,
-                email: email,
+                name,
+                email,
                 phone: "",
-                city: ""
+                city:  "",
             };
-            
             const mockToken = "token_" + Date.now() + "_" + Math.random().toString(36).slice(2);
-            
             localStorage.setItem("slb_token", mockToken);
             localStorage.setItem("slb_user", JSON.stringify(mockUser));
             setToken(mockToken);
@@ -90,85 +72,65 @@ export function AuthProvider({ children }) {
         } catch (error) {
             throw new Error(error.response?.data?.detail || "Registration failed");
         }
-    };
+    }, []);
 
-    const updateUserProfile = async (profileData) => {
+    const updateUserProfile = useCallback(async (profileData) => {
         try {
-            // For now, update locally - replace with actual API when backend ready
             const updatedUser = { ...user, ...profileData };
             localStorage.setItem("slb_user", JSON.stringify(updatedUser));
             setUser(updatedUser);
             return updatedUser;
-        } catch (error) {
+        } catch {
             throw new Error("Failed to update profile");
         }
-    };
+    }, [user]);
 
-    const logoutUser = () => {
+    const logoutUser = useCallback(() => {
         localStorage.removeItem("slb_token");
         localStorage.removeItem("slb_user");
         setToken("");
         setUser(null);
         setIsLoggedIn(false);
-    };
+    }, []);
 
-    // Admin methods
-    const loginAdmin = async (key) => {
-        try {
-            // Persist the admin key locally. Validation happens server-side on
-            // each privileged request via the X-Admin-Key header.
-            localStorage.setItem("slb_admin_key", key);
-            setAdminKey(key);
-            setIsAdmin(true);
-            return true;
-        } catch (error) {
-            throw new Error("Invalid admin key");
-        }
-    };
+    // ── Admin methods ────────────────────────────────────────────────────────
+    const loginAdmin = useCallback(async (key) => {
+        localStorage.setItem("slb_admin_key", key);
+        setAdminKey(key);
+        setIsAdmin(true);
+        return true;
+    }, []);
 
-    const logoutAdmin = () => {
+    const logoutAdmin = useCallback(() => {
         localStorage.removeItem("slb_admin_key");
         setAdminKey("");
         setIsAdmin(false);
-    };
+    }, []);
 
-    const logout = () => {
+    const logout = useCallback(() => {
         logoutUser();
         logoutAdmin();
-    };
+    }, [logoutUser, logoutAdmin]);
 
-    return (
-        <AuthContext.Provider
-            value={{
-                // Admin
-                isAdmin,
-                adminKey,
-                loginAdmin,
-                logoutAdmin,
+    // ── Memoised context value — prevents all consumers re-rendering on
+    //    unrelated state changes ────────────────────────────────────────────
+    const value = useMemo(() => ({
+        isAdmin, adminKey, loginAdmin, logoutAdmin,
+        isLoggedIn, user, token, loading,
+        loginUser, registerUser, updateUserProfile, logoutUser,
+        logout,
+    }), [
+        isAdmin, adminKey, loginAdmin, logoutAdmin,
+        isLoggedIn, user, token, loading,
+        loginUser, registerUser, updateUserProfile, logoutUser,
+        logout,
+    ]);
 
-                // User
-                isLoggedIn,
-                user,
-                token,
-                loading,
-                loginUser,
-                registerUser,
-                updateUserProfile,
-                logoutUser,
-
-                // General
-                logout,
-            }}
-        >
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-    const context = useContext(AuthContext);
-    if (!context) {
-        throw new Error("useAuth must be used within AuthProvider");
-    }
-    return context;
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+    return ctx;
 }

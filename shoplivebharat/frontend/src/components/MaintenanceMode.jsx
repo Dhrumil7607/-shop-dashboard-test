@@ -14,11 +14,8 @@ export default function MaintenanceMode() {
                 const settings = JSON.parse(
                     localStorage.getItem("slb_admin_settings") || "{}"
                 );
-                const maintenance = settings.maintenanceMode === true;
-                console.log("🔧 Maintenance Mode:", maintenance ? "ON" : "OFF");
-                setIsMaintenanceMode(maintenance);
-            } catch (error) {
-                console.error("Error checking maintenance mode:", error);
+                setIsMaintenanceMode(settings.maintenanceMode === true);
+            } catch {
                 setIsMaintenanceMode(false);
             }
         };
@@ -41,13 +38,11 @@ export default function MaintenanceMode() {
 
     // Allow admin access to admin routes
     if (isAdmin && currentPath.startsWith('/admin')) {
-        console.log("✅ Admin route allowed during maintenance");
         return null;
     }
 
     // Allow access to admin login
     if (currentPath === '/admin/login') {
-        console.log("✅ Admin login allowed during maintenance");
         return null;
     }
 

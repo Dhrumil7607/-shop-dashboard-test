@@ -1,30 +1,50 @@
 import { useEffect, useState } from "react";
-import { Package, Store, Users, TrendingUp, ShoppingBag, ArrowUpRight } from "lucide-react";
 import AdminLayout from "@/layouts/AdminLayout";
 import { fetchMarketplaceStats, fetchShops, fetchProducts } from "@/lib/api";
 import { MOCK_SHOPS, MOCK_PRODUCTS } from "@/lib/testData";
 import { Link } from "react-router-dom";
 
-function StatCard({ icon: Icon, label, value, sub, color }) {
+// Icon components matching the screenshot exactly
+const icons = {
+    sellers:   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    pending:   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>,
+    products:  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+    pendProd:  <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+    orders:    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/></svg>,
+    revenue:   <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+    sales:     <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+    active:    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
+};
+
+function StatCard({ icon, label, value }) {
     return (
-        <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <div className="flex items-start justify-between mb-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
-                    <Icon size={18} className="text-white" />
-                </div>
-                <ArrowUpRight size={14} className="text-gray-300" />
+        <div className="rounded-xl p-5 border flex items-start gap-4"
+            style={{ backgroundColor: "white", borderColor: "#E8E4DF" }}>
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: "#FAF9F6", color: "#C9A84C" }}>
+                {icon}
             </div>
-            <p className="text-2xl font-bold text-[#1a1a1a] mb-1">{value}</p>
-            <p className="text-sm text-gray-500">{label}</p>
-            {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+            <div>
+                <p className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: "#9B8B7A" }}>
+                    {label}
+                </p>
+                <p className="text-2xl font-bold" style={{ color: "#1a1a1a" }}>{value}</p>
+            </div>
         </div>
     );
 }
 
+const STATUS_BADGE = {
+    approved: { bg: "#D1FAE5", color: "#065F46", label: "approved" },
+    pending:  { bg: "#FEF3C7", color: "#92400E", label: "pending" },
+    rejected: { bg: "#FEE2E2", color: "#991B1B", label: "rejected" },
+    inactive: { bg: "#F3F4F6", color: "#374151", label: "inactive" },
+};
+
 export default function AdminDashboard() {
-    const [stats,    setStats]    = useState(null);
     const [shops,    setShops]    = useState([]);
     const [products, setProducts] = useState([]);
+    const [stats,    setStats]    = useState(null);
     const [loading,  setLoading]  = useState(true);
 
     useEffect(() => {
@@ -32,8 +52,8 @@ export default function AdminDashboard() {
             try {
                 const [s, sh, pr] = await Promise.all([
                     fetchMarketplaceStats(),
-                    fetchShops({ active_only: true, limit: 100 }),
-                    fetchProducts({ active_only: true, limit: 100 }),
+                    fetchShops({ active_only: false, limit: 100 }),
+                    fetchProducts({ active_only: false, limit: 100 }),
                 ]);
                 setStats(s);
                 setShops(sh?.length ? sh : MOCK_SHOPS);
@@ -47,76 +67,91 @@ export default function AdminDashboard() {
         })();
     }, []);
 
-    if (loading) {
-        return (
-            <AdminLayout>
-                <div className="flex items-center justify-center h-64 text-gray-400 text-sm">Loading…</div>
-            </AdminLayout>
-        );
-    }
+    // Derive counts
+    const totalSellers  = shops.length;
+    const pendingSellers = shops.filter(s => !s.is_active).length;
+    const activeSellers  = shops.filter(s => s.is_active).length;
+    const totalProducts  = products.length;
+    const pendingProds   = 0; // placeholder
+
+    // Recent seller applications from MOCK
+    const recentApps = [...MOCK_SHOPS].slice(0, 5).map((s, i) => ({
+        ...s,
+        status: i < 4 ? "approved" : "pending",
+    }));
+
+    if (loading) return (
+        <AdminLayout>
+            <div className="flex items-center justify-center h-64 text-sm" style={{ color: "#9B8B7A" }}>Loading…</div>
+        </AdminLayout>
+    );
 
     return (
         <AdminLayout>
-            {/* Stat cards */}
+            {/* Stats — 4 per row, 2 rows = 8 cards matching screenshot */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <StatCard icon={Store}       label="Active Stores"   value={shops.length}           color="bg-[#1a1a1a]" />
-                <StatCard icon={Package}     label="Total Products"  value={products.length}        color="bg-blue-500" />
-                <StatCard icon={Users}       label="Waitlist"        value={stats?.waitlist_members || "10K+"} color="bg-purple-500" />
-                <StatCard icon={TrendingUp}  label="Revenue"         value="₹4.2L"                  sub="This month" color="bg-green-500" />
+                <StatCard icon={icons.sellers}  label="Total Sellers"   value={totalSellers} />
+                <StatCard icon={icons.pending}  label="Pending Sellers" value={pendingSellers} />
+                <StatCard icon={icons.products} label="Total Products"  value={totalProducts} />
+                <StatCard icon={icons.pendProd} label="Pending Products" value={pendingProds} />
+                <StatCard icon={icons.orders}   label="Total Orders"    value={0} />
+                <StatCard icon={icons.revenue}  label="Total Revenue"   value="₹0" />
+                <StatCard icon={icons.sales}    label="Today's Sales"   value="₹0" />
+                <StatCard icon={icons.active}   label="Active Sellers"  value={activeSellers} />
             </div>
 
-            {/* Recent Stores */}
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h2 className="font-bold text-[#1a1a1a] text-sm uppercase tracking-wider">Recent Stores</h2>
-                    <Link to="/admin/seller-applications" className="text-xs font-semibold text-gray-500 hover:text-[#1a1a1a] transition">View all →</Link>
-                </div>
-                <div className="divide-y divide-gray-100">
-                    {shops.slice(0, 5).map(shop => (
-                        <div key={shop.id} className="flex items-center justify-between px-6 py-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 bg-[#1a1a1a] rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                    {shop.name[0]}
-                                </div>
-                                <div>
-                                    <p className="text-sm font-semibold text-[#1a1a1a]">{shop.name}</p>
-                                    <p className="text-xs text-gray-500">{shop.owner_name} · {shop.city}</p>
-                                </div>
-                            </div>
-                            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                                shop.is_active
-                                    ? "bg-green-100 text-green-700 border border-green-200"
-                                    : "bg-gray-100 text-gray-500 border border-gray-200"
-                            }`}>
-                                {shop.is_active ? "approved" : "inactive"}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            </div>
+            {/* Two-column grid: Recent Orders + Recent Seller Applications */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            {/* Recent Products */}
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                    <h2 className="font-bold text-[#1a1a1a] text-sm uppercase tracking-wider">Recent Products</h2>
-                    <Link to="/admin/products" className="text-xs font-semibold text-gray-500 hover:text-[#1a1a1a] transition">View all →</Link>
+                {/* Recent Orders */}
+                <div className="rounded-xl border overflow-hidden"
+                    style={{ backgroundColor: "white", borderColor: "#E8E4DF" }}>
+                    <div className="px-6 py-4 border-b" style={{ borderColor: "#E8E4DF" }}>
+                        <h2 className="font-semibold text-sm" style={{ color: "#1a1a1a" }}>Recent Orders</h2>
+                    </div>
+                    <div className="px-6 py-8 text-sm text-center" style={{ color: "#9B8B7A" }}>
+                        No orders yet.
+                    </div>
                 </div>
-                <div className="divide-y divide-gray-100">
-                    {products.slice(0, 6).map(p => (
-                        <div key={p.id} className="flex items-center gap-4 px-6 py-3">
-                            <img src={p.image_url} alt={p.name}
-                                className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-gray-100"
-                                onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=80&q=60"; }}
-                            />
-                            <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-[#1a1a1a] truncate">{p.name}</p>
-                                <p className="text-xs text-gray-400">{p.shop_name} · {p.category}</p>
-                            </div>
-                            <p className="text-sm font-bold text-[#1a1a1a] flex-shrink-0">
-                                ₹{Number(p.price).toLocaleString("en-IN")}
-                            </p>
-                        </div>
-                    ))}
+
+                {/* Recent Seller Applications */}
+                <div className="rounded-xl border overflow-hidden"
+                    style={{ backgroundColor: "white", borderColor: "#E8E4DF" }}>
+                    <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#E8E4DF" }}>
+                        <h2 className="font-semibold text-sm" style={{ color: "#1a1a1a" }}>Recent Seller Applications</h2>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: "#E8E4DF" }}>
+                        {recentApps.map(app => {
+                            const badge = STATUS_BADGE[app.status] || STATUS_BADGE.inactive;
+                            return (
+                                <div key={app.id} className="flex items-center justify-between px-6 py-3.5">
+                                    <div className="flex items-center gap-3">
+                                        <img
+                                            src={app.image_url}
+                                            alt={app.name}
+                                            className="w-9 h-9 rounded-full object-cover flex-shrink-0 border"
+                                            style={{ borderColor: "#E8E4DF" }}
+                                            onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=60&q=60"; }}
+                                        />
+                                        <div>
+                                            <p className="text-sm font-semibold" style={{ color: "#1a1a1a" }}>{app.name}</p>
+                                            <p className="text-xs" style={{ color: "#9B8B7A" }}>{app.city}</p>
+                                        </div>
+                                    </div>
+                                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full"
+                                        style={{ backgroundColor: badge.bg, color: badge.color }}>
+                                        {badge.label}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="px-6 py-3 border-t" style={{ borderColor: "#E8E4DF" }}>
+                        <Link to="/admin/seller-applications"
+                            className="text-xs font-semibold hover:underline" style={{ color: "#C9A84C" }}>
+                            View all →
+                        </Link>
+                    </div>
                 </div>
             </div>
         </AdminLayout>

@@ -34,21 +34,9 @@ export default function AdminShops() {
 
     const loadShops = async () => {
         try {
-            console.log("Loading shops...");
             const data = await fetchShops({ active_only: false, limit: 500 });
-            console.log("Shops loaded:", data);
-            if (data && Array.isArray(data) && data.length > 0) {
-                console.log(`✅ Loaded ${data.length} shops`);
-                setShops(data);
-            } else if (data && Array.isArray(data)) {
-                console.warn("⚠️ No shops available");
-                setShops([]);
-            } else {
-                console.warn("⚠️ Shops data is not an array:", data);
-                setShops([]);
-            }
-        } catch (error) {
-            console.error("❌ Failed to load shops:", error);
+            setShops(Array.isArray(data) ? data : []);
+        } catch {
             toast.error("Failed to load shops");
             setShops([]);
         } finally {
@@ -80,68 +68,30 @@ export default function AdminShops() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            console.log("📝 Saving shop with data:", formData);
-            console.log("🔑 Admin key present:", !!adminKey);
-            
-            if (!formData.name || formData.name.length < 2) {
-                toast.error("Shop name must be at least 2 characters");
-                return;
-            }
-            if (!formData.owner_name || formData.owner_name.length < 2) {
-                toast.error("Owner name must be at least 2 characters");
-                return;
-            }
-            if (!formData.owner_email) {
-                toast.error("Owner email is required");
-                return;
-            }
-            if (!formData.city || formData.city.length < 2) {
-                toast.error("City must be at least 2 characters");
-                return;
-            }
-            if (!formData.specialty || formData.specialty.length < 2) {
-                toast.error("Specialty must be at least 2 characters");
-                return;
-            }
-            if (!formData.description || formData.description.length < 10) {
-                toast.error("Description must be at least 10 characters");
-                return;
-            }
-            if (!formData.image_url) {
-                toast.error("Please enter a shop image URL");
-                return;
-            }
+            if (!formData.name || formData.name.length < 2) { toast.error("Shop name must be at least 2 characters"); return; }
+            if (!formData.owner_name || formData.owner_name.length < 2) { toast.error("Owner name must be at least 2 characters"); return; }
+            if (!formData.owner_email) { toast.error("Owner email is required"); return; }
+            if (!formData.city || formData.city.length < 2) { toast.error("City must be at least 2 characters"); return; }
+            if (!formData.specialty || formData.specialty.length < 2) { toast.error("Specialty must be at least 2 characters"); return; }
+            if (!formData.description || formData.description.length < 10) { toast.error("Description must be at least 10 characters"); return; }
+            if (!formData.image_url) { toast.error("Please enter a shop image URL"); return; }
 
             if (isEditing && editingId) {
-                console.log("✏️ Updating shop:", editingId);
                 const result = await updateShop(editingId, formData, adminKey);
-                console.log("✅ Shop updated:", result);
-                // Update local state immediately
                 setShops(shops.map(s => s.id === editingId ? result : s));
-                toast.success("✅ Shop updated successfully!");
+                toast.success("Shop updated successfully!");
             } else {
-                console.log("➕ Creating new shop");
                 const newShop = await createShop(formData, adminKey);
-                console.log("✅ New shop created:", newShop);
-                // Add new shop to local state immediately
-                if (newShop && newShop.id) {
+                if (newShop?.id) {
                     setShops([newShop, ...shops]);
-                    toast.success("✅ Shop is now LIVE!");
+                    toast.success("Shop is now LIVE!");
                 }
             }
-            setShowForm(false);
-            setIsEditing(false);
-            setEditingId(null);
-            setFormData(emptyShop);
-            // Reload to ensure data consistency
+            setShowForm(false); setIsEditing(false); setEditingId(null); setFormData(emptyShop);
             loadShops();
         } catch (error) {
-            console.error("❌ Error saving shop:", error);
-            console.error("Response data:", error?.response?.data);
-            console.error("Error message:", error?.message);
-            const errorMessage = error?.response?.data?.detail || error?.message || "Failed to save shop";
-            console.error("Final error message:", errorMessage);
-            toast.error(`❌ ${errorMessage}`);
+            const msg = error?.response?.data?.detail || error?.message || "Failed to save shop";
+            toast.error(msg);
         }
     };
 

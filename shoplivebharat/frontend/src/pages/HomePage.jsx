@@ -142,12 +142,13 @@ function ProductCard({ product }) {
 function Ticker() {
     const items = [...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS];
     return (
-        <div className="bg-maroon text-ivory overflow-hidden py-3">
-            <div className="flex whitespace-nowrap animate-[marquee_30s_linear_infinite] w-max">
+        <div className="overflow-hidden py-3" style={{ backgroundColor: "#1a1a1a" }}>
+            <div className="marquee-wrap">
                 {items.map((t, i) => (
-                    <span key={i} className="inline-flex items-center gap-6 px-8 text-xs font-semibold tracking-widest uppercase">
+                    <span key={i} className="inline-flex items-center gap-6 px-8 text-xs font-semibold tracking-widest uppercase"
+                        style={{ color: "rgba(255,255,255,0.8)", whiteSpace: "nowrap" }}>
                         {t}
-                        <span className="text-ivory/40">✦</span>
+                        <span style={{ color: "#C9A84C" }}>✦</span>
                     </span>
                 ))}
             </div>
@@ -161,55 +162,95 @@ export default function HomePage() {
         <MarketplaceLayout>
 
             {/* ── HERO ── */}
-            <section className="relative min-h-[92vh] flex items-center overflow-hidden bg-[#0a0a0a]">
-                {/* Background image */}
-                <div className="absolute inset-0">
+            <section className="relative min-h-[92vh] flex items-center overflow-hidden" style={{ backgroundColor: "#0a0a0a" }}>
+                <motion.div
+                    className="absolute inset-0"
+                    initial={{ scale: 1.08 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
+                >
                     <img
                         src="https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=1600&q=85"
                         alt=""
                         aria-hidden="true"
-                        className="w-full h-full object-cover opacity-30"
+                        className="w-full h-full object-cover"
+                        style={{ opacity: 0.28 }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent" />
-                </div>
+                    <div className="absolute inset-0" style={{
+                        background: "linear-gradient(to right, #0a0a0a 30%, rgba(10,10,10,0.75) 65%, transparent 100%)"
+                    }} />
+                </motion.div>
 
                 <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-24">
                     <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.8 }}
                         className="max-w-2xl"
+                        initial="hidden"
+                        animate="visible"
+                        variants={{
+                            hidden: {},
+                            visible: { transition: { staggerChildren: 0.12 } }
+                        }}
                     >
-                        <p className="text-maroon text-xs font-bold uppercase tracking-[0.3em] mb-5">
+                        <motion.p
+                            variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16,1,0.3,1] } } }}
+                            className="text-xs font-bold uppercase tracking-[0.3em] mb-5"
+                            style={{ color: "#8B3A3A" }}
+                        >
                             INDIA TO THE WORLD
-                        </p>
-                        <h1 className="font-serif text-5xl md:text-7xl text-white leading-[1.05] mb-6">
+                        </motion.p>
+
+                        <motion.h1
+                            variants={{ hidden: { opacity: 0, y: 32, filter: "blur(6px)" }, visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.85, ease: [0.16,1,0.3,1] } } }}
+                            className="font-serif text-5xl md:text-7xl text-white leading-[1.05] mb-6"
+                        >
                             Shop Authentic<br />Indian Fashion<br />
-                            <span className="text-champagne">From Anywhere<br />In The World</span>
-                        </h1>
-                        <p className="text-white/70 text-lg leading-relaxed mb-10 max-w-lg">
+                            <span style={{ color: "#C9A84C" }}>From Anywhere<br />In The World</span>
+                        </motion.h1>
+
+                        <motion.p
+                            variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.16,1,0.3,1] } } }}
+                            className="text-lg leading-relaxed mb-10 max-w-lg"
+                            style={{ color: "rgba(255,255,255,0.65)" }}
+                        >
                             Buy sarees, lehengas, kurtas, sherwanis, chaniya choli and wedding outfits
                             directly from trusted local stores in India, with worldwide delivery.
-                        </p>
-                        <div className="flex flex-wrap gap-4 mb-12">
-                            <Link to="/marketplace" className="inline-flex items-center gap-2 px-8 py-4 bg-maroon text-ivory rounded-lg hover:bg-maroon/90 transition font-semibold text-sm">
-                                Shop Now <ArrowRight size={18} />
-                            </Link>
-                            <Link to="/shops" className="inline-flex items-center gap-2 px-8 py-4 border-2 border-white/30 text-white rounded-lg hover:border-white/60 transition font-semibold text-sm">
-                                Explore Stores
-                            </Link>
-                            <Link to="/become-a-seller" className="inline-flex items-center gap-2 px-8 py-4 border-2 border-champagne/50 text-champagne rounded-lg hover:border-champagne transition font-semibold text-sm">
-                                Become a Seller
-                            </Link>
-                        </div>
-                        <div className="flex flex-wrap gap-x-8 gap-y-3">
+                        </motion.p>
+
+                        <motion.div
+                            variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } }}
+                            className="flex flex-wrap gap-3 mb-12"
+                        >
+                            <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                                <Link to="/marketplace" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition"
+                                    style={{ backgroundColor: "#8B3A3A", color: "white" }}>
+                                    Shop Now <ArrowRight size={16} />
+                                </Link>
+                            </motion.div>
+                            <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                                <Link to="/shops" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition border-2"
+                                    style={{ borderColor: "rgba(255,255,255,0.25)", color: "white" }}>
+                                    Explore Stores
+                                </Link>
+                            </motion.div>
+                            <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                                <Link to="/become-a-seller" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition border-2"
+                                    style={{ borderColor: "rgba(201,168,76,0.45)", color: "#C9A84C" }}>
+                                    Become a Seller
+                                </Link>
+                            </motion.div>
+                        </motion.div>
+
+                        <motion.div
+                            variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: 0.5, delay: 0.1 } } }}
+                            className="flex flex-wrap gap-x-7 gap-y-2"
+                        >
                             {["Worldwide Shipping","Trusted Indian Stores","Secure Payments","Authentic Local Fashion"].map(f => (
-                                <div key={f} className="flex items-center gap-2 text-white/60 text-xs">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-maroon flex-shrink-0" />
+                                <div key={f} className="flex items-center gap-2 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+                                    <span className="w-1 h-1 rounded-full" style={{ backgroundColor: "#8B3A3A" }} />
                                     {f}
                                 </div>
                             ))}
-                        </div>
+                        </motion.div>
                     </motion.div>
                 </div>
             </section>
@@ -267,28 +308,32 @@ export default function HomePage() {
             </section>
 
             {/* ── HOW IT WORKS ── */}
-            <section className="py-20 px-6 md:px-12 bg-espresso text-ivory">
+            <section className="py-20 px-6 md:px-12" style={{ backgroundColor: "#1a1a1a" }}>
                 <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-14">
-                        <p className="text-xs uppercase tracking-[0.3em] text-champagne font-semibold mb-3">THE PROCESS</p>
-                        <h2 className="font-serif text-4xl md:text-5xl">How ShopLiveBharat Works</h2>
-                        <p className="text-ivory/60 mt-3 text-sm">From a local store in India to your doorstep, anywhere in the world.</p>
-                    </div>
+                    <motion.div className="text-center mb-14"
+                        initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "-80px" }}
+                        transition={{ duration: 0.6, ease: [0.16,1,0.3,1] }}>
+                        <p className="text-xs uppercase tracking-[0.3em] font-semibold mb-3" style={{ color: "#C9A84C" }}>THE PROCESS</p>
+                        <h2 className="font-serif text-4xl md:text-5xl" style={{ color: "white" }}>How ShopLiveBharat Works</h2>
+                        <p className="mt-3 text-sm" style={{ color: "rgba(255,255,255,0.45)" }}>From a local store in India to your doorstep, anywhere in the world.</p>
+                    </motion.div>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
                         {HOW_IT_WORKS.map((step, i) => (
-                            <motion.div
-                                key={step.n}
-                                initial={{ opacity: 0, y: 20 }}
-                                whileInView={{ opacity: 1, y: 0 }}
-                                viewport={{ once: true }}
-                                transition={{ delay: i * 0.08, duration: 0.5 }}
-                                className="text-center"
-                            >
-                                <div className="w-14 h-14 rounded-full border-2 border-champagne/40 flex items-center justify-center mx-auto mb-4">
-                                    <span className="font-serif text-champagne text-xl font-bold">{step.n}</span>
-                                </div>
-                                <h3 className="font-semibold text-sm text-ivory mb-1">{step.title}</h3>
-                                <p className="text-ivory/50 text-xs leading-relaxed">{step.desc}</p>
+                            <motion.div key={step.n} className="text-center"
+                                initial={{ opacity: 0, y: 28, scale: 0.95 }}
+                                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                                viewport={{ once: true, margin: "-60px" }}
+                                transition={{ duration: 0.5, ease: [0.16,1,0.3,1], delay: i * 0.07 }}>
+                                <motion.div
+                                    className="w-14 h-14 rounded-full border-2 flex items-center justify-center mx-auto mb-4"
+                                    style={{ borderColor: "rgba(201,168,76,0.35)" }}
+                                    whileHover={{ borderColor: "#C9A84C", scale: 1.08 }}
+                                    transition={{ duration: 0.2 }}>
+                                    <span className="font-serif text-xl font-bold" style={{ color: "#C9A84C" }}>{step.n}</span>
+                                </motion.div>
+                                <h3 className="font-semibold text-sm mb-1" style={{ color: "white" }}>{step.title}</h3>
+                                <p className="text-xs leading-relaxed" style={{ color: "rgba(255,255,255,0.45)" }}>{step.desc}</p>
                             </motion.div>
                         ))}
                     </div>
