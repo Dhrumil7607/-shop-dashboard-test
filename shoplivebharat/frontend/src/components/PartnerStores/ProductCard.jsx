@@ -9,6 +9,7 @@
 import { memo, useRef, useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { ShoppingBag, Eye, BadgeCheck } from "lucide-react";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const ProductCard = memo(function ProductCard({
     product,
@@ -35,6 +36,7 @@ const ProductCard = memo(function ProductCard({
     const [isImageLoaded, setIsImageLoaded] = useState(false);
     const [isImageVisible, setIsImageVisible] = useState(false);
     const imageRef = useRef(null);
+    const { formatPrice } = useCurrency();
 
     // Lazy load image using Intersection Observer
     useEffect(() => {
@@ -223,11 +225,11 @@ const ProductCard = memo(function ProductCard({
                     {/* Price Section - Spacer for flex-grow */}
                     <div className="mt-auto flex items-baseline gap-2">
                         <span className="text-lg md:text-xl font-bold text-espresso">
-                            ₹{price.toLocaleString()}
+                            {formatPrice(price)}
                         </span>
                         {compare_at_price && (
                             <span className="text-sm text-espresso/40 line-through">
-                                ₹{compare_at_price.toLocaleString()}
+                                {formatPrice(compare_at_price)}
                             </span>
                         )}
                     </div>

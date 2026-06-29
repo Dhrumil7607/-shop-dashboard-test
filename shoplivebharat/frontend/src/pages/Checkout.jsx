@@ -339,7 +339,7 @@ export default function Checkout() {
                                                 )}
                                             </div>
                                             <p className="text-xs font-semibold flex-shrink-0" style={{ color: "#1a1a1a" }}>
-                                                ₹{Number(item.price * item.quantity).toLocaleString("en-IN")}
+                                                {formatPrice(item.price * item.quantity)}
                                             </p>
                                         </div>
                                     ))}
@@ -349,23 +349,23 @@ export default function Checkout() {
                                 <div className="space-y-2.5 mb-5 pb-5 border-b text-sm" style={{ borderColor: "#F0EBE3" }}>
                                     <div className="flex justify-between" style={{ color: "#4A3F35" }}>
                                         <span>Subtotal</span>
-                                        <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                                        <span>{formatPrice(subtotal)}</span>
                                     </div>
                                     <div className="flex justify-between" style={{ color: "#4A3F35" }}>
                                         <span>Shipping</span>
                                         <span style={{ color: shipping === 0 ? "#2D7A3A" : "#4A3F35" }}>
-                                            {shipping === 0 ? "FREE" : `₹${shipping}`}
+                                            {shipping === 0 ? "FREE" : formatPrice(shipping)}
                                         </span>
                                     </div>
                                     <div className="flex justify-between" style={{ color: "#4A3F35" }}>
                                         <span>Tax</span>
-                                        <span>₹{tax.toLocaleString("en-IN")}</span>
+                                        <span>{formatPrice(tax)}</span>
                                     </div>
                                 </div>
 
                                 <div className="flex justify-between font-bold text-base mb-6" style={{ color: "#1a1a1a" }}>
                                     <span>Total</span>
-                                    <span>₹{total.toLocaleString("en-IN")}</span>
+                                    <span>{formatPrice(total)}</span>
                                 </div>
 
                                 {/* CTA */}

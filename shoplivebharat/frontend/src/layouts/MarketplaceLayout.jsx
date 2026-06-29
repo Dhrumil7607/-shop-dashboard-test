@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import Footer from "@/components/Footer";
+import CurrencySelector from "@/components/CurrencySelector";
 
 const NAV = [
     { label: "Collections", to: "/marketplace" },
@@ -138,6 +139,11 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
 
                     {/* Right actions */}
                     <div className="flex items-center gap-0.5">
+                        {/* Currency Selector */}
+                        <div className="hidden sm:block mr-1">
+                            <CurrencySelector />
+                        </div>
+
                         {/* Search */}
                         <motion.button
                             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
@@ -313,6 +319,12 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                                 style={{ color: "#C9A84C" }}>
                                 ✦ Become a Seller
                             </Link>
+
+                            {/* Currency selector in mobile menu */}
+                            <div className="pt-2 border-t" style={{ borderColor: "#E8E4DF" }}>
+                                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "#8B8680" }}>Currency</p>
+                                <CurrencySelector />
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>

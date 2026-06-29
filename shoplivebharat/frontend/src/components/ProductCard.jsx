@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShoppingCart, Heart } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const COLOR_MAP = {
     "Ivory":"#FAF8F5","Gold":"#D4AF37","Maroon":"#8B3A3A","Crimson":"#DC143C",
@@ -10,11 +11,10 @@ const COLOR_MAP = {
     "Cream":"#F5F0E8","Yellow":"#FFD700","Green":"#2D6A4F","White":"#FFF","Black":"#000","Pink":"#E8417A",
 };
 
-function fmt(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
-
 const ProductCard = memo(function ProductCard({ product, index = 0 }) {
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { formatPrice } = useCurrency();
     const [fav,      setFav]      = useState(false);
     const [imgError, setImgError] = useState(false);
     const [hovering, setHovering] = useState(false);
@@ -144,9 +144,9 @@ const ProductCard = memo(function ProductCard({ product, index = 0 }) {
                 </motion.h3>
 
                 <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-sm font-semibold" style={{ color: "#1a1a1a" }}>{fmt(product.price)}</span>
+                    <span className="text-sm font-semibold" style={{ color: "#1a1a1a" }}>{formatPrice(product.price)}</span>
                     {product.compare_at_price && (
-                        <span className="text-xs line-through" style={{ color: "#9B8B7A" }}>{fmt(product.compare_at_price)}</span>
+                        <span className="text-xs line-through" style={{ color: "#9B8B7A" }}>{formatPrice(product.compare_at_price)}</span>
                     )}
                 </div>
 

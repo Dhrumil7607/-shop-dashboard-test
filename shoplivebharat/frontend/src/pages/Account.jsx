@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader, Edit2, Save, X } from "lucide-react";
 import { toast } from "sonner";
@@ -175,8 +175,8 @@ export default function Account() {
 
                 {/* Quick Links */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <a
-                        href="/orders"
+                    <Link
+                        to="/orders"
                         className="border border-line-soft rounded-lg p-6 hover:shadow-md transition group"
                     >
                         <h3 className="text-lg font-semibold text-espresso mb-2 group-hover:text-maroon transition">
@@ -185,22 +185,22 @@ export default function Account() {
                         <p className="text-espresso/60 text-sm">
                             View and track your orders
                         </p>
-                    </a>
+                    </Link>
 
-                    <a
-                        href="/wishlist"
+                    <Link
+                        to="/marketplace"
                         className="border border-line-soft rounded-lg p-6 hover:shadow-md transition group"
                     >
                         <h3 className="text-lg font-semibold text-espresso mb-2 group-hover:text-maroon transition">
-                            Wishlist
+                            Browse Collections
                         </h3>
                         <p className="text-espresso/60 text-sm">
-                            Your saved items
+                            Discover authentic Indian fashion
                         </p>
-                    </a>
+                    </Link>
 
-                    <a
-                        href="/settings"
+                    <Link
+                        to="/settings"
                         className="border border-line-soft rounded-lg p-6 hover:shadow-md transition group"
                     >
                         <h3 className="text-lg font-semibold text-espresso mb-2 group-hover:text-maroon transition">
@@ -209,7 +209,7 @@ export default function Account() {
                         <p className="text-espresso/60 text-sm">
                             Account preferences and security
                         </p>
-                    </a>
+                    </Link>
                 </div>
             </div>
         </MarketplaceLayout>

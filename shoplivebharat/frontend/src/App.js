@@ -28,6 +28,7 @@ const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
 const Orders = lazy(() => import("@/pages/Orders"));
 const Account = lazy(() => import("@/pages/Account"));
+const UserSettings = lazy(() => import("@/pages/UserSettings"));
 const About = lazy(() => import("@/pages/About"));
 const PrivacyPolicy = lazy(() => import("@/pages/PrivacyPolicy"));
 const RefundPolicy = lazy(() => import("@/pages/RefundPolicy"));
@@ -47,6 +48,7 @@ const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminProducts = lazy(() => import("@/pages/admin/Products"));
 const AdminShops = lazy(() => import("@/pages/admin/Shops"));
 const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
+const AdminCoupons  = lazy(() => import("@/pages/admin/Coupons"));
 const AdminOrders = lazy(() => import("@/pages/admin/Orders"));
 const AdminBookings = lazy(() => import("@/pages/admin/Bookings"));
 const AdminSellerApplications = lazy(() => import("@/pages/admin/SellerApplications"));
@@ -113,6 +115,7 @@ function AppRoutes() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/account" element={<Account />} />
+                <Route path="/settings" element={<UserSettings />} />
                 <Route path="/orders" element={<Orders />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -178,6 +181,14 @@ function AppRoutes() {
                     element={
                         <ProtectedAdminRoute>
                             <AdminSettings />
+                        </ProtectedAdminRoute>
+                    }
+                />
+                <Route
+                    path="/admin/coupons"
+                    element={
+                        <ProtectedAdminRoute>
+                            <AdminCoupons />
                         </ProtectedAdminRoute>
                     }
                 />

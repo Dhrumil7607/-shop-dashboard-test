@@ -4,9 +4,11 @@ import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchOrders } from "@/lib/api";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 export default function Orders() {
     const { isLoggedIn } = useAuth();
+    const { formatPrice } = useCurrency();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -101,7 +103,7 @@ export default function Orders() {
                                             Total
                                         </p>
                                         <p className="font-medium text-espresso">
-                                            ₹{order.total?.toLocaleString() || "0"}
+                                            {formatPrice(order.total ?? 0)}
                                         </p>
                                     </div>
                                     <div>

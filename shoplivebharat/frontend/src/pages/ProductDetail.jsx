@@ -7,6 +7,7 @@ import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import ProductCard from "@/components/ProductCard";
 import SizeGuideModal, { getSizesForCategory, needsSizeSelection } from "@/components/SizeGuideModal";
 import { useCart } from "@/contexts/CartContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { fetchProducts, fetchShops } from "@/lib/api";
 import { MOCK_PRODUCTS, MOCK_SHOPS } from "@/lib/testData";
 
@@ -16,12 +17,11 @@ const COLOR_MAP = {
     "Cream":"#F5F0E8","Yellow":"#FFD700","Pink":"#E8417A",
 };
 
-function fmt(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
-
 export default function ProductDetail() {
     const { productId } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
+    const { formatPrice } = useCurrency();
 
     const [product,  setProduct]  = useState(null);
     const [shop,     setShop]     = useState(null);
@@ -172,9 +172,9 @@ export default function ProductDetail() {
 
                             {/* Price */}
                             <div className="flex items-center gap-3 mb-5">
-                                <span className="text-2xl font-bold" style={{ color: "#1a1a1a" }}>{fmt(product.price)}</span>
+                                <span className="text-2xl font-bold" style={{ color: "#1a1a1a" }}>{formatPrice(product.price)}</span>
                                 {product.compare_at_price && (
-                                    <span className="text-base line-through" style={{ color: "#9B8B7A" }}>{fmt(product.compare_at_price)}</span>
+                                    <span className="text-base line-through" style={{ color: "#9B8B7A" }}>{formatPrice(product.compare_at_price)}</span>
                                 )}
                                 {discount > 0 && (
                                     <span className="text-xs font-bold text-white px-2 py-0.5 rounded"

@@ -17,7 +17,8 @@ const NAV_TABS = [
     { label: "Sellers",    path: "/admin/seller-applications" },
     { label: "Products",   path: "/admin/products" },
     { label: "Orders",     path: "/admin/orders" },
-    { label: "Coupons",    path: "/admin/settings" },
+    { label: "Coupons",    path: "/admin/coupons" },
+    { label: "Settings",   path: "/admin/settings" },
 ];
 
 export default function AdminLayout({ children }) {

@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 /* ─── Data ───────────────────────────────────────────────────── */
 const CATEGORIES = [
@@ -68,6 +69,7 @@ function fmt(n) { return "₹" + n.toLocaleString("en-IN"); }
 /* ─── Product card (HomePage inline version — delegates to shared component) ── */
 function ProductCard({ product }) {
     const { addToCart } = useCart();
+    const { formatPrice } = useCurrency();
 
     const discount = product.original
         ? Math.round(((product.original - product.price) / product.original) * 100)
@@ -76,8 +78,6 @@ function ProductCard({ product }) {
     const storeName = (product.tag || "")
         .replace(/^READY TO SHIP[·•\-\s]+/i, "")
         .trim();
-
-    const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN");
 
     const COLOR_HEX = {
         "Ivory":"#FAF8F5","Gold":"#D4AF37","Maroon":"#8B3A3A","Crimson":"#DC143C",
@@ -116,9 +116,9 @@ function ProductCard({ product }) {
                     {product.name}
                 </h3>
                 <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="font-bold text-[#0a0a0a] text-sm">{fmt(product.price)}</span>
+                    <span className="font-bold text-[#0a0a0a] text-sm">{formatPrice(product.price)}</span>
                     {product.original && (
-                        <span className="text-xs text-gray-400 line-through">{fmt(product.original)}</span>
+                        <span className="text-xs text-gray-400 line-through">{formatPrice(product.original)}</span>
                     )}
                 </div>
                 {product.color && (

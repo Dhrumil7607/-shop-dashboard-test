@@ -1,77 +1,88 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Globe } from "lucide-react";
+import { ChevronDown, Globe, Check } from "lucide-react";
 import { useCurrency, CURRENCIES } from "@/contexts/CurrencyContext";
 
 export default function CurrencySelector() {
     const { currency, setCurrency } = useCurrency();
     const [isOpen, setIsOpen] = useState(false);
+    const ref = useRef(null);
 
-    const currentCurrency = CURRENCIES[currency];
+    // Close on outside click
+    useEffect(() => {
+        const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setIsOpen(false); };
+        document.addEventListener("mousedown", handler);
+        return () => document.removeEventListener("mousedown", handler);
+    }, []);
+
+    const current = CURRENCIES[currency];
 
     return (
-        <div className="relative">
+        <div ref={ref} className="relative">
+            {/* Trigger button */}
             <motion.button
-                onClick={() => setIsOpen(!isOpen)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white/60 hover:bg-white/80 border border-white/40 backdrop-blur-sm text-espresso font-medium text-sm transition-all duration-300 group"
+                onClick={() => setIsOpen(v => !v)}
+                whileTap={{ scale: 0.96 }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-sm font-semibold transition hover:bg-black/5"
+                style={{ borderColor: "#E8E4DF", color: "#2C241B" }}
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
             >
-                <Globe className="w-4 h-4 group-hover:rotate-12 transition-transform" strokeWidth={1.5} />
-                <span className="font-serif text-base">{currentCurrency.symbol}</span>
-                <span className="text-xs tracking-widest hidden md:inline">{currency}</span>
-                <motion.div
-                    animate={{ rotate: isOpen ? 180 : 0 }}
-                    transition={{ duration: 0.3 }}
-                >
-                    <ChevronDown className="w-4 h-4" strokeWidth={1.5} />
+                <Globe size={14} style={{ color: "#8B8680" }} />
+                <span>{current.symbol}</span>
+                <span className="text-xs font-medium hidden sm:inline" style={{ color: "#8B8680" }}>{currency}</span>
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <ChevronDown size={12} style={{ color: "#8B8680" }} />
                 </motion.div>
             </motion.button>
 
-            {/* Dropdown Menu */}
+            {/* Dropdown */}
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                        role="listbox"
+                        initial={{ opacity: 0, y: -6, scale: 0.97 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute top-full right-0 mt-2 w-56 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-xl rounded-xl border border-white/40 shadow-xl z-50 overflow-hidden"
+                        exit={{ opacity: 0, y: -6, scale: 0.97 }}
+                        transition={{ duration: 0.15, ease: "easeOut" }}
+                        className="absolute top-full right-0 mt-1.5 w-52 rounded-xl shadow-xl z-50 overflow-hidden border"
+                        style={{ background: "#FAF9F6", borderColor: "#E8E4DF" }}
                     >
-                        <div className="p-3">
-                            <p className="text-xs uppercase tracking-[0.2em] text-stone/60 font-medium mb-3 px-2">
+                        <div className="p-1.5">
+                            <p className="text-[10px] uppercase tracking-[0.2em] font-bold px-3 py-2" style={{ color: "#8B8680" }}>
                                 Select Currency
                             </p>
-                            <div className="space-y-1">
-                                {Object.entries(CURRENCIES).map(([code, data]) => (
+                            {Object.entries(CURRENCIES).map(([code, data]) => {
+                                const active = currency === code;
+                                return (
                                     <motion.button
                                         key={code}
-                                        onClick={() => {
-                                            setCurrency(code);
-                                            setIsOpen(false);
+                                        role="option"
+                                        aria-selected={active}
+                                        onClick={() => { setCurrency(code); setIsOpen(false); }}
+                                        whileHover={{ x: 2 }}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition"
+                                        style={{
+                                            background: active ? "#F0EBE3" : "transparent",
+                                            color: "#2C241B",
                                         }}
-                                        whileHover={{ x: 4 }}
-                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 text-left ${
-                                            currency === code
-                                                ? "bg-maroon text-ivory"
-                                                : "hover:bg-espresso/5 text-espresso"
-                                        }`}
                                     >
-                                        <span className="font-serif text-lg">{data.symbol}</span>
-                                        <div className="flex-1">
-                                            <p className="font-medium text-sm">{code}</p>
-                                            <p className="text-xs text-stone/60">{data.name}</p>
+                                        {/* Symbol */}
+                                        <span className="w-6 text-center font-semibold text-base flex-shrink-0" style={{ color: active ? "#A2466B" : "#6B5E4C" }}>
+                                            {data.symbol}
+                                        </span>
+
+                                        {/* Code + Name */}
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-sm">{code}</p>
+                                            <p className="text-xs truncate" style={{ color: "#8B8680" }}>{data.name}</p>
                                         </div>
-                                        {currency === code && (
-                                            <motion.div
-                                                initial={{ scale: 0 }}
-                                                animate={{ scale: 1 }}
-                                                className="w-2 h-2 rounded-full bg-current"
-                                            />
-                                        )}
+
+                                        {/* Check */}
+                                        {active && <Check size={14} style={{ color: "#A2466B" }} />}
                                     </motion.button>
-                                ))}
-                            </div>
+                                );
+                            })}
                         </div>
                     </motion.div>
                 )}
