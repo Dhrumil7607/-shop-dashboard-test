@@ -94,7 +94,7 @@ const ProductCard = memo(function ProductCard({ product, index = 0 }) {
                     </span>
                 )}
 
-                {/* Hover action row */}
+                {/* Hover action row — always visible on touch devices */}
                 <AnimatePresence>
                     {hovering && (
                         <motion.div
@@ -103,7 +103,7 @@ const ProductCard = memo(function ProductCard({ product, index = 0 }) {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 4 }}
                             transition={{ duration: 0.18 }}
-                            className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between"
+                            className="absolute bottom-2.5 left-2.5 right-2.5 hidden md:flex items-center justify-between"
                         >
                             <motion.button
                                 onClick={handleCart}
@@ -125,6 +125,27 @@ const ProductCard = memo(function ProductCard({ product, index = 0 }) {
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                {/* Mobile always-visible action buttons */}
+                <div className="absolute bottom-2.5 left-2.5 right-2.5 flex md:hidden items-center justify-between">
+                    <motion.button
+                        onClick={handleCart}
+                        disabled={!product.is_active}
+                        whileTap={{ scale: 0.93 }}
+                        className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center disabled:opacity-30"
+                        aria-label="Add to cart"
+                    >
+                        <ShoppingCart size={15} style={{ color: "#1a1a1a" }} />
+                    </motion.button>
+                    <motion.button
+                        onClick={handleFav}
+                        whileTap={{ scale: 0.9 }}
+                        className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center"
+                        aria-label={fav ? "Remove" : "Wishlist"}
+                    >
+                        <Heart size={15} className={fav ? "fill-red-500 text-red-500" : "text-gray-400"} />
+                    </motion.button>
+                </div>
             </motion.div>
 
             {/* ── INFO ── */}

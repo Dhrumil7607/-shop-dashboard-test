@@ -49,10 +49,10 @@ export default function Account() {
 
     return (
         <MarketplaceLayout>
-            <div className="max-w-4xl mx-auto px-6 py-12">
+            <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
                 {/* Header */}
-                <div className="mb-12">
-                    <h1 className="font-serif text-5xl md:text-6xl mb-4 text-espresso">
+                <div className="mb-8 md:mb-12">
+                    <h1 className="font-serif text-3xl md:text-5xl lg:text-6xl mb-3 text-espresso">
                         My Account
                     </h1>
                     <p className="text-lg text-espresso/70">

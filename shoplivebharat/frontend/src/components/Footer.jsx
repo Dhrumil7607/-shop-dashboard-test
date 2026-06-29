@@ -242,7 +242,7 @@ export default function Footer() {
                             © {new Date().getFullYear()} ShopLiveBharat. Crafted with care for the Indian diaspora.
                         </motion.p>
                         <motion.div 
-                            className="flex items-center gap-4 text-xs" 
+                            className="flex flex-wrap items-center justify-center md:justify-end gap-2 md:gap-4 text-xs" 
                             style={{ color: "rgba(255,255,255,0.35)" }}
                             variants={containerVariants.fadeInFast()}
                             initial="hidden"
@@ -250,9 +250,9 @@ export default function Footer() {
                             viewport={viewportSettings.normal}
                         >
                             {["Worldwide Shipping", "Secure Payments", "Authentic Local Stores"].map((item, i) => (
-                                <motion.span key={item} variants={itemVariants.fadeInLeft}>
+                                <motion.span key={item} className="flex items-center gap-2" variants={itemVariants.fadeInLeft}>
                                     {item}
-                                    {i < 2 && <span className="ml-4">•</span>}
+                                    {i < 2 && <span className="hidden md:inline">•</span>}
                                 </motion.span>
                             ))}
                         </motion.div>

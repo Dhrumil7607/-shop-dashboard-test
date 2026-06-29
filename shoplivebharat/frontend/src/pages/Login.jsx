@@ -68,10 +68,10 @@ export default function Login() {
     return (
         <MarketplaceLayout hideFooter>
             <div
-                className="flex items-center justify-center py-12 px-4"
+                className="flex items-center justify-center py-8 px-4"
                 style={{ backgroundColor: "#EDE8E0", minHeight: "calc(100vh - 64px)" }}
             >
-                <div className="w-full max-w-5xl flex flex-col lg:flex-row items-center justify-center gap-12">
+                <div className="w-full max-w-5xl flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-12">
 
                     {/* ── LEFT: Image Card ── */}
                     <motion.div
@@ -148,7 +148,7 @@ export default function Login() {
                                     <span className="font-bold text-sm" style={{ color: "#C9A84C" }}>ShopLive</span>
                                     <span className="font-bold text-sm" style={{ color: "#2C241B" }}>Bharat</span>
                                 </div>
-                                <h1 className="font-serif leading-none mb-2" style={{ fontSize: "2.35rem", color: "#2C241B" }}>
+                                <h1 className="font-serif leading-none mb-2" style={{ fontSize: "clamp(1.75rem, 5vw, 2.35rem)", color: "#2C241B" }}>
                                     Welcome{" "}
                                     <span style={{ fontStyle: "italic", color: "#A2466B" }}>Back</span>
                                 </h1>

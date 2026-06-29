@@ -63,19 +63,19 @@ export default function Cart() {
                     Back
                 </button>
 
-                <h1 className="font-serif text-4xl mb-8">Shopping Cart</h1>
+                <h1 className="font-serif text-2xl md:text-4xl mb-6 md:mb-8">Shopping Cart</h1>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
                     {/* Cart Items */}
                     <div className="lg:col-span-2">
-                        <div className="space-y-4">
+                        <div className="space-y-3 md:space-y-4">
                             {cartItems.map((item) => (
                                 <div
                                     key={item.id}
-                                    className="flex gap-6 p-6 border border-line-soft rounded-lg hover:shadow-md transition"
+                                    className="flex gap-4 p-4 md:p-6 border border-line-soft rounded-lg hover:shadow-md transition"
                                 >
                                     {/* Image */}
-                                    <div className="h-32 w-32 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                                    <div className="h-24 w-24 md:h-32 md:w-32 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                                         <img
                                             src={item.image_url}
                                             alt={item.name}
@@ -83,48 +83,46 @@ export default function Cart() {
                                         />
                                     </div>
 
-                                    {/* Details */}
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-lg text-espresso mb-2">
-                                            {item.name}
-                                        </h3>
-                                        <p className="text-sm text-espresso/60 mb-3">
-                                            {item.category}
-                                        </p>
-                                        <p className="font-serif text-xl font-bold text-maroon">
-                                            {formatPrice(item.price)}
-                                        </p>
-                                    </div>
-
-                                    {/* Quantity & Action */}
-                                    <div className="flex flex-col items-end justify-between">
-                                        <button
-                                            onClick={() => removeFromCart(item.id)}
-                                            className="text-maroon hover:text-maroon/70 transition p-1"
-                                        >
-                                            <Trash2 size={20} />
-                                        </button>
-
-                                        <div className="flex items-center border border-line-soft rounded-lg">
+                                    {/* Details + Controls */}
+                                    <div className="flex-1 min-w-0 flex flex-col justify-between gap-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <h3 className="font-semibold text-sm md:text-lg text-espresso leading-snug line-clamp-2">
+                                                    {item.name}
+                                                </h3>
+                                                <p className="text-xs md:text-sm text-espresso/60 mt-0.5">
+                                                    {item.category}
+                                                </p>
+                                            </div>
                                             <button
-                                                onClick={() =>
-                                                    updateQuantity(item.id, item.quantity - 1)
-                                                }
-                                                className="p-2 hover:bg-gray-100 transition"
+                                                onClick={() => removeFromCart(item.id)}
+                                                className="text-maroon hover:text-maroon/70 transition p-1.5 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                             >
-                                                <Minus size={16} />
+                                                <Trash2 size={18} />
                                             </button>
-                                            <span className="px-3 py-2 border-x border-line-soft text-sm font-medium">
-                                                {item.quantity}
-                                            </span>
-                                            <button
-                                                onClick={() =>
-                                                    updateQuantity(item.id, item.quantity + 1)
-                                                }
-                                                className="p-2 hover:bg-gray-100 transition"
-                                            >
-                                                <Plus size={16} />
-                                            </button>
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="font-serif text-base md:text-xl font-bold text-maroon">
+                                                {formatPrice(item.price)}
+                                            </p>
+                                            <div className="flex items-center border border-line-soft rounded-lg">
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                                    className="p-2 hover:bg-gray-100 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                                >
+                                                    <Minus size={16} />
+                                                </button>
+                                                <span className="px-3 py-2 border-x border-line-soft text-sm font-medium min-w-[36px] text-center">
+                                                    {item.quantity}
+                                                </span>
+                                                <button
+                                                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                                    className="p-2 hover:bg-gray-100 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                                >
+                                                    <Plus size={16} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

@@ -140,7 +140,7 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                     {/* Right actions */}
                     <div className="flex items-center gap-0.5">
                         {/* Currency Selector */}
-                        <div className="hidden sm:block mr-1">
+                        <div className="hidden md:block mr-1">
                             <CurrencySelector />
                         </div>
 

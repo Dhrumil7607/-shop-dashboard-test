@@ -165,10 +165,33 @@ export default function UserSettings() {
                     <p className="text-sm" style={{ color: "#8B8680" }}>Manage your account preferences and security</p>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-8">
-                    {/* ── Sidebar nav ── */}
+                <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+                    {/* ── Sidebar nav — scrollable tab strip on mobile ── */}
                     <aside className="md:w-56 flex-shrink-0">
-                        <nav className="space-y-1">
+                        {/* Mobile: horizontal scrollable tabs */}
+                        <div className="flex md:hidden gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                            {[
+                                { label: "Notifications", short: "Notifs", icon: Bell },
+                                { label: "Password",      short: "Password", icon: Lock },
+                                { label: "Privacy",       short: "Privacy", icon: Shield },
+                                { label: "Danger Zone",   short: "Danger", icon: AlertTriangle },
+                            ].map(({ label, short, icon: Icon }) => (
+                                <button
+                                    key={label}
+                                    onClick={() => setActiveSection(label)}
+                                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap min-h-[44px]"
+                                    style={{
+                                        background: activeSection === label ? "#A2466B" : "#F5F1ED",
+                                        color: activeSection === label ? "#fff" : "#6B5E4C",
+                                    }}
+                                >
+                                    <Icon size={13} /> {short}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Desktop: vertical nav */}
+                        <nav className="hidden md:block space-y-1">
                             {[
                                 { label: "Notifications", icon: Bell },
                                 { label: "Password",      icon: Lock },
@@ -178,7 +201,7 @@ export default function UserSettings() {
                                 <button
                                     key={label}
                                     onClick={() => setActiveSection(label)}
-                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-left transition-all"
+                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-left transition-all min-h-[44px]"
                                     style={{
                                         background: activeSection === label ? "#F5F1ED" : "transparent",
                                         color: activeSection === label ? "#A2466B" : "#6B5E4C",
@@ -192,7 +215,7 @@ export default function UserSettings() {
                             <div className="pt-4 border-t" style={{ borderColor: "#E8E4DF" }}>
                                 <button
                                     onClick={handleLogout}
-                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-left transition hover:bg-red-50"
+                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-left transition hover:bg-red-50 min-h-[44px]"
                                     style={{ color: "#ef4444" }}
                                 >
                                     <LogOut size={16} />
