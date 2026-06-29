@@ -3,14 +3,10 @@ import { motion } from "framer-motion";
 import { Heart, Search, ShoppingBag, Sparkles, Truck, Video } from "lucide-react";
 import { SHOP_CATEGORIES, SHOP_HERO_IMAGES, SHOP_PRODUCTS, SHOP_STORIES } from "@/lib/shopCatalog";
 import { fetchMarketplaceStats, fetchProducts, fetchShops } from "@/lib/api";
-
-const rupee = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-});
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 function ProductCard({ product, index }) {
+    const { formatPrice } = useCurrency();
     const compareAt = product.compare_at_price ?? product.compareAt;
     const hoverImage = product.hover_image_url || product.hoverImage || product.image_url || product.image;
     const image = product.image_url || product.image;
@@ -58,8 +54,8 @@ function ProductCard({ product, index }) {
                     {shopName && <p className="mt-1 text-xs text-stone">{shopName}</p>}
                 </div>
                 <div className="text-right">
-                    <p className="font-medium text-espresso">{rupee.format(product.price)}</p>
-                    {compareAt ? <p className="text-sm text-stone line-through">{rupee.format(compareAt)}</p> : null}
+                    <p className="font-medium text-espresso">{formatPrice(product.price)}</p>
+                    {compareAt ? <p className="text-sm text-stone line-through">{formatPrice(compareAt)}</p> : null}
                 </div>
             </div>
         </motion.article>

@@ -115,12 +115,8 @@ export function AuthProvider({ children }) {
     // Admin methods
     const loginAdmin = async (key) => {
         try {
-            // Validate the admin key by making a test API call to an admin-only endpoint
-            const response = await api.get("/admin/waitlist", {
-                headers: { "X-Admin-Key": key }
-            });
-            
-            // If successful, store the key
+            // Persist the admin key locally. Validation happens server-side on
+            // each privileged request via the X-Admin-Key header.
             localStorage.setItem("slb_admin_key", key);
             setAdminKey(key);
             setIsAdmin(true);

@@ -34,16 +34,22 @@ export default function AdminShops() {
 
     const loadShops = async () => {
         try {
+            console.log("Loading shops...");
             const data = await fetchShops({ active_only: false, limit: 500 });
-            if (data && Array.isArray(data)) {
+            console.log("Shops loaded:", data);
+            if (data && Array.isArray(data) && data.length > 0) {
+                console.log(`✅ Loaded ${data.length} shops`);
                 setShops(data);
+            } else if (data && Array.isArray(data)) {
+                console.warn("⚠️ No shops available");
+                setShops([]);
             } else {
-                console.warn("Shops data is not an array:", data);
+                console.warn("⚠️ Shops data is not an array:", data);
                 setShops([]);
             }
         } catch (error) {
-            console.error("Failed to load shops:", error);
-            toast.error("Failed to load shops - using empty list");
+            console.error("❌ Failed to load shops:", error);
+            toast.error("Failed to load shops");
             setShops([]);
         } finally {
             setLoading(false);
@@ -74,11 +80,30 @@ export default function AdminShops() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            console.log("📝 Saving shop with data:", formData);
+            console.log("🔑 Admin key present:", !!adminKey);
+            
+            if (!formData.name || formData.name.length < 2) {
+                toast.error("Shop name must be at least 2 characters");
+                return;
+            }
+            if (!formData.owner_name || formData.owner_name.length < 2) {
+                toast.error("Owner name must be at least 2 characters");
+                return;
+            }
+            if (!formData.owner_email) {
+                toast.error("Owner email is required");
+                return;
+            }
+            if (!formData.city || formData.city.length < 2) {
+                toast.error("City must be at least 2 characters");
+                return;
+            }
             if (!formData.specialty || formData.specialty.length < 2) {
                 toast.error("Specialty must be at least 2 characters");
                 return;
             }
-            if (formData.description.length < 10) {
+            if (!formData.description || formData.description.length < 10) {
                 toast.error("Description must be at least 10 characters");
                 return;
             }
@@ -88,12 +113,16 @@ export default function AdminShops() {
             }
 
             if (isEditing && editingId) {
-                await updateShop(editingId, formData, adminKey);
+                console.log("✏️ Updating shop:", editingId);
+                const result = await updateShop(editingId, formData, adminKey);
+                console.log("✅ Shop updated:", result);
                 // Update local state immediately
-                setShops(shops.map(s => s.id === editingId ? formData : s));
+                setShops(shops.map(s => s.id === editingId ? result : s));
                 toast.success("✅ Shop updated successfully!");
             } else {
+                console.log("➕ Creating new shop");
                 const newShop = await createShop(formData, adminKey);
+                console.log("✅ New shop created:", newShop);
                 // Add new shop to local state immediately
                 if (newShop && newShop.id) {
                     setShops([newShop, ...shops]);
@@ -107,7 +136,12 @@ export default function AdminShops() {
             // Reload to ensure data consistency
             loadShops();
         } catch (error) {
-            toast.error(error?.response?.data?.detail || "Failed to save shop");
+            console.error("❌ Error saving shop:", error);
+            console.error("Response data:", error?.response?.data);
+            console.error("Error message:", error?.message);
+            const errorMessage = error?.response?.data?.detail || error?.message || "Failed to save shop";
+            console.error("Final error message:", errorMessage);
+            toast.error(`❌ ${errorMessage}`);
         }
     };
 
@@ -160,21 +194,25 @@ export default function AdminShops() {
                     <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-line-soft p-6 mb-8">
                         <h2 className="text-xl font-bold mb-6">{isEditing ? "Edit Shop" : "Create New Shop"}</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Shop Name */}
                             <input
                                 type="text"
-                                placeholder="Shop Name *"
+                                placeholder="Shop Name (min 2 characters) *"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                 className="px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
                                 required
+                                minLength="2"
                             />
+                            {/* Owner Name */}
                             <input
                                 type="text"
-                                placeholder="Owner Name *"
+                                placeholder="Owner Name (min 2 characters) *"
                                 value={formData.owner_name}
                                 onChange={(e) => setFormData({ ...formData, owner_name: e.target.value })}
                                 className="px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
                                 required
+                                minLength="2"
                             />
                             <input
                                 type="email"
@@ -186,11 +224,12 @@ export default function AdminShops() {
                             />
                             <input
                                 type="text"
-                                placeholder="City *"
+                                placeholder="City (min 2 characters) *"
                                 value={formData.city}
                                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                                 className="px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
                                 required
+                                minLength="2"
                             />
                             <input
                                 type="text"
@@ -252,7 +291,29 @@ export default function AdminShops() {
                 {/* Shops Grid */}
                 {loading ? (
                     <div className="flex items-center justify-center h-64">
-                        <p className="text-espresso/60">Loading shops...</p>
+                        <div className="flex flex-col items-center">
+                            <div className="animate-spin w-12 h-12 border-4 border-maroon/20 border-t-maroon rounded-full mb-4"></div>
+                            <p className="text-espresso/60">Loading shops...</p>
+                        </div>
+                    </div>
+                ) : shops.length === 0 ? (
+                    <div className="flex items-center justify-center h-64">
+                        <div className="text-center">
+                            <p className="text-espresso/60 text-lg mb-4">No shops yet</p>
+                            <p className="text-espresso/50 mb-6">Create your first shop to get started</p>
+                            <button
+                                onClick={() => {
+                                    setIsEditing(false);
+                                    setEditingId(null);
+                                    setFormData(emptyShop);
+                                    setShowForm(true);
+                                }}
+                                className="inline-flex items-center gap-2 px-6 py-3 bg-maroon text-ivory rounded-lg hover:bg-maroon/90 transition"
+                            >
+                                <Plus size={20} />
+                                Create First Shop
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

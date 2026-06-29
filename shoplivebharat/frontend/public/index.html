@@ -2,41 +2,94 @@
 <html lang="en">
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="description" content="India's first luxury live-shopping marketplace" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
+        <meta name="theme-color" content="#8B3A3A" />
+        <meta name="description" content="ShopLive Bharat - India's premium live shopping platform featuring luxury fashion, jewelry, and home decor from exclusive artisans. Watch live product demonstrations and shop with expert guidance worldwide." />
+        <meta name="keywords" content="live shopping, luxury fashion India, premium jewelry, traditional wear, live commerce, Indian designers, online shopping, video shopping" />
+        <meta name="author" content="ShopLive Bharat" />
+        <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+        <meta name="language" content="English" />
+        
+        <!-- Open Graph / Facebook -->
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://shoplivebharat.com/" />
+        <meta property="og:title" content="ShopLive Bharat | Premium Live Shopping Experience" />
+        <meta property="og:description" content="Discover India's luxury fashion and jewelry through personalized live shopping sessions. Expert guidance, authentic products, worldwide delivery." />
+        <meta property="og:image" content="https://shoplivebharat.com/og-image.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:locale" content="en_IN" />
+        
+        <!-- Twitter -->
+        <meta property="twitter:card" content="summary_large_image" />
+        <meta property="twitter:url" content="https://shoplivebharat.com/" />
+        <meta property="twitter:title" content="ShopLive Bharat | Premium Live Shopping" />
+        <meta property="twitter:description" content="Experience luxury fashion and jewelry through live shopping. Expert consultants, authentic Indian products." />
+        <meta property="twitter:image" content="https://shoplivebharat.com/og-image.jpg" />
+        
+        <!-- Canonical -->
+        <link rel="canonical" href="https://shoplivebharat.com/" />
+        
+        <!-- Preconnect to external resources -->
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet" />
-        <!--
-        manifest.json provides metadata used when your web app is installed on a
-        user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-        -->
-        <!--
-        Notice the use of %PUBLIC_URL% in the tags above.
-        It will be replaced with the URL of the `public` folder during the build.
-        Only files inside the `public` folder can be referenced from the HTML.
-
-        Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-        work correctly both with client-side routing and a non-root public URL.
-        Learn how to configure a non-root public URL by running `npm run build`.
-        -->
-        <title>ShopLiveBharat | Luxury Live Shopping</title>
+        <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+        
+        <!-- Fonts with display swap for performance -->
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet" />
+        
+        <!-- Structured Data / JSON-LD -->
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "name": "ShopLive Bharat",
+          "url": "https://shoplivebharat.com",
+          "logo": "https://shoplivebharat.com/logo.png",
+          "description": "Premium live shopping platform for Indian luxury fashion and jewelry",
+          "sameAs": [
+            "https://www.facebook.com/shoplivebharat",
+            "https://www.instagram.com/shoplivebharat",
+            "https://www.twitter.com/shoplivebharat"
+          ],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "Customer Support",
+            "telephone": "+91-9876543210",
+            "email": "support@shoplivebharat.com"
+          },
+          "address": {
+            "@type": "PostalAddress",
+            "addressCountry": "IN",
+            "addressRegion": "Worldwide"
+          }
+        }
+        </script>
+        
+        <!-- Website schema -->
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "ShopLive Bharat",
+          "url": "https://shoplivebharat.com",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://shoplivebharat.com/marketplace?search={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        }
+        </script>
+        
+        <title>ShopLive Bharat | Premium Live Shopping Experience</title>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
-        <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
 
         <script>
             !(function (t, e) {

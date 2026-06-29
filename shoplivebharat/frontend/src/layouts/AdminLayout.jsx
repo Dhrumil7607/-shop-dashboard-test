@@ -1,160 +1,128 @@
-import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { LogOut, Menu, X, Store, Settings, Users, Package, Home, Bell, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { Search, Heart, ShoppingBag, UserCircle } from "lucide-react";
+
+/**
+ * Admin layout — matches the reference screenshot exactly:
+ * - Same cream/ivory background as storefront
+ * - Top navigation bar (logo + nav links + Admin + Logout)
+ * - "ADMIN CONSOLE" label + "Welcome, Admin" heading
+ * - Horizontal tab bar: Dashboard | Sellers | Products | Orders | Coupons
+ * - No sidebar
+ */
+
+const NAV_TABS = [
+    { label: "Dashboard",  path: "/admin/dashboard" },
+    { label: "Sellers",    path: "/admin/seller-applications" },
+    { label: "Products",   path: "/admin/products" },
+    { label: "Orders",     path: "/admin/orders" },
+    { label: "Coupons",    path: "/admin/settings" },
+];
 
 export default function AdminLayout({ children }) {
-    const { logout } = useAuth();
+    const { logout, user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    const [sidebarOpen, setSidebarOpen] = useState(true);
-
-    const menuItems = [
-        { icon: Home, label: "Dashboard", path: "/admin/dashboard" },
-        { icon: Package, label: "Products", path: "/admin/products" },
-        { icon: Store, label: "Shops", path: "/admin/shops" },
-        { icon: Users, label: "Orders", path: "/admin/orders" },
-        { icon: Settings, label: "Settings", path: "/admin/settings" },
-    ];
 
     const handleLogout = () => {
         logout();
         navigate("/admin/login");
     };
 
-    const isActive = (path) => location.pathname === path;
+    const activeTab = NAV_TABS.find(t => location.pathname.startsWith(t.path));
 
     return (
-        <div className="min-h-screen bg-gray-50 flex">
-            {/* Sidebar */}
-            <div
-                className={`fixed md:static top-0 left-0 h-screen bg-espresso text-ivory transition-all duration-300 z-40 ${
-                    sidebarOpen ? "w-64" : "w-20"
-                } md:translate-x-0 overflow-y-auto`}
-            >
-                {/* Logo */}
-                <div className="p-6 border-b border-maroon sticky top-0 bg-espresso">
-                    <Link to="/" className="font-serif text-xl font-bold">
-                        {sidebarOpen ? "ShopLiveBharat" : "SLB"}
+        <div className="min-h-screen" style={{ backgroundColor: "#faf8f5" }}>
+
+            {/* ── Top nav bar (matches storefront style) ── */}
+            <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+                <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-6">
+
+                    {/* Logo */}
+                    <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+                        <svg width="32" height="32" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                            <path d="M12 10 Q12 3 24 3 Q36 3 36 10" stroke="#1a1a1a" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+                            <rect x="10" y="10" width="28" height="32" rx="2" stroke="#1a1a1a" strokeWidth="2" fill="none" />
+                            <polygon points="21,17 21,31 33,24" fill="#FF9500" />
+                        </svg>
+                        <div className="leading-none">
+                            <span className="font-bold text-sm text-[#1a1a1a] tracking-tight">ShopLive</span>
+                            <span className="font-bold text-sm tracking-tight" style={{ color: "#C9A84C" }}>Bharat</span>
+                            <p className="text-[9px] uppercase tracking-[0.18em] text-gray-400 font-medium mt-0.5">Indian Luxury, Worldwide</p>
+                        </div>
                     </Link>
-                </div>
 
-                {/* Menu */}
-                <nav className="py-6">
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`flex items-center gap-4 px-6 py-3 transition border-r-4 ${
-                                    isActive(item.path)
-                                        ? "bg-maroon border-maroon"
-                                        : "border-transparent hover:bg-opacity-80"
-                                }`}
-                            >
-                                <Icon size={20} className="flex-shrink-0" />
-                                {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+                    {/* Center nav links */}
+                    <nav className="hidden md:flex items-center gap-7 text-sm">
+                        {["Collections", "Stores", "How It Works", "About"].map(label => (
+                            <Link key={label} to="/" className="text-gray-600 hover:text-[#1a1a1a] transition font-medium">
+                                {label}
                             </Link>
-                        );
-                    })}
-                </nav>
+                        ))}
+                        <Link to="/become-a-seller" className="flex items-center gap-1.5 text-gray-600 hover:text-[#1a1a1a] transition font-medium">
+                            <span className="text-[#C9A84C]">✦</span> Become a Seller
+                        </Link>
+                    </nav>
 
-                {/* User Section */}
-                <div className="absolute bottom-0 left-0 right-0 border-t border-maroon bg-espresso/95">
-                    <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-4 px-6 py-4 hover:bg-maroon transition"
-                    >
-                        <LogOut size={20} className="flex-shrink-0" />
-                        {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
-                    </button>
+                    {/* Right actions */}
+                    <div className="flex items-center gap-2">
+                        <button className="p-2 text-gray-500 hover:text-[#1a1a1a] transition" aria-label="Search">
+                            <Search size={18} />
+                        </button>
+                        <button className="p-2 text-gray-500 hover:text-[#1a1a1a] transition" aria-label="Wishlist">
+                            <Heart size={18} />
+                        </button>
+                        <button className="p-2 text-gray-500 hover:text-[#1a1a1a] transition" aria-label="Cart">
+                            <ShoppingBag size={18} />
+                        </button>
+                        <Link to="/admin/dashboard"
+                            className="px-3.5 py-1.5 bg-[#1a1a1a] text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition">
+                            Admin
+                        </Link>
+                        <button onClick={handleLogout}
+                            className="px-3.5 py-1.5 border border-gray-200 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 transition">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            {/* ── Page hero (dark band) ── */}
+            <div className="bg-[#1a1a1a] text-white py-8 px-6">
+                <div className="max-w-7xl mx-auto">
+                    <p className="text-[10px] uppercase tracking-[0.25em] text-gray-400 font-semibold mb-1.5">
+                        Admin Console
+                    </p>
+                    <h1 className="font-serif text-3xl md:text-4xl text-white">Welcome, Admin</h1>
                 </div>
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1">
-                {/* Top Header */}
-                <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
-                    <div className="px-6 py-4 flex items-center justify-between">
-                        {/* Left: Hamburger + Search */}
-                        <div className="flex items-center gap-4">
-                            <button
-                                onClick={() => setSidebarOpen(!sidebarOpen)}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition hidden md:flex"
-                            >
-                                {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-                            </button>
-
-                            {/* Search Bar */}
-                            <div className="hidden lg:flex items-center gap-2 bg-gray-100 rounded-lg px-4 py-2 flex-1 max-w-md">
-                                <Search size={18} className="text-gray-500" />
-                                <input
-                                    type="text"
-                                    placeholder="Search products, shops..."
-                                    className="flex-1 bg-transparent outline-none text-sm"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Right: Actions */}
-                        <div className="flex items-center gap-6">
-                            {/* Notifications */}
-                            <button className="relative p-2 hover:bg-gray-100 rounded-lg transition">
-                                <Bell size={20} />
-                                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-                            </button>
-
-                            {/* User Menu */}
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 bg-maroon rounded-full flex items-center justify-center text-white font-bold">
-                                    A
-                                </div>
-                                <div className="hidden sm:block">
-                                    <p className="text-sm font-medium text-espresso">Admin</p>
-                                    <p className="text-xs text-gray-500">Shop Manager</p>
-                                </div>
-                            </div>
-                        </div>
+            {/* ── Tab bar ── */}
+            <div className="bg-white border-b border-gray-200">
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="flex items-center gap-0.5">
+                        {NAV_TABS.map(tab => {
+                            const isActive = location.pathname === tab.path ||
+                                (tab.path === "/admin/seller-applications" && location.pathname === "/admin/shops");
+                            return (
+                                <Link key={tab.path} to={tab.path}
+                                    className={`px-5 py-3.5 text-sm font-semibold border-b-2 transition whitespace-nowrap ${
+                                        isActive
+                                            ? "border-[#1a1a1a] text-[#1a1a1a]"
+                                            : "border-transparent text-gray-500 hover:text-[#1a1a1a] hover:border-gray-300"
+                                    }`}>
+                                    {tab.label}
+                                </Link>
+                            );
+                        })}
                     </div>
-
-                    {/* Breadcrumb / Page Title Bar */}
-                    <div className="px-6 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-                        <div>
-                            <h1 className="font-semibold text-gray-800">
-                                {menuItems.find((item) => isActive(item.path))?.label || "Admin Dashboard"}
-                            </h1>
-                            <p className="text-xs text-gray-500">
-                                {new Date().toLocaleDateString("en-IN", {
-                                    weekday: "long",
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "numeric",
-                                })}
-                            </p>
-                        </div>
-                        <Link
-                            to="/"
-                            className="px-4 py-2 bg-ivory text-espresso rounded-lg hover:bg-gray-100 transition font-medium text-sm"
-                        >
-                            View Store
-                        </Link>
-                    </div>
-                </header>
-
-                {/* Page Content */}
-                <main className="p-6 md:p-8">
-                    {children}
-                </main>
+                </div>
             </div>
 
-            {/* Mobile Sidebar Overlay */}
-            {sidebarOpen && (
-                <div
-                    className="fixed inset-0 bg-black/50 z-30 md:hidden"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
+            {/* ── Page content ── */}
+            <main className="max-w-7xl mx-auto px-6 py-8">
+                {children}
+            </main>
         </div>
     );
 }
