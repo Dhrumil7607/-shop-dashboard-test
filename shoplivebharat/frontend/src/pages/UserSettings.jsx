@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,13 +13,7 @@ const SECTIONS = ["Notifications", "Password", "Privacy", "Danger Zone"];
 
 export default function UserSettings() {
     const navigate = useNavigate();
-    const { user, isLoggedIn, logout, updateUserProfile } = useAuth();
-
-    // Redirect if not logged in
-    if (!isLoggedIn) {
-        navigate("/login", { replace: true });
-        return null;
-    }
+    const { user, isLoggedIn, logout } = useAuth();
 
     const [activeSection, setActiveSection] = useState("Notifications");
 
@@ -53,6 +47,11 @@ export default function UserSettings() {
         } catch { return { profilePublic: false, shareData: true, analytics: true }; }
     });
     const [privacySaving, setPrivacySaving] = useState(false);
+
+    // Redirect if not logged in — must come AFTER all hooks
+    useEffect(() => {
+        if (!isLoggedIn) navigate("/login", { replace: true });
+    }, [isLoggedIn, navigate]);
 
     /* ── handlers ── */
     const saveNotifs = async () => {
