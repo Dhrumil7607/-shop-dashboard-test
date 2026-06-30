@@ -188,7 +188,7 @@ export function listAll() {
     try {
         // Dynamic require so this pure module doesn't break in test environments
         // that don't load the full React component tree.
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        // eslint-disable-next-line
         const mod = require("../pages/admin/Bookings");
         const mockBookings = mod.MOCK_BOOKINGS;
         if (Array.isArray(mockBookings)) {
