@@ -1,12 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { CheckCircle, Calendar, Clock, MapPin, User, Phone, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { setMetaTags } from "@/lib/seo";
+import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 
 export default function BookingConfirmation() {
     const navigate = useNavigate();
     const location = useLocation();
+
+    // Stable confirmation number — generated once per mount, not on every render
+    const confirmationRef = useRef(`BOOK-${Date.now().toString().slice(-8)}`);
 
     useEffect(() => {
         // Set SEO meta tags
@@ -19,12 +23,27 @@ export default function BookingConfirmation() {
         });
 
         // If no booking data, redirect to live-shopping
-        if (!location.state?.bookingData) {
+        if (!location.state?.booking && !location.state?.bookingData) {
             setTimeout(() => navigate("/live-shopping"), 3000);
         }
     }, [navigate, location]);
 
-    const bookingData = location.state?.bookingData || {};
+    // Support both the new `booking` key (from LiveShopping.jsx) and the legacy
+    // `bookingData` key so that any existing deep-links continue to work.
+    const booking = location.state?.booking || location.state?.bookingData || null;
+
+    // Map the canonical Booking shape (from bookingService) to the display fields
+    // the confirmation card expects, falling back gracefully for older shapes.
+    const bookingData = {
+        date: booking?.appointmentDate ||
+              (booking?.appointmentIST ? booking.appointmentIST.slice(0, 10) : null),
+        time: booking?.appointmentTime ||
+              (booking?.appointmentIST ? booking.appointmentIST.slice(11, 16) : null),
+        city: booking?.storeName || null,
+        customerName: booking?.customerName || null,
+        phone: booking?.phone || null,
+        ...booking,
+    };
 
     const containerVariants = {
         hidden: { opacity: 0 },
@@ -47,7 +66,8 @@ export default function BookingConfirmation() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-b from-ivory to-cream flex items-center justify-center px-6 py-20">
+        <MarketplaceLayout>
+        <div className="min-h-[80vh] bg-gradient-to-b from-ivory to-cream flex items-center justify-center px-6 py-20">
             <motion.div
                 className="max-w-2xl w-full"
                 variants={containerVariants}
@@ -102,7 +122,7 @@ export default function BookingConfirmation() {
                             <div>
                                 <p className="text-xs uppercase tracking-[0.2em] text-maroon/70">Confirmation Number</p>
                                 <p className="font-serif text-lg text-espresso">
-                                    {`BOOK-${Date.now().toString().slice(-8)}`}
+                                    {confirmationRef.current}
                                 </p>
                             </div>
                         </div>
@@ -205,7 +225,7 @@ export default function BookingConfirmation() {
                     </Link>
 
                     <Link
-                        to="/booked-slots"
+                        to="/account/bookings"
                         className="px-6 py-4 bg-gradient-to-r from-maroon/10 to-gold/10 text-espresso border border-maroon/30 rounded-lg hover:from-maroon/20 hover:to-gold/20 transition-all font-medium flex items-center justify-center gap-2"
                     >
                         <span>View My Bookings</span>
@@ -222,5 +242,6 @@ export default function BookingConfirmation() {
                 </motion.div>
             </motion.div>
         </div>
+        </MarketplaceLayout>
     );
 }

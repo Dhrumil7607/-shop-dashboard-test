@@ -16,9 +16,6 @@ const DEFAULT_SETTINGS = {
     enableLiveChat: true,
     maxProductsPerPage: 12,
     defaultCurrency: "INR",
-    adminId: "admin",
-    adminPassword: "admin123",
-    confirmPassword: "admin123"
 };
 
 export default function AdminSettings() {
@@ -34,7 +31,6 @@ export default function AdminSettings() {
     });
 
     const [isSaving, setIsSaving] = useState(false);
-    const [passwordChanged, setPasswordChanged] = useState(false);
 
     // Ensure maintenance mode is explicitly false on load
     useEffect(() => {
@@ -60,7 +56,6 @@ export default function AdminSettings() {
         try {
             localStorage.setItem("slb_admin_settings", JSON.stringify(settings));
             toast.success("Settings saved successfully!");
-            setPasswordChanged(false);
         } catch {
             toast.error("Failed to save settings");
         } finally {
@@ -74,7 +69,8 @@ export default function AdminSettings() {
                 <div className="flex items-center justify-between mb-8">
                     <h1 className="text-3xl font-bold text-espresso">Settings</h1>
                     <button
-                        onClick={handleSave}
+                        type="submit"
+                        form="settings-form"
                         disabled={isSaving}
                         className="flex items-center gap-2 px-6 py-3 bg-maroon text-ivory rounded-lg hover:bg-maroon/90 transition disabled:opacity-50"
                     >
@@ -83,7 +79,7 @@ export default function AdminSettings() {
                     </button>
                 </div>
 
-                <form onSubmit={handleSave} className="space-y-8">
+                <form id="settings-form" onSubmit={handleSave} className="space-y-8">
                     {/* Store Information */}
                     <div className="bg-white rounded-lg border border-line-soft p-8">
                         <h2 className="text-2xl font-bold text-espresso mb-6">Store Information</h2>
@@ -264,68 +260,13 @@ export default function AdminSettings() {
 
                     {/* Admin Credentials */}
                     <div className="bg-white rounded-lg border border-line-soft p-8">
-                        <h2 className="text-2xl font-bold text-espresso mb-6">Admin Credentials</h2>
-                        <p className="text-sm text-espresso/60 mb-6">Change your login credentials here</p>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label className="block text-sm font-semibold text-espresso mb-2">
-                                    Admin ID
-                                </label>
-                                <input
-                                    type="text"
-                                    name="adminId"
-                                    value={settings.adminId}
-                                    onChange={(e) => {
-                                        setSettings({ ...settings, adminId: e.target.value });
-                                        setPasswordChanged(true);
-                                    }}
-                                    className="w-full px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                    placeholder="Enter admin ID"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-espresso mb-2">
-                                    New Password
-                                </label>
-                                <input
-                                    type="password"
-                                    name="adminPassword"
-                                    value={settings.adminPassword}
-                                    onChange={(e) => {
-                                        setSettings({ ...settings, adminPassword: e.target.value });
-                                        setPasswordChanged(true);
-                                    }}
-                                    className="w-full px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                    placeholder="Enter new password"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-espresso mb-2">
-                                    Confirm Password
-                                </label>
-                                <input
-                                    type="password"
-                                    name="confirmPassword"
-                                    value={settings.confirmPassword}
-                                    onChange={(e) => {
-                                        setSettings({ ...settings, confirmPassword: e.target.value });
-                                        setPasswordChanged(true);
-                                    }}
-                                    className="w-full px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
-                                    placeholder="Confirm password"
-                                />
-                            </div>
+                        <h2 className="text-2xl font-bold text-espresso mb-4">Admin Credentials</h2>
+                        <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <AlertCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+                            <p className="text-sm text-blue-800">
+                                Admin credentials are managed securely on the backend. To change your admin password or username, please update them directly through the server configuration or contact your system administrator.
+                            </p>
                         </div>
-
-                        {passwordChanged && settings.adminPassword !== settings.confirmPassword && (
-                            <p className="text-red-600 text-sm mt-3">⚠️ Passwords do not match</p>
-                        )}
-                        {passwordChanged && settings.adminPassword === settings.confirmPassword && settings.adminPassword.length > 0 && (
-                            <p className="text-green-600 text-sm mt-3">✓ Passwords match</p>
-                        )}
                     </div>
 
                     {/* System Settings */}

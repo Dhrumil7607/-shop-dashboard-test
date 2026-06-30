@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function MaintenanceMode() {
@@ -76,7 +77,7 @@ export default function MaintenanceMode() {
                         onClick={() => {
                             // Copy email to clipboard
                             navigator.clipboard.writeText("support@shoplivebharat.com");
-                            alert("Email copied to clipboard!");
+                            toast.success("Email copied to clipboard!");
                         }}
                         className="px-8 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition"
                     >

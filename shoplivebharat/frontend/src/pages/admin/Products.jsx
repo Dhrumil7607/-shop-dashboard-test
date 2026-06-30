@@ -60,21 +60,11 @@ export default function AdminProducts() {
         try {
             const data = await fetchProducts({ active_only: false, limit: 500 });
             if (data && Array.isArray(data)) {
-                // If we got products from API, use them
-                if (data.length > 0) {
-                    setProducts(data);
-                } else {
-                    // If API returns empty, use mock data
-                    console.log("No products from API, using mock data");
-                    setProducts(MOCK_PRODUCTS);
-                }
+                setProducts(data.length > 0 ? data : MOCK_PRODUCTS);
             } else {
-                // Fallback to mock data
                 setProducts(MOCK_PRODUCTS);
             }
-        } catch (error) {
-            console.error("Failed to load products:", error);
-            // Fallback to mock data on error
+        } catch {
             setProducts(MOCK_PRODUCTS);
         } finally {
             setLoading(false);
@@ -143,7 +133,7 @@ export default function AdminProducts() {
     };
 
     const handleArchive = async (productId) => {
-        if (!confirm("Archive this product?")) return;
+        if (!window.confirm("Archive this product? It will be hidden from the storefront.")) return;
         try {
             await archiveProduct(productId, adminKey);
             toast.success("Product archived");

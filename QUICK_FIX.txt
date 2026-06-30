@@ -1,0 +1,96 @@
+╔════════════════════════════════════════════════════════════════════╗
+║         🔧 SHOPS NOT SHOWING - QUICK FIX (5 MINUTES)             ║
+╚════════════════════════════════════════════════════════════════════╝
+
+PROBLEM:
+  Shops dropdown is empty in Admin Products page
+
+ROOT CAUSE:
+  Backend not configured to use in-memory database with pre-seeded shops
+
+════════════════════════════════════════════════════════════════════
+
+SOLUTION IN 4 STEPS:
+
+1️⃣  STOP BACKEND (Ctrl+C if running)
+
+2️⃣  UPDATE BACKEND CONFIG
+    
+    cd shoplivebharat/backend
+    
+    Replace content of .env with:
+    ─────────────────────────────
+    USE_MEMORY_DB=1
+    ADMIN_API_KEY=shoplivebharat-admin
+    LAUNCH_DATE=2026-06-28T00:00:00+05:30
+    ─────────────────────────────
+
+3️⃣  RESTART BACKEND
+    
+    python server.py
+    
+    You should see:
+    ✅ "ShopLiveBharat API started"
+    or
+    ✅ "Using ephemeral in-memory data store..."
+
+4️⃣  REFRESH BROWSER
+    
+    • Hard refresh: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)
+    • Go to: http://localhost:3000/admin/login
+    • Login with: shoplivebharat-admin
+    • Check: Products → Add Product → Shop dropdown
+
+════════════════════════════════════════════════════════════════════
+
+EXPECTED RESULT:
+
+  Before:  Shop dropdown = [EMPTY]
+  After:   Shop dropdown = [Jaipur Atelier House]
+                           [The Banaras Edit]
+
+════════════════════════════════════════════════════════════════════
+
+VERIFY IT WORKS:
+
+  Open browser console (F12) and look for:
+  ✅ "✅ Loading shops..."
+  ✅ "✅ Loaded 2 shops"
+
+  If you see instead:
+  ❌ "❌ Failed to load shops"
+  
+  Then backend isn't running or port is wrong.
+
+════════════════════════════════════════════════════════════════════
+
+IF STILL NOT WORKING:
+
+  1. Check backend console for errors
+  2. Check frontend .env has: REACT_APP_BACKEND_URL=http://localhost:8000
+  3. Clear browser cache: Local Storage in DevTools → Delete all
+  4. Hard refresh: Ctrl+Shift+R
+  5. Restart everything fresh
+
+════════════════════════════════════════════════════════════════════
+
+FILES MODIFIED:
+
+  ✅ shoplivebharat/backend/.env
+  ✅ shoplivebharat/frontend/src/pages/admin/Products.jsx
+  ✅ shoplivebharat/frontend/src/pages/admin/Shops.jsx
+
+════════════════════════════════════════════════════════════════════
+
+TESTS AVAILABLE:
+
+  • SHOPS_FIX_SUMMARY.md - Detailed summary
+  • SHOPS_NOT_SHOWING_FIX.md - Complete troubleshooting guide
+  • TEST_SHOPS_API.md - API testing commands
+
+════════════════════════════════════════════════════════════════════
+
+That's it! Shops should now show in the admin panel.
+
+Questions? Check the guides above for detailed troubleshooting.
+

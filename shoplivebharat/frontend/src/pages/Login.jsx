@@ -160,12 +160,13 @@ export default function Login() {
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 {/* Email */}
                                 <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                    <label htmlFor="email" className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
                                         style={{ color: "#8B8680" }}>
                                         Email Address
                                     </label>
                                     <div className="relative">
                                         <input
+                                            id="email"
                                             type="email"
                                             value={email}
                                             onChange={(e) => {
@@ -173,6 +174,7 @@ export default function Login() {
                                                 if (errors.email) setErrors((p) => ({ ...p, email: "" }));
                                             }}
                                             placeholder="you@example.com"
+                                            aria-describedby={errors.email ? "email-error" : undefined}
                                             className="w-full py-3.5 pl-4 pr-11 rounded-xl outline-none text-sm"
                                             style={{
                                                 border: `1.5px solid ${errors.email ? "#ef4444" : "#E8E4DF"}`,
@@ -190,6 +192,7 @@ export default function Login() {
                                     <AnimatePresence>
                                         {errors.email && (
                                             <motion.p
+                                                id="email-error"
                                                 initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                                                 className="flex items-center gap-1.5 mt-1.5 text-xs text-red-600"
                                             >
@@ -201,12 +204,13 @@ export default function Login() {
 
                                 {/* Password */}
                                 <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                    <label htmlFor="password" className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
                                         style={{ color: "#8B8680" }}>
                                         Password
                                     </label>
                                     <div className="relative">
                                         <input
+                                            id="password"
                                             type={showPassword ? "text" : "password"}
                                             value={password}
                                             onChange={(e) => {
@@ -214,6 +218,7 @@ export default function Login() {
                                                 if (errors.password) setErrors((p) => ({ ...p, password: "" }));
                                             }}
                                             placeholder="••••••••"
+                                            aria-describedby={errors.password ? "password-error" : undefined}
                                             className="w-full py-3.5 pl-4 pr-11 rounded-xl outline-none text-sm"
                                             style={{
                                                 border: `1.5px solid ${errors.password ? "#ef4444" : "#E8E4DF"}`,
@@ -235,6 +240,7 @@ export default function Login() {
                                     <AnimatePresence>
                                         {errors.password && (
                                             <motion.p
+                                                id="password-error"
                                                 initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                                                 className="flex items-center gap-1.5 mt-1.5 text-xs text-red-600"
                                             >

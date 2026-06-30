@@ -33,17 +33,19 @@ export function CurrencyProvider({ children }) {
     };
 
     const formatPrice = (priceInINR) => {
-        if (!priceInINR) return `${CURRENCIES[currency].symbol}0`;
+        if (priceInINR === null || priceInINR === undefined) return `${CURRENCIES[currency]?.symbol || '₹'}0`;
         const converted = convertPrice(priceInINR);
-        
-        const formatter = new Intl.NumberFormat("en-IN", {
-            style: "currency",
-            currency: currency,
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 2,
-        });
-
-        return formatter.format(converted);
+        try {
+            const formatter = new Intl.NumberFormat("en-IN", {
+                style: "currency",
+                currency: currency,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+            });
+            return formatter.format(converted);
+        } catch {
+            return `${CURRENCIES[currency]?.symbol || '₹'}${converted.toLocaleString('en-IN')}`;
+        }
     };
 
     return (

@@ -104,11 +104,12 @@ export default function Contact() {
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-xs uppercase tracking-widest text-maroon mb-2">
+                                    <label htmlFor="name" className="block text-xs uppercase tracking-widest text-maroon mb-2">
                                         Full Name *
                                     </label>
                                     <input
                                         type="text"
+                                        id="name"
                                         name="name"
                                         value={formData.name}
                                         onChange={handleInputChange}
@@ -118,11 +119,12 @@ export default function Contact() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs uppercase tracking-widest text-maroon mb-2">
+                                    <label htmlFor="email" className="block text-xs uppercase tracking-widest text-maroon mb-2">
                                         Email *
                                     </label>
                                     <input
                                         type="email"
+                                        id="email"
                                         name="email"
                                         value={formData.email}
                                         onChange={handleInputChange}
@@ -134,11 +136,12 @@ export default function Contact() {
                             </div>
 
                             <div>
-                                <label className="block text-xs uppercase tracking-widest text-maroon mb-2">
+                                <label htmlFor="phone" className="block text-xs uppercase tracking-widest text-maroon mb-2">
                                     Phone Number
                                 </label>
                                 <input
                                     type="tel"
+                                    id="phone"
                                     name="phone"
                                     value={formData.phone}
                                     onChange={handleInputChange}
@@ -148,10 +151,11 @@ export default function Contact() {
                             </div>
 
                             <div>
-                                <label className="block text-xs uppercase tracking-widest text-maroon mb-2">
+                                <label htmlFor="subject" className="block text-xs uppercase tracking-widest text-maroon mb-2">
                                     Subject *
                                 </label>
                                 <select
+                                    id="subject"
                                     name="subject"
                                     value={formData.subject}
                                     onChange={handleInputChange}
@@ -169,10 +173,11 @@ export default function Contact() {
                             </div>
 
                             <div>
-                                <label className="block text-xs uppercase tracking-widest text-maroon mb-2">
+                                <label htmlFor="message" className="block text-xs uppercase tracking-widest text-maroon mb-2">
                                     Message *
                                 </label>
                                 <textarea
+                                    id="message"
                                     name="message"
                                     value={formData.message}
                                     onChange={handleInputChange}

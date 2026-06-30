@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Loader, Package } from "lucide-react";
 import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
@@ -9,17 +10,18 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 export default function Orders() {
     const { isLoggedIn } = useAuth();
     const { formatPrice } = useCurrency();
+    const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!isLoggedIn) {
-            window.location.href = "/login";
+            navigate("/login", { replace: true });
             return;
         }
 
         loadOrders();
-    }, [isLoggedIn]);
+    }, [isLoggedIn, navigate]);
 
     const loadOrders = async () => {
         try {
@@ -68,12 +70,12 @@ export default function Orders() {
                     <div className="flex flex-col items-center justify-center h-96">
                         <Package size={48} className="text-espresso/30 mb-4" />
                         <p className="text-espresso/60 text-lg mb-4">No orders yet</p>
-                        <a
-                            href="/shop"
+                        <Link
+                            to="/marketplace"
                             className="text-maroon font-medium hover:text-maroon/70 transition"
                         >
                             Start shopping
-                        </a>
+                        </Link>
                     </div>
                 ) : (
                     /* Orders List */

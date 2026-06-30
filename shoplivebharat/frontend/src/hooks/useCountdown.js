@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 export function useCountdown(targetISO) {
-    const target = targetISO ? new Date(targetISO).getTime() : null;
-    const compute = () => {
+    const targetRef = useRef(targetISO ? new Date(targetISO).getTime() : null);
+
+    const compute = useCallback(() => {
+        const target = targetRef.current;
         if (!target) return { days: 0, hours: 0, minutes: 0, seconds: 0, done: false };
         const diff = target - Date.now();
         if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0, done: true };
@@ -11,17 +13,17 @@ export function useCountdown(targetISO) {
         const minutes = Math.floor((diff / (1000 * 60)) % 60);
         const seconds = Math.floor((diff / 1000) % 60);
         return { days, hours, minutes, seconds, done: false };
-    };
+    }, []);
 
     const [time, setTime] = useState(compute);
 
     useEffect(() => {
-        if (!target) return;
+        targetRef.current = targetISO ? new Date(targetISO).getTime() : null;
+        if (!targetRef.current) return;
         setTime(compute());
         const id = setInterval(() => setTime(compute()), 1000);
         return () => clearInterval(id);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [targetISO]);
+    }, [targetISO, compute]);
 
     return time;
 }

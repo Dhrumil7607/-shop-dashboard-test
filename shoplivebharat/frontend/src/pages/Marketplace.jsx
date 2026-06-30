@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Search, ChevronDown, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import ProductCard from "@/components/ProductCard";
 import { fetchProducts } from "@/lib/api";
@@ -35,12 +36,14 @@ export default function Marketplace() {
     const [products,       setProducts]       = useState([]);
     const [loading,        setLoading]        = useState(true);
     const [sort,           setSort]           = useState("newest");
-    const [category,       setCategory]       = useState("All Categories");
     const [minPrice,       setMinPrice]       = useState("");
     const [maxPrice,       setMaxPrice]       = useState("");
     const [readyToShip,    setReadyToShip]    = useState(false);
-    const [search,         setSearch]         = useState("");
     const [filtersOpen,    setFiltersOpen]    = useState(false); // mobile filter drawer
+
+    const [searchParams] = useSearchParams();
+    const [search,    setSearch]    = useState(() => searchParams.get("search") || "");
+    const [category,  setCategory]  = useState(() => searchParams.get("category") || "All Categories");
 
     useEffect(() => {
         (async () => {
@@ -55,25 +58,28 @@ export default function Marketplace() {
         })();
     }, []);
 
-    let filtered = [...products];
-    if (search.trim()) {
-        const q = search.toLowerCase();
-        filtered = filtered.filter(p =>
-            p.name.toLowerCase().includes(q) ||
-            (p.shop_name || "").toLowerCase().includes(q) ||
-            (p.category || "").toLowerCase().includes(q)
-        );
-    }
-    if (category !== "All Categories") filtered = filtered.filter(p => p.category === category);
-    if (minPrice) filtered = filtered.filter(p => p.price >= Number(minPrice));
-    if (maxPrice) filtered = filtered.filter(p => p.price <= Number(maxPrice));
-    if (readyToShip) filtered = filtered.filter(p => p.ready_to_ship);
-    switch (sort) {
-        case "price_low":  filtered = filtered.sort((a, b) => a.price - b.price); break;
-        case "price_high": filtered = filtered.sort((a, b) => b.price - a.price); break;
-        case "popular":    filtered = filtered.sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)); break;
-        default:           filtered = filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    }
+    const filtered = useMemo(() => {
+        let result = [...products];
+        if (search.trim()) {
+            const q = search.toLowerCase();
+            result = result.filter(p =>
+                p.name.toLowerCase().includes(q) ||
+                (p.shop_name || "").toLowerCase().includes(q) ||
+                (p.category || "").toLowerCase().includes(q)
+            );
+        }
+        if (category !== "All Categories") result = result.filter(p => p.category === category);
+        if (minPrice) result = result.filter(p => p.price >= Number(minPrice));
+        if (maxPrice) result = result.filter(p => p.price <= Number(maxPrice));
+        if (readyToShip) result = result.filter(p => p.ready_to_ship);
+        switch (sort) {
+            case "price_low":  result = [...result].sort((a, b) => a.price - b.price); break;
+            case "price_high": result = [...result].sort((a, b) => b.price - a.price); break;
+            case "popular":    result = [...result].sort((a, b) => (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0)); break;
+            default:           result = [...result].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        }
+        return result;
+    }, [products, search, category, minPrice, maxPrice, readyToShip, sort]);
 
     const activeFiltersCount = (category !== "All Categories" ? 1 : 0) + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (readyToShip ? 1 : 0) + (search ? 1 : 0);
     const reset = () => { setCategory("All Categories"); setMinPrice(""); setMaxPrice(""); setReadyToShip(false); setSearch(""); };

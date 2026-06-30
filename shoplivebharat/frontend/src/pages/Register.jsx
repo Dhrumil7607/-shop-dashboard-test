@@ -176,9 +176,10 @@ export default function Register() {
 
                                 {/* Full Name */}
                                 <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                    <label htmlFor="name" className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
                                         style={{ color: "#8B8680" }}>Full Name</label>
                                     <input
+                                        id="name"
                                         type="text" value={name}
                                         onChange={(e) => setName(e.target.value)}
                                         placeholder="Your full name"
@@ -190,9 +191,10 @@ export default function Register() {
 
                                 {/* Email */}
                                 <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                    <label htmlFor="email" className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
                                         style={{ color: "#8B8680" }}>Email Address</label>
                                     <input
+                                        id="email"
                                         type="email" value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         placeholder="you@example.com"
@@ -204,10 +206,11 @@ export default function Register() {
 
                                 {/* Password */}
                                 <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                    <label htmlFor="password" className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
                                         style={{ color: "#8B8680" }}>Password</label>
                                     <div className="relative">
                                         <input
+                                            id="password"
                                             type={showPass ? "text" : "password"} value={password}
                                             onChange={(e) => setPassword(e.target.value)}
                                             placeholder="Min. 8 characters"
@@ -240,10 +243,11 @@ export default function Register() {
 
                                 {/* Confirm Password */}
                                 <div>
-                                    <label className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
+                                    <label htmlFor="confirmPassword" className="block text-[10px] font-bold uppercase tracking-[0.22em] mb-2"
                                         style={{ color: "#8B8680" }}>Confirm Password</label>
                                     <div className="relative">
                                         <input
+                                            id="confirmPassword"
                                             type={showConfirm ? "text" : "password"} value={confirmPassword}
                                             onChange={(e) => setConfirmPassword(e.target.value)}
                                             placeholder="••••••••"

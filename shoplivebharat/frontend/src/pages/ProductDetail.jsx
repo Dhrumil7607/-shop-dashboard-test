@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Minus, Plus, Heart, ShoppingCart, ArrowRight, Loader, Ruler } from "lucide-react";
+import { Minus, Plus, Heart, ShoppingCart, ArrowRight, Loader, Ruler, Sparkles, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import ProductCard from "@/components/ProductCard";
 import SizeGuideModal, { getSizesForCategory, needsSizeSelection } from "@/components/SizeGuideModal";
+import AISizeFinder from "@/components/AISizeFinder/AISizeFinder";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { fetchProducts, fetchShops } from "@/lib/api";
@@ -34,6 +35,7 @@ export default function ProductDetail() {
     const [selSize,  setSelSize]  = useState("");
     const [fav,      setFav]      = useState(false);
     const [showSizeGuide, setShowSizeGuide] = useState(false);
+    const [showAIFinder, setShowAIFinder] = useState(false);
 
     useEffect(() => {
         setLoading(true);
@@ -70,15 +72,17 @@ export default function ProductDetail() {
 
     const handleAddToCart = useCallback(() => {
         if (!product) return;
-        for (let i = 0; i < qty; i++) addToCart(product);
+        const productWithSize = selSize ? { ...product, size: selSize } : product;
+        for (let i = 0; i < qty; i++) addToCart(productWithSize);
         toast.success("Added to cart!");
-    }, [product, qty, addToCart]);
+    }, [product, qty, addToCart, selSize]);
 
     const handleBuyNow = useCallback(() => {
         if (!product) return;
-        addToCart(product);
+        const productWithSize = selSize ? { ...product, size: selSize } : product;
+        addToCart(productWithSize);
         navigate("/checkout");
-    }, [product, addToCart, navigate]);
+    }, [product, addToCart, navigate, selSize]);
 
     if (loading) return (
         <MarketplaceLayout>
@@ -144,6 +148,8 @@ export default function ProductDetail() {
                                         <button
                                             key={idx}
                                             onClick={() => setSelImg(idx)}
+                                            aria-label={`View image ${idx + 1}`}
+                                            aria-pressed={selImg === idx}
                                             className="rounded-lg overflow-hidden border-2 transition w-20 h-24 flex-shrink-0"
                                             style={{
                                                 borderColor: selImg === idx ? "#1a1a1a" : "#E8E4DF",
@@ -209,9 +215,62 @@ export default function ProductDetail() {
                                 </div>
                             )}
 
-                            {/* Size — only shown for garments that need it */}
+                            {/* AI Size Finder + Size — only for garments that need sizing */}
                             {needsSizeSelection(product.category) && (
                             <div className="mb-5">
+                                {/* AI Size Finder trigger */}
+                                <button
+                                    onClick={() => setShowAIFinder(v => !v)}
+                                    aria-expanded={showAIFinder}
+                                    className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl border-2 mb-4 transition group"
+                                    style={{
+                                        borderColor: showAIFinder ? "#A2466B" : "#E8E4DF",
+                                        background: showAIFinder ? "rgba(162,70,107,0.04)" : "linear-gradient(135deg, rgba(201,168,76,0.08), rgba(162,70,107,0.06))",
+                                    }}
+                                >
+                                    <span className="flex items-center gap-2.5">
+                                        <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                            style={{ background: "linear-gradient(135deg, #C9A84C, #A2466B)" }}>
+                                            <Sparkles size={15} className="text-white" />
+                                        </span>
+                                        <span className="text-left">
+                                            <span className="block text-sm font-bold" style={{ color: "#1a1a1a" }}>
+                                                Find My Perfect Size
+                                            </span>
+                                            <span className="block text-[11px]" style={{ color: "#9B8B7A" }}>
+                                                AI Recommended Size · My Saved Size Profiles
+                                            </span>
+                                        </span>
+                                    </span>
+                                    <motion.span animate={{ rotate: showAIFinder ? 90 : 0 }} transition={{ duration: 0.2 }}>
+                                        <ArrowRight size={16} style={{ color: "#A2466B" }} />
+                                    </motion.span>
+                                </button>
+
+                                {/* AI Size Finder inline panel */}
+                                <AnimatePresence>
+                                    {showAIFinder && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: "auto" }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                                            className="overflow-hidden mb-5"
+                                        >
+                                            <div className="rounded-xl border p-4" style={{ borderColor: "#E8E4DF", background: "#FFFDFB" }}>
+                                                <AISizeFinder
+                                                    productName={product.name}
+                                                    onAddToCart={(recommendedSize) => {
+                                                        setSelSize(recommendedSize);
+                                                        setShowAIFinder(false);
+                                                        toast.success(`Size ${recommendedSize} selected from AI recommendation`);
+                                                    }}
+                                                />
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+
                                 <div className="flex items-center justify-between mb-2">
                                     <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#9B8B7A" }}>SIZE</p>
                                     <button

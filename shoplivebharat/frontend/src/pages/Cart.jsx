@@ -47,8 +47,8 @@ export default function Cart() {
     }
 
     const subtotal = getTotalPrice();
-    const shipping = subtotal > 5000 ? 0 : 299;
-    const tax = Math.round(subtotal * 0.18);
+    const shipping = subtotal > 15000 ? 0 : 499;
+    const tax = Math.round(subtotal * 0.05);
     const total = subtotal + shipping + tax;
 
     return (
@@ -162,7 +162,7 @@ export default function Cart() {
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-espresso">
-                                    <span>Tax (18%)</span>
+                                    <span>Tax (5%)</span>
                                     <span className="font-medium">{formatPrice(tax)}</span>
                                 </div>
                             </div>
@@ -176,12 +176,13 @@ export default function Cart() {
 
                             {shipping > 0 && (
                                 <p className="text-xs text-espresso/60 mb-4 text-center">
-                                    Free shipping on orders above {formatPrice(5000)}
+                                    Free shipping on orders above {formatPrice(15000)}
                                 </p>
                             )}
 
                             <button
                                 onClick={() => navigate("/checkout")}
+                                aria-label="Proceed to checkout"
                                 className="w-full py-3 bg-espresso text-ivory rounded-lg font-medium hover:bg-opacity-90 transition mb-3"
                             >
                                 Proceed to Checkout

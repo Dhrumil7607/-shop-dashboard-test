@@ -1,11 +1,90 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
     containerVariants,
     itemVariants,
     hoverVariants,
     viewportSettings,
 } from "@/utils/animations";
+
+// Chevron icon for mobile accordion toggle
+function ChevronIcon({ open }) {
+    return (
+        <motion.svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            animate={{ rotate: open ? 180 : 0 }}
+            transition={{ duration: 0.25 }}
+            aria-hidden="true"
+        >
+            <polyline points="4 6 8 10 12 6" />
+        </motion.svg>
+    );
+}
+
+// FooterGroup renders an accordion on mobile (<640px) and a static heading on desktop
+function FooterGroup({ id, title, headingDelay, children }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <motion.div variants={itemVariants.fadeInUp}>
+            {/* Mobile toggle button — visible only below sm (640px) */}
+            <button
+                id={`${id}-btn`}
+                aria-expanded={open}
+                aria-controls={id}
+                onClick={() => setOpen((prev) => !prev)}
+                className="flex items-center justify-between w-full min-h-[44px] sm:hidden text-left"
+                style={{ color: "rgba(255,255,255,0.4)" }}
+            >
+                <span className="text-xs font-bold uppercase tracking-widest">
+                    {title}
+                </span>
+                <ChevronIcon open={open} />
+            </button>
+
+            {/* Desktop static heading — visible only at sm and above */}
+            <motion.h4
+                className="hidden sm:block text-xs font-bold uppercase tracking-widest mb-5"
+                style={{ color: "rgba(255,255,255,0.4)" }}
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.6, delay: headingDelay }}
+            >
+                {title}
+            </motion.h4>
+
+            {/* Mobile: collapsible content via AnimatePresence */}
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        key={id}
+                        id={id}
+                        role="region"
+                        aria-labelledby={`${id}-btn`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        className="overflow-hidden sm:hidden"
+                    >
+                        <div className="pt-3 pb-4">{children}</div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Desktop: always-visible content */}
+            <div className="hidden sm:block">{children}</div>
+        </motion.div>
+    );
+}
 
 const SOCIAL = [
     { label: "Instagram", href: "#", icon: (
@@ -106,16 +185,7 @@ export default function Footer() {
                     </motion.div>
 
                     {/* Shop */}
-                    <motion.div variants={sectionVariants}>
-                        <motion.h4 
-                            className="text-xs font-bold uppercase tracking-widest mb-5" 
-                            style={{ color: "rgba(255,255,255,0.4)" }}
-                            initial={{ opacity: 0 }}
-                            whileInView={{ opacity: 1 }}
-                            transition={{ duration: 0.6, delay: 0.1 }}
-                        >
-                            Shop
-                        </motion.h4>
+                    <FooterGroup id="footer-shop" title="Shop" headingDelay={0.1}>
                         <motion.ul 
                             className="space-y-3"
                             variants={containerVariants.fadeInUp(0.05)}
@@ -130,31 +200,22 @@ export default function Footer() {
                                 { label: "Kurtas",    to: "/marketplace?category=Kurtas" },
                                 { label: "Bridal",    to: "/marketplace?category=Wedding+Wear" },
                                 { label: "Festival",  to: "/marketplace?category=Festival+Wear" },
-                            ].map((l, i) => (
+                            ].map((l) => (
                                 <motion.li 
                                     key={l.label}
-                                    variants={itemVariants.fadeInLeft}
-                                    whileHover={{ x: 8 }}
-                                    transition={{ duration: 0.3 }}
+                                    variants={itemVariants.fadeInUp}
+                                    whileHover={{ x: 6 }}
+                                    transition={{ duration: 0.25 }}
                                 >
                                     <Link to={l.to} className="text-sm transition hover:text-white"
                                         style={{ color: "rgba(255,255,255,0.6)" }}>{l.label}</Link>
                                 </motion.li>
                             ))}
                         </motion.ul>
-                    </motion.div>
+                    </FooterGroup>
 
                     {/* Help */}
-                    <motion.div variants={sectionVariants}>
-                        <motion.h4 
-                            className="text-xs font-bold uppercase tracking-widest mb-5" 
-                            style={{ color: "rgba(255,255,255,0.4)" }}
-                            initial={{ opacity: 0 }}
-                            whileInView={{ opacity: 1 }}
-                            transition={{ duration: 0.6, delay: 0.15 }}
-                        >
-                            Help
-                        </motion.h4>
+                    <FooterGroup id="footer-help" title="Help" headingDelay={0.15}>
                         <motion.ul 
                             className="space-y-3"
                             variants={containerVariants.fadeInUp(0.05)}
@@ -170,28 +231,19 @@ export default function Footer() {
                             ].map((l) => (
                                 <motion.li 
                                     key={l.label}
-                                    variants={itemVariants.fadeInLeft}
-                                    whileHover={{ x: 8 }}
-                                    transition={{ duration: 0.3 }}
+                                    variants={itemVariants.fadeInUp}
+                                    whileHover={{ x: 6 }}
+                                    transition={{ duration: 0.25 }}
                                 >
                                     <Link to={l.to} className="text-sm transition hover:text-white"
                                         style={{ color: "rgba(255,255,255,0.6)" }}>{l.label}</Link>
                                 </motion.li>
                             ))}
                         </motion.ul>
-                    </motion.div>
+                    </FooterGroup>
 
                     {/* For Sellers */}
-                    <motion.div variants={sectionVariants}>
-                        <motion.h4 
-                            className="text-xs font-bold uppercase tracking-widest mb-5" 
-                            style={{ color: "rgba(255,255,255,0.4)" }}
-                            initial={{ opacity: 0 }}
-                            whileInView={{ opacity: 1 }}
-                            transition={{ duration: 0.6, delay: 0.2 }}
-                        >
-                            For Sellers
-                        </motion.h4>
+                    <FooterGroup id="footer-sellers" title="For Sellers" headingDelay={0.2}>
                         <motion.ul 
                             className="space-y-3"
                             variants={containerVariants.fadeInUp(0.05)}
@@ -206,16 +258,16 @@ export default function Footer() {
                             ].map((l) => (
                                 <motion.li 
                                     key={l.label}
-                                    variants={itemVariants.fadeInLeft}
-                                    whileHover={{ x: 8 }}
-                                    transition={{ duration: 0.3 }}
+                                    variants={itemVariants.fadeInUp}
+                                    whileHover={{ x: 6 }}
+                                    transition={{ duration: 0.25 }}
                                 >
                                     <Link to={l.to} className="text-sm transition hover:text-white"
                                         style={{ color: "rgba(255,255,255,0.6)" }}>{l.label}</Link>
                                 </motion.li>
                             ))}
                         </motion.ul>
-                    </motion.div>
+                    </FooterGroup>
                 </motion.div>
 
                 {/* Bottom bar */}

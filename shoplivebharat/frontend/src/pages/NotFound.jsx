@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Home, Search } from "lucide-react";
 import { motion } from "framer-motion";
 import { setMetaTags } from "@/lib/seo";
+import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 
 export default function NotFound() {
     const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function NotFound() {
     }, []);
 
     return (
+        <MarketplaceLayout>
         <div className="min-h-screen bg-gradient-to-b from-ivory to-cream flex items-center justify-center px-6 py-20">
             <div className="max-w-2xl w-full text-center">
                 {/* 404 Animation */}
@@ -153,5 +155,6 @@ export default function NotFound() {
                 </p>
             </div>
         </div>
+        </MarketplaceLayout>
     );
 }

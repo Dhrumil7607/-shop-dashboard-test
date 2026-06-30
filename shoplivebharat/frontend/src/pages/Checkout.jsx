@@ -7,19 +7,34 @@ import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useAuth } from "@/contexts/AuthContext";
+import SizeProfileSelector from "@/components/SizeProfile/SizeProfileSelector";
+import GlassCard from "@/components/Checkout/GlassCard";
+import CouponField from "@/components/Checkout/CouponField";
+import TrustBadgeRow from "@/components/Checkout/TrustBadgeRow";
 
 /* ─── Styled input ─────────────────────────────────────────── */
 const inp = "w-full px-3 py-2.5 border-b border-gray-200 bg-transparent text-sm outline-none focus:border-[#C9A84C] transition placeholder-gray-400";
 const lbl = "block text-xs font-medium mb-1" ;
 
+/* ─── Brand accent colours for payment tiles ────────────────── */
+const PAY_ACCENT = {
+    card:     "#1B2A6B",
+    razorpay: "#2563EB",
+    paypal:   "#F59E0B",
+    applepay: "#0A0A0A",
+};
+
 /* ─── Payment method option ─────────────────────────────────── */
 function PayMethod({ id, title, sub, selected, onClick }) {
+    const accent = PAY_ACCENT[id] || "#C9A84C";
     return (
         <button type="button" onClick={onClick}
             className="w-full text-left px-4 py-3.5 rounded-xl border-2 transition"
             style={{
-                borderColor: selected ? "#C9A84C" : "#E8E4DF",
-                backgroundColor: selected ? "rgba(201,168,76,0.06)" : "white",
+                borderColor: selected ? accent : "#E8E4DF",
+                backgroundColor: selected ? `${accent}0D` : "white",
+                borderLeftColor: selected ? accent : "#E8E4DF",
+                borderLeftWidth: selected ? 3 : 2,
             }}>
             <p className="text-sm font-semibold" style={{ color: "#1a1a1a" }}>{title}</p>
             {sub && <p className="text-xs mt-0.5" style={{ color: "#9B8B7A" }}>{sub}</p>}
@@ -103,6 +118,8 @@ export default function Checkout() {
     const [payMethod, setPayMethod] = useState("card");
     const [orderData, setOrderData] = useState(null);
     const [currency, setCurrency] = useState("INR");
+    const [selectedSizeProfileId, setSelectedSizeProfileId] = useState(null);
+    const [couponDiscount, setCouponDiscount] = useState(0);
 
     const [form, setForm] = useState({
         full_name: user?.name  || "",
@@ -120,7 +137,12 @@ export default function Checkout() {
     const subtotal = getTotalPrice();
     const shipping = subtotal > 15000 ? 0 : 499;
     const tax      = Math.round(subtotal * 0.05);
-    const total    = subtotal + shipping + tax;
+    const discount = Math.round(subtotal * couponDiscount / 100);
+    const total    = subtotal + shipping + tax - discount;
+
+    const minDelivery = new Date(); minDelivery.setDate(minDelivery.getDate() + 7);
+    const maxDelivery = new Date(); maxDelivery.setDate(maxDelivery.getDate() + 14);
+    const deliveryRange = `${minDelivery.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${maxDelivery.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
 
     const COUNTRIES = ["India","United States","United Kingdom","Canada","Australia","UAE","Singapore","Germany","France","Other"];
     const CURRENCIES = ["INR","USD","GBP","CAD","AUD","EUR","SGD"];
@@ -148,6 +170,7 @@ export default function Checkout() {
                 items:    cartItems,
                 subtotal, shipping, tax, total,
                 payMethod,
+                ...(selectedSizeProfileId ? { selectedSizeProfileId } : {}),
             };
             clearCart();
             setOrderData(order);
@@ -156,7 +179,7 @@ export default function Checkout() {
         } finally {
             setLoading(false);
         }
-    }, [form, cartItems, subtotal, shipping, tax, total, payMethod, clearCart]);
+    }, [form, cartItems, subtotal, shipping, tax, total, payMethod, clearCart, selectedSizeProfileId]);
 
     if (cartItems.length === 0 && !orderData) {
         return (
@@ -198,7 +221,7 @@ export default function Checkout() {
                     </motion.div>
 
                     <form onSubmit={handlePlaceOrder}>
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-col-reverse lg:flex-row">
 
                             {/* ── LEFT: Form ── */}
                             <div className="lg:col-span-2 space-y-6">
@@ -274,6 +297,13 @@ export default function Checkout() {
                                     </div>
                                 </motion.div>
 
+                                {/* Size Profile card */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.4, delay: 0.08 }}>
+                                    <SizeProfileSelector onSelectionChange={setSelectedSizeProfileId} />
+                                </motion.div>
+
                                 {/* Payment card */}
                                 <motion.div
                                     initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
@@ -310,9 +340,8 @@ export default function Checkout() {
                             {/* ── RIGHT: Order summary ── */}
                             <motion.div
                                 initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.45, delay: 0.15 }}
-                                className="lg:sticky lg:top-24 bg-white rounded-2xl border p-6"
-                                style={{ borderColor: "#E8E4DF", boxShadow: "0 2px 12px rgba(44,36,27,0.05)" }}>
+                                transition={{ duration: 0.45, delay: 0.15 }}>
+                                <GlassCard className="lg:sticky lg:top-24 p-6">
 
                                 <h2 className="font-bold text-base mb-5" style={{ color: "#1a1a1a" }}>Order Summary</h2>
 
@@ -321,10 +350,16 @@ export default function Checkout() {
                                     {cartItems.map(item => (
                                         <div key={item.id} className="flex items-center gap-3">
                                             <div className="relative flex-shrink-0">
-                                                <img src={item.image_url} alt={item.name}
-                                                    className="w-12 h-14 rounded-lg object-cover"
-                                                    style={{ backgroundColor: "#F0EBE3" }}
-                                                    onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=80&q=60"; }} />
+                                                <motion.div
+                                                    whileHover={{ width: 80, height: 96 }}
+                                                    style={{ width: 48, height: 56 }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="flex-shrink-0">
+                                                    <img src={item.image_url} alt={item.name}
+                                                        className="w-full h-full rounded-lg object-cover"
+                                                        style={{ backgroundColor: "#F0EBE3" }}
+                                                        onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=80&q=60"; }} />
+                                                </motion.div>
                                                 <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center"
                                                     style={{ backgroundColor: "#9B8B7A" }}>
                                                     {item.quantity}
@@ -345,6 +380,11 @@ export default function Checkout() {
                                     ))}
                                 </div>
 
+                                {/* Coupon field */}
+                                <div className="mb-5">
+                                    <CouponField onCouponApply={setCouponDiscount} cartSubtotal={subtotal} />
+                                </div>
+
                                 {/* Totals */}
                                 <div className="space-y-2.5 mb-5 pb-5 border-b text-sm" style={{ borderColor: "#F0EBE3" }}>
                                     <div className="flex justify-between" style={{ color: "#4A3F35" }}>
@@ -357,16 +397,44 @@ export default function Checkout() {
                                             {shipping === 0 ? "FREE" : formatPrice(shipping)}
                                         </span>
                                     </div>
+                                    <AnimatePresence>
+                                        {shipping === 0 && (
+                                            <motion.div
+                                                initial={{ opacity: 0, x: -16 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: -16 }}
+                                                className="text-xs text-green-700 font-medium">
+                                                You saved ₹499 on shipping
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
                                     <div className="flex justify-between" style={{ color: "#4A3F35" }}>
                                         <span>Tax</span>
                                         <span>{formatPrice(tax)}</span>
                                     </div>
+                                    {discount > 0 && (
+                                        <div className="flex justify-between" style={{ color: "#2D7A3A" }}>
+                                            <span>Discount</span>
+                                            <span>−{formatPrice(discount)}</span>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="flex justify-between font-bold text-base mb-6" style={{ color: "#1a1a1a" }}>
+                                <div className="flex justify-between font-bold text-base mb-3" style={{ color: "#1a1a1a" }}>
                                     <span>Total</span>
-                                    <span>{formatPrice(total)}</span>
+                                    <motion.span
+                                        key={total}
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.3 }}>
+                                        {formatPrice(total)}
+                                    </motion.span>
                                 </div>
+
+                                {/* Estimated delivery */}
+                                <p className="text-xs mb-5" style={{ color: "#9B8B7A" }}>
+                                    Estimated delivery: <span style={{ color: "#4A3F35", fontWeight: 500 }}>{deliveryRange}</span>
+                                </p>
 
                                 {/* CTA */}
                                 <motion.button
@@ -386,6 +454,11 @@ export default function Checkout() {
                                 <p className="text-center text-xs mt-3" style={{ color: "#9B8B7A" }}>
                                     🔒 Secure &nbsp;·&nbsp; ✈️ Worldwide &nbsp;·&nbsp; ✓ Authenticated
                                 </p>
+
+                                {/* Trust badge row */}
+                                <TrustBadgeRow />
+
+                                </GlassCard>
                             </motion.div>
                         </div>
                     </form>

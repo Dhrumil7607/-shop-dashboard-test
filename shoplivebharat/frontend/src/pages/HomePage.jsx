@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
-import { motion } from "framer-motion";
+import { ArrowRight, Globe, ShieldCheck, CreditCard, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import StoreDiscoverySection from "@/components/Store/StoreDiscoverySection";
 
 /* ─── Data ───────────────────────────────────────────────────── */
 const CATEGORIES = [
@@ -54,6 +56,196 @@ const TICKER_ITEMS = [
     "SECURE PAYMENTS — RAZORPAY, PAYPAL, STRIPE",
     "RETURNS & REFUNDS — EASY & TRANSPARENT",
 ];
+
+/* ─── Hero carousel slides (bridal & ethnic fashion) ─────────── */
+const HERO_SLIDES = [
+    "https://images.unsplash.com/photo-1600685890506-593fdf55949b?fm=jpg&q=80&w=1920&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1610173827043-9db50e0d8ef9?fm=jpg&q=80&w=1920&auto=format&fit=crop",
+    "https://i.pinimg.com/736x/ae/80/69/ae8069dc37538de9f7b88421a3e7cd56.jpg",
+    "https://images.pexels.com/photos/28941551/pexels-photo-28941551.jpeg?w=1920",
+];
+
+/* Fallback images proven to load in this project (used if a slide errors) */
+const HERO_FALLBACKS = [
+    "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=1920&q=85",
+    "https://images.unsplash.com/photo-1503160865267-af4660ce7bf2?w=1920&q=85",
+    "https://images.unsplash.com/photo-1668371459824-094a960a227d?w=1920&q=85",
+    "https://images.unsplash.com/photo-1703045199207-5312874d9e54?w=1920&q=85",
+];
+
+const HERO_FEATURES = [
+    { icon: Globe,       label: "Worldwide Shipping" },
+    { icon: ShieldCheck, label: "Trusted Indian Stores" },
+    { icon: CreditCard,  label: "Secure Payments" },
+    { icon: Sparkles,    label: "Authentic Local Fashion" },
+];
+
+/* ─── Full-screen auto-rotating hero carousel ────────────────── */
+function HeroCarousel() {
+    const [slide, setSlide] = useState(0);
+
+    // Auto-advance every 5.5s
+    useEffect(() => {
+        const id = setInterval(() => {
+            setSlide((s) => (s + 1) % HERO_SLIDES.length);
+        }, 5500);
+        return () => clearInterval(id);
+    }, []);
+
+    return (
+        <section
+            className="relative min-h-[92vh] flex items-center justify-center overflow-hidden"
+            style={{ backgroundColor: "#0a0a0a" }}
+        >
+            {/* ── Background image carousel (crossfade + slow Ken-Burns zoom) ── */}
+            <AnimatePresence mode="sync">
+                <motion.div
+                    key={slide}
+                    className="absolute inset-0"
+                    initial={{ opacity: 0, scale: 1.1 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{
+                        opacity: { duration: 1.4, ease: "easeInOut" },
+                        scale:   { duration: 7, ease: "linear" },
+                    }}
+                    style={{ willChange: "transform, opacity" }}
+                >
+                    <img
+                        src={HERO_SLIDES[slide]}
+                        alt=""
+                        aria-hidden="true"
+                        className="w-full h-full object-cover object-center"
+                        onError={(e) => { e.currentTarget.src = HERO_FALLBACKS[slide]; }}
+                    />
+                </motion.div>
+            </AnimatePresence>
+
+            {/* ── Cinematic dark overlays for text legibility ── */}
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: "radial-gradient(ellipse at center, rgba(10,10,10,0.35) 0%, rgba(10,10,10,0.68) 100%)" }}
+            />
+            <div
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: "linear-gradient(to bottom, rgba(10,10,10,0.55) 0%, transparent 28%, transparent 58%, rgba(10,10,10,0.8) 100%)" }}
+            />
+
+            {/* ── Centered content ── */}
+            <div className="relative z-10 w-full max-w-4xl mx-auto px-6 text-center py-24">
+                {/* Eyebrow */}
+                <motion.div
+                    className="flex items-center justify-center gap-3 mb-6"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                >
+                    <span className="h-px w-10 md:w-14" style={{ background: "rgba(201,168,76,0.55)" }} />
+                    <span className="text-[10px] md:text-xs font-bold uppercase tracking-[0.34em]" style={{ color: "#C9A84C" }}>
+                        India to the World
+                    </span>
+                    <span className="h-px w-10 md:w-14" style={{ background: "rgba(201,168,76,0.55)" }} />
+                </motion.div>
+
+                {/* Headline */}
+                <motion.h1
+                    className="font-serif leading-[1.06] mb-6 text-white"
+                    style={{ fontSize: "clamp(2.5rem, 7vw, 5rem)", fontWeight: 400, textShadow: "0 2px 30px rgba(0,0,0,0.4)" }}
+                    initial={{ opacity: 0, y: 28, filter: "blur(6px)" }}
+                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                    transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+                >
+                    Shop Authentic{" "}
+                    <span style={{ color: "#C9A84C" }}>Indian Fashion</span>
+                    <br className="hidden sm:block" />
+                    {" "}From Anywhere In The World
+                </motion.h1>
+
+                {/* Subtitle */}
+                <motion.p
+                    className="text-sm md:text-lg leading-relaxed max-w-xl mx-auto mb-9"
+                    style={{ color: "rgba(255,255,255,0.78)" }}
+                    initial={{ opacity: 0, y: 18 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.65, ease: [0.16, 1, 0.3, 1], delay: 0.25 }}
+                >
+                    Buy sarees, lehengas, kurtas, sherwanis, chaniya choli and wedding outfits
+                    directly from trusted local stores in India, with worldwide delivery.
+                </motion.p>
+
+                {/* CTAs */}
+                <motion.div
+                    className="flex flex-wrap items-center justify-center gap-3 mb-10"
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.55, delay: 0.4 }}
+                >
+                    <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                        <Link to="/marketplace"
+                            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm shadow-lg"
+                            style={{ backgroundColor: "#C9A84C", color: "#1a1a1a" }}>
+                            Shop Now <ArrowRight size={16} />
+                        </Link>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                        <Link to="/shops"
+                            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm border-2"
+                            style={{ borderColor: "rgba(255,255,255,0.4)", color: "white", backdropFilter: "blur(4px)" }}>
+                            Explore Stores
+                        </Link>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.04, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
+                        <Link to="/become-a-seller"
+                            className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded-xl font-semibold text-sm"
+                            style={{ color: "#C9A84C" }}>
+                            Become a Seller <span>✦</span>
+                        </Link>
+                    </motion.div>
+                </motion.div>
+
+                {/* Feature pills */}
+                <motion.div
+                    className="flex flex-wrap items-center justify-center gap-2.5"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.6, delay: 0.55 }}
+                >
+                    {HERO_FEATURES.map(({ icon: Icon, label }) => (
+                        <span key={label}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-medium"
+                            style={{
+                                background: "rgba(255,255,255,0.1)",
+                                backdropFilter: "blur(10px)",
+                                WebkitBackdropFilter: "blur(10px)",
+                                border: "1px solid rgba(255,255,255,0.16)",
+                                color: "rgba(255,255,255,0.88)",
+                            }}>
+                            <Icon size={13} style={{ color: "#C9A84C" }} />
+                            {label}
+                        </span>
+                    ))}
+                </motion.div>
+            </div>
+
+            {/* ── Slide indicator dots ── */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+                {HERO_SLIDES.map((_, i) => (
+                    <button
+                        key={i}
+                        onClick={() => setSlide(i)}
+                        aria-label={`Go to slide ${i + 1}`}
+                        aria-current={i === slide ? "true" : undefined}
+                        className="h-1.5 rounded-full transition-all duration-300"
+                        style={{
+                            width: i === slide ? 30 : 16,
+                            background: i === slide ? "#C9A84C" : "rgba(255,255,255,0.4)",
+                        }}
+                    />
+                ))}
+            </div>
+        </section>
+    );
+}
 
 const WHY_US = [
     { title:"Authentic & Direct", desc:"Sourced straight from trusted Indian local stores — no middlemen, no fakes." },
@@ -161,99 +353,8 @@ export default function HomePage() {
     return (
         <MarketplaceLayout>
 
-            {/* ── HERO ── */}
-            <section className="relative min-h-[92vh] flex items-center overflow-hidden" style={{ backgroundColor: "#0a0a0a" }}>
-                <motion.div
-                    className="absolute inset-0"
-                    initial={{ scale: 1.08 }}
-                    animate={{ scale: 1 }}
-                    transition={{ duration: 1.8, ease: [0.16, 1, 0.3, 1] }}
-                >
-                    <img
-                        src="https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=1600&q=85"
-                        alt=""
-                        aria-hidden="true"
-                        className="w-full h-full object-cover"
-                        style={{ opacity: 0.28 }}
-                    />
-                    <div className="absolute inset-0" style={{
-                        background: "linear-gradient(to right, #0a0a0a 30%, rgba(10,10,10,0.75) 65%, transparent 100%)"
-                    }} />
-                </motion.div>
-
-                <div className="relative z-10 max-w-7xl mx-auto px-6 md:px-12 py-24">
-                    <motion.div
-                        className="max-w-2xl"
-                        initial="hidden"
-                        animate="visible"
-                        variants={{
-                            hidden: {},
-                            visible: { transition: { staggerChildren: 0.12 } }
-                        }}
-                    >
-                        <motion.p
-                            variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16,1,0.3,1] } } }}
-                            className="text-xs font-bold uppercase tracking-[0.3em] mb-5"
-                            style={{ color: "#8B3A3A" }}
-                        >
-                            INDIA TO THE WORLD
-                        </motion.p>
-
-                        <motion.h1
-                            variants={{ hidden: { opacity: 0, y: 32, filter: "blur(6px)" }, visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.85, ease: [0.16,1,0.3,1] } } }}
-                            className="font-serif text-5xl md:text-7xl text-white leading-[1.05] mb-6"
-                        >
-                            Shop Authentic<br />Indian Fashion<br />
-                            <span style={{ color: "#C9A84C" }}>From Anywhere<br />In The World</span>
-                        </motion.h1>
-
-                        <motion.p
-                            variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.16,1,0.3,1] } } }}
-                            className="text-lg leading-relaxed mb-10 max-w-lg"
-                            style={{ color: "rgba(255,255,255,0.65)" }}
-                        >
-                            Buy sarees, lehengas, kurtas, sherwanis, chaniya choli and wedding outfits
-                            directly from trusted local stores in India, with worldwide delivery.
-                        </motion.p>
-
-                        <motion.div
-                            variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } }}
-                            className="flex flex-wrap gap-3 mb-12"
-                        >
-                            <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
-                                <Link to="/marketplace" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition"
-                                    style={{ backgroundColor: "#8B3A3A", color: "white" }}>
-                                    Shop Now <ArrowRight size={16} />
-                                </Link>
-                            </motion.div>
-                            <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
-                                <Link to="/shops" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition border-2"
-                                    style={{ borderColor: "rgba(255,255,255,0.25)", color: "white" }}>
-                                    Explore Stores
-                                </Link>
-                            </motion.div>
-                            <motion.div whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }} transition={{ duration: 0.2 }}>
-                                <Link to="/become-a-seller" className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition border-2"
-                                    style={{ borderColor: "rgba(201,168,76,0.45)", color: "#C9A84C" }}>
-                                    Become a Seller
-                                </Link>
-                            </motion.div>
-                        </motion.div>
-
-                        <motion.div
-                            variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: 0.5, delay: 0.1 } } }}
-                            className="flex flex-wrap gap-x-7 gap-y-2"
-                        >
-                            {["Worldwide Shipping","Trusted Indian Stores","Secure Payments","Authentic Local Fashion"].map(f => (
-                                <div key={f} className="flex items-center gap-2 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
-                                    <span className="w-1 h-1 rounded-full" style={{ backgroundColor: "#8B3A3A" }} />
-                                    {f}
-                                </div>
-                            ))}
-                        </motion.div>
-                    </motion.div>
-                </div>
-            </section>
+            {/* ── HERO (full-screen auto-rotating carousel) ── */}
+            <HeroCarousel />
 
             {/* ── TICKER ── */}
             <Ticker />
@@ -339,6 +440,9 @@ export default function HomePage() {
                     </div>
                 </div>
             </section>
+
+            {/* ── STORE DISCOVERY — Req 6.1: between How It Works and New Arrivals ── */}
+            <StoreDiscoverySection />
 
             {/* ── NEW ARRIVALS ── */}
             <section className="py-20 px-6 md:px-12 bg-ivory">

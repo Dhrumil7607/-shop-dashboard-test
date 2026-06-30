@@ -1,112 +1,221 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, Loader } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+/**
+ * ShopsDirectory — Enhanced /shops page
+ *
+ * Tasks 8.1 + 8.2
+ * Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6
+ *
+ * Changes from the original:
+ *  - Uses <StoreCard> instead of inline card markup (Req 7.1)
+ *  - Removes the 8-store cap — shows ALL stores from fetchShops (Req 7.2)
+ *  - Adds <StoreFilterPills> with the same 7 options as StoreDiscoverySection (Req 7.3)
+ *  - Adds a debounced (300 ms) search input that filters by name or city (Req 7.4)
+ *  - Search only activates at ≥2 characters (Req 7.5)
+ *  - Empty search-result state message when ≥2 chars match nothing (Req 7.6)
+ *  - Filter + search are applied simultaneously (a store must pass BOTH)
+ */
+
+import { useEffect, useRef, useState, useCallback } from "react";
+import { Loader } from "lucide-react";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
-import { fetchShops, fetchProducts } from "@/lib/api";
-import { MOCK_SHOPS, MOCK_PRODUCTS } from "@/lib/testData";
+import { fetchShops } from "@/lib/api";
+import { MOCK_SHOPS } from "@/lib/testData";
+import StoreCard from "@/components/Store/StoreCard";
+import StoreFilterPills from "@/components/Store/StoreFilterPills";
+
+// ── Filter helper — identical to StoreDiscoverySection ────────────────────────
+
+function shopMatchesFilter(shop, filter) {
+  if (filter === "All") return true;
+
+  const filterLower = filter.toLowerCase();
+
+  if (filter === "Trending" && shop.trending === true) return true;
+  if (filter === "Featured" && shop.featured === true) return true;
+
+  if (Array.isArray(shop.tags)) {
+    if (shop.tags.some((t) => t.toLowerCase().includes(filterLower))) return true;
+  }
+
+  if (typeof shop.specialty === "string") {
+    if (shop.specialty.toLowerCase().includes(filterLower)) return true;
+  }
+
+  if (Array.isArray(shop.categories)) {
+    if (shop.categories.some((c) => c.toLowerCase().includes(filterLower))) return true;
+  }
+
+  if (typeof shop.description === "string") {
+    if (shop.description.toLowerCase().includes(filterLower)) return true;
+  }
+
+  if (filter === "New" && (shop.isNew === true || shop.new === true)) return true;
+
+  if (filter === "Wedding Specialists") {
+    const wedding = ["wedding", "bridal", "bride", "groom"];
+    const textToCheck = [shop.specialty, shop.description, shop.name].filter(Boolean);
+    if (textToCheck.some((t) => wedding.some((w) => t.toLowerCase().includes(w)))) return true;
+  }
+
+  if (filter === "Regional") {
+    const regional = [
+      "jaipur", "varanasi", "surat", "delhi", "mumbai", "kolkata",
+      "chennai", "bengaluru", "hyderabad", "regional",
+    ];
+    const textToCheck = [shop.city, shop.specialty, shop.description].filter(Boolean);
+    if (textToCheck.some((t) => regional.some((r) => t.toLowerCase().includes(r)))) return true;
+  }
+
+  if (filter === "Luxury") {
+    const luxury = ["luxury", "premium", "couture", "royal", "maharani", "heritage", "silk"];
+    const textToCheck = [shop.name, shop.specialty, shop.description].filter(Boolean);
+    if (textToCheck.some((t) => luxury.some((l) => t.toLowerCase().includes(l)))) return true;
+  }
+
+  return false;
+}
+
+// ── Search helper ─────────────────────────────────────────────────────────────
+
+function shopMatchesSearch(shop, query) {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return true; // Req 7.5 — fewer than 2 chars → show all
+  return (
+    (shop.name  && shop.name.toLowerCase().includes(q)) ||
+    (shop.city  && shop.city.toLowerCase().includes(q))
+  );
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ShopsDirectory() {
-    const navigate = useNavigate();
-    const [shops,    setShops]    = useState([]);
-    const [products, setProducts] = useState([]);
-    const [loading,  setLoading]  = useState(true);
+  const [shops,        setShops]        = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [activeFilter, setActiveFilter] = useState("All");
 
-    useEffect(() => {
-        (async () => {
-            try {
-                const [sh, pr] = await Promise.all([
-                    fetchShops({ active_only: true, limit: 100 }).catch(() => MOCK_SHOPS),
-                    fetchProducts({ active_only: true, limit: 200 }).catch(() => MOCK_PRODUCTS),
-                ]);
-                setShops(sh?.length ? sh : MOCK_SHOPS);
-                setProducts(pr?.length ? pr : MOCK_PRODUCTS);
-            } catch {
-                setShops(MOCK_SHOPS);
-                setProducts(MOCK_PRODUCTS);
-            } finally {
-                setLoading(false);
-            }
-        })();
-    }, []);
+  // Raw value bound to the <input>; debounced value drives filtering
+  const [inputValue,    setInputValue]    = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-    const countFor = (shopId) => products.filter(p => p.shop_id === shopId).length;
+  // Debounce: 300 ms via useRef + setTimeout (no external library)
+  const debounceRef = useRef(null);
 
-    return (
-        <MarketplaceLayout>
-            <div style={{ backgroundColor: "#FAF9F6" }}>
-                <div className="max-w-7xl mx-auto px-6 md:px-12 py-10">
+  const handleSearchChange = useCallback((e) => {
+    const value = e.target.value;
+    setInputValue(value);
 
-                    {/* Header */}
-                    <h1 className="font-serif text-4xl md:text-5xl mb-2" style={{ color: "#1a1a1a", fontWeight: 400 }}>
-                        Trusted Indian Stores
-                    </h1>
-                    <p className="text-sm mb-10" style={{ color: "#9B8B7A" }}>
-                        Family-run, generations-old, lovingly curated.
-                    </p>
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(value);
+    }, 300);
+  }, []);
 
-                    {loading ? (
-                        <div className="flex items-center justify-center py-24">
-                            <Loader size={28} className="animate-spin" style={{ color: "#C9A84C" }} />
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {shops.map(shop => (
-                                <div key={shop.id}
-                                    className="rounded-xl overflow-hidden border"
-                                    style={{ backgroundColor: "white", borderColor: "#E8E4DF" }}>
+  // Clean up the timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
-                                    {/* Shop image */}
-                                    <div className="relative overflow-hidden" style={{ height: "200px", backgroundColor: "#F0EBE3" }}>
-                                        <img
-                                            src={shop.image_url}
-                                            alt={shop.name}
-                                            loading="lazy"
-                                            className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
-                                            onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=600&q=60"; }}
-                                        />
-                                    </div>
+  // Fetch all stores — no 8-store cap (Req 7.2)
+  useEffect(() => {
+    (async () => {
+      try {
+        const sh = await fetchShops({ active_only: true, limit: 1000 }).catch(() => MOCK_SHOPS);
+        setShops(sh?.length ? sh : MOCK_SHOPS);
+      } catch {
+        setShops(MOCK_SHOPS);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-                                    {/* Shop info */}
-                                    <div className="p-5">
-                                        <div className="flex items-start gap-3 mb-3">
-                                            {/* Avatar */}
-                                            <img
-                                                src={shop.image_url}
-                                                alt={shop.name}
-                                                className="w-10 h-10 rounded-full object-cover flex-shrink-0 border"
-                                                style={{ borderColor: "#E8E4DF" }}
-                                                onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=80&q=60"; }}
-                                            />
-                                            <div className="min-w-0">
-                                                <p className="font-semibold text-sm truncate" style={{ color: "#1a1a1a" }}>{shop.name}</p>
-                                                <p className="text-xs" style={{ color: "#9B8B7A" }}>
-                                                    {shop.city}, {shop.country || "India"}
-                                                </p>
-                                            </div>
-                                        </div>
+  // Apply filter pill + search simultaneously (Req 7.3, 7.4, 7.5)
+  const visibleShops = shops.filter(
+    (shop) =>
+      shopMatchesFilter(shop, activeFilter) &&
+      shopMatchesSearch(shop, debouncedQuery)
+  );
 
-                                        <p className="text-xs leading-relaxed mb-4" style={{ color: "#6B5E52" }}>
-                                            {shop.description}
-                                        </p>
+  // Req 7.6 — empty state only when search is active (≥2 chars) and nothing matches
+  const searchIsActive = debouncedQuery.trim().length >= 2;
+  const showEmptyState = searchIsActive && visibleShops.length === 0;
 
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs" style={{ color: "#9B8B7A" }}>
-                                                {countFor(shop.id)} products
-                                            </span>
-                                            <button
-                                                onClick={() => navigate(`/marketplace?shop=${shop.id}`)}
-                                                className="flex items-center gap-1.5 text-xs font-semibold transition hover:opacity-70"
-                                                style={{ color: "#1a1a1a" }}>
-                                                Visit <ArrowRight size={13} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+  return (
+    <MarketplaceLayout>
+      <div style={{ backgroundColor: "#FAF9F6" }}>
+        <div className="max-w-7xl mx-auto px-6 md:px-12 py-10">
+
+          {/* ── Page header ────────────────────────────────────────────── */}
+          <h1
+            className="font-serif text-4xl md:text-5xl mb-2"
+            style={{ color: "#1a1a1a", fontWeight: 400 }}
+          >
+            Trusted Indian Stores
+          </h1>
+          <p className="text-sm mb-8" style={{ color: "#9B8B7A" }}>
+            Family-run, generations-old, lovingly curated.
+          </p>
+
+          {/* ── Search input (Req 7.4 / 7.5) ──────────────────────────── */}
+          <div className="mb-6">
+            <label
+              htmlFor="shops-search"
+              className="block text-sm font-medium mb-2"
+              style={{ color: "#3C3027" }}
+            >
+              Search stores
+            </label>
+            <input
+              id="shops-search"
+              type="search"
+              value={inputValue}
+              onChange={handleSearchChange}
+              placeholder="Search by name or city…"
+              className="w-full max-w-md rounded-full border px-4 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-espresso focus-visible:ring-offset-2 transition-colors"
+              style={{
+                borderColor: "#E8E4DF",
+                backgroundColor: "#FFFFFF",
+                color: "#1a1a1a",
+                /* Req 12.4 — minimum 44 px touch / click target height */
+                minHeight: "44px",
+              }}
+              autoComplete="off"
+              aria-label="Search stores by name or city"
+            />
+          </div>
+
+          {/* ── Filter pills (Req 7.3) ──────────────────────────────────── */}
+          <div className="mb-8">
+            <StoreFilterPills
+              activeFilter={activeFilter}
+              onFilterChange={setActiveFilter}
+            />
+          </div>
+
+          {/* ── Loading state ───────────────────────────────────────────── */}
+          {loading ? (
+            <div className="flex items-center justify-center py-24">
+              <Loader size={28} className="animate-spin" style={{ color: "#C9A84C" }} />
             </div>
-        </MarketplaceLayout>
-    );
+
+          /* ── Empty search state (Req 7.6) ──────────────────────────── */
+          ) : showEmptyState ? (
+            <p className="text-sm py-16 text-center" style={{ color: "#9B8B7A" }}>
+              No stores match your search — try a different term.
+            </p>
+
+          /* ── Store grid ────────────────────────────────────────────── */
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {visibleShops.map((shop) => (
+                <StoreCard key={shop.id} shop={shop} />
+              ))}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </MarketplaceLayout>
+  );
 }

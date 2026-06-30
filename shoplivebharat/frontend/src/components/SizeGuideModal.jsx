@@ -235,6 +235,9 @@ export default function SizeGuideModal({ category, shopName, onClose }) {
     return (
         /* Backdrop */
         <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="size-guide-title"
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
             onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
@@ -262,7 +265,7 @@ export default function SizeGuideModal({ category, shopName, onClose }) {
                             {shopName}
                         </p>
                     )}
-                    <h2 className="font-serif text-2xl md:text-3xl mb-1"
+                    <h2 id="size-guide-title" className="font-serif text-2xl md:text-3xl mb-1"
                         style={{ color: "#1a1a1a", fontWeight: 400 }}>
                         Size Guide &amp; Measurements
                     </h2>

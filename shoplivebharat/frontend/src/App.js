@@ -53,6 +53,9 @@ const AdminOrders = lazy(() => import("@/pages/admin/Orders"));
 const AdminBookings = lazy(() => import("@/pages/admin/Bookings"));
 const AdminSellerApplications = lazy(() => import("@/pages/admin/SellerApplications"));
 
+const SizeProfiles = lazy(() => import("@/pages/account/SizeProfiles"));
+const AccountBookings = lazy(() => import("@/pages/account/Bookings"));
+
 // Seller registration (separate chunk — never loaded by regular shoppers)
 const BecomeASeller = lazy(() => import("@/pages/seller/BecomeASeller"));
 const ApplicationStatus = lazy(() => import("@/pages/seller/ApplicationStatus"));
@@ -115,6 +118,8 @@ function AppRoutes() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/account" element={<Account />} />
+                <Route path="/account/size-profiles" element={<SizeProfiles />} />
+                <Route path="/account/bookings" element={<AccountBookings />} />
                 <Route path="/settings" element={<UserSettings />} />
                 <Route path="/orders" element={<Orders />} />
                 <Route path="/about" element={<About />} />

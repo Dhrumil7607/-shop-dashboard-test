@@ -1,0 +1,174 @@
+╔════════════════════════════════════════════════════════════════════╗
+║        SHOP SAVE ERROR - QUICK REFERENCE & DIAGNOSTIC GUIDE       ║
+╚════════════════════════════════════════════════════════════════════╝
+
+🔍 PROBLEM DIAGNOSIS TREE:
+
+1. Shop creation fails → Check error message
+   │
+   ├─→ "Invalid admin key"
+   │   └─→ FIX: Re-login to admin panel with: shoplivebharat-admin
+   │
+   ├─→ "Connection refused"
+   │   └─→ FIX: Start backend: python shoplivebharat/backend/server.py
+   │
+   ├─→ "Validation error" or "422"
+   │   └─→ FIX: Check all fields are filled correctly
+   │   └─→ Description must be 10+ characters
+   │   └─→ Email must be valid format
+   │
+   ├─→ "slug already exists"
+   │   └─→ FIX: Use different shop name
+   │
+   └─→ Blank error or silent failure
+       └─→ FIX: Open console (F12) to see real error
+
+════════════════════════════════════════════════════════════════════
+
+📋 QUICK CHECKLIST (Do These First):
+
+☐ Backend running?
+  terminal$ python shoplivebharat/backend/server.py
+  Should see: "ShopLiveBharat API started"
+
+☐ Frontend running?
+  terminal$ cd frontend && npm start
+  Should see: "Compiled successfully!"
+
+☐ Backend .env correct?
+  cat shoplivebharat/backend/.env
+  Should have: USE_MEMORY_DB=1
+              ADMIN_API_KEY=shoplivebharat-admin
+
+☐ Frontend .env correct?
+  cat shoplivebharat/frontend/.env
+  Should have: REACT_APP_BACKEND_URL=http://localhost:8000
+
+☐ Logged into admin?
+  http://localhost:3000/admin/login
+  Key: shoplivebharat-admin
+
+════════════════════════════════════════════════════════════════════
+
+🔧 TROUBLESHOOTING COMMANDS:
+
+Test Backend:
+  curl http://localhost:8000/api/
+  → Should return: {"service":"ShopLiveBharat API","status":"ok"}
+
+Test Admin Key:
+  curl "http://localhost:8000/api/admin/waitlist" \
+    -H "X-Admin-Key: shoplivebharat-admin"
+  → Should return list (even if empty)
+
+Test Shop Creation API:
+  curl -X POST http://localhost:8000/api/admin/shops \
+    -H "X-Admin-Key: shoplivebharat-admin" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"Test","owner_name":"Owner","owner_email":"test@test.com","city":"City","specialty":"Spec","description":"This is a long description","image_url":"/shop-assets/banner-1.jpg"}'
+
+════════════════════════════════════════════════════════════════════
+
+📊 CONSOLE DEBUGGING (F12 → Console):
+
+Good Signs (Should See):
+  ✅ "🔑 Admin key present: true"
+  ✅ "📝 Saving shop with data: {...}"
+  ✅ "➕ Creating new shop"
+  ✅ "✅ New shop created: {...}"
+
+Bad Signs (If You See):
+  ❌ "🔑 Admin key present: false" → Admin not logged in
+  ❌ "❌ Error saving shop: 401" → Invalid admin key
+  ❌ "❌ Error saving shop: 422" → Invalid form data
+  ❌ "❌ Error saving shop: Network" → Backend not running
+
+════════════════════════════════════════════════════════════════════
+
+✅ TEST FORM DATA (Copy-Paste This):
+
+Shop Name:     My Test Shop
+Owner Name:    Test Owner
+Owner Email:   test@example.com
+City:          Mumbai
+Country:       India
+Specialty:     Ethnic Wear
+Shop Image:    /shop-assets/banner-1.jpg
+Instagram:     (leave blank or /)
+Description:   This is my beautiful test shop with amazing collections
+
+════════════════════════════════════════════════════════════════════
+
+🚀 COMPLETE RESET (If Nothing Works):
+
+1. Stop everything (Ctrl+C in terminals)
+
+2. Update backend/.env:
+   cd shoplivebharat/backend
+   cat > .env << EOF
+   USE_MEMORY_DB=1
+   ADMIN_API_KEY=shoplivebharat-admin
+   LAUNCH_DATE=2026-06-28T00:00:00+05:30
+   EOF
+
+3. Clear browser cache:
+   DevTools → Application → Local Storage → Delete All
+
+4. Start fresh:
+   Terminal 1: python shoplivebharat/backend/server.py
+   Terminal 2: cd frontend && npm start
+
+5. Hard refresh browser:
+   Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)
+
+6. Re-login:
+   http://localhost:3000/admin/login
+   Key: shoplivebharat-admin
+
+════════════════════════════════════════════════════════════════════
+
+📖 DETAILED GUIDES AVAILABLE:
+
+• DEBUG_SHOP_SAVE_ERROR.md    - Full debugging walkthrough
+• TEST_CREATE_SHOP.md         - Step-by-step testing guide
+• SHOP_SAVE_FIX_SUMMARY.md    - Complete summary
+
+════════════════════════════════════════════════════════════════════
+
+✨ SUCCESS INDICATORS:
+
+After creating a shop, you should see:
+
+Toast notification:  "✅ Shop is now LIVE!"
+Console message:     "✅ New shop created: {...}"
+Network status:      201 Created
+Shop in list:        New shop appears in shops list
+Edit button:         Can click to edit the shop
+Archive button:      Can click to archive the shop
+
+════════════════════════════════════════════════════════════════════
+
+🎯 NEXT STEPS AFTER SHOP WORKS:
+
+1. Create another shop (test multiple)
+2. Go to Products page
+3. Click "Add Product"
+4. Check: Shop dropdown shows your shops
+5. Create a product under a shop
+6. Go to marketplace and verify product appears
+
+════════════════════════════════════════════════════════════════════
+
+💡 PRO TIPS:
+
+• Always check console first (most errors logged there)
+• Always check network tab for HTTP status codes
+• Always read error messages carefully
+• Always clear cache if things seem stuck
+• Always restart backend fresh after changes
+• Use the curl commands above to test API directly
+
+════════════════════════════════════════════════════════════════════
+
+**If stuck, follow DEBUG_SHOP_SAVE_ERROR.md for detailed steps.**
+

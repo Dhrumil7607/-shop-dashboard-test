@@ -24,6 +24,17 @@ export default function Account() {
         }
     }, [isLoggedIn, navigate]);
 
+    useEffect(() => {
+        if (user) {
+            setProfileData({
+                name: user?.name || "",
+                email: user?.email || "",
+                phone: user?.phone || "",
+                city: user?.city || "",
+            });
+        }
+    }, [user]);
+
     const handleUpdate = async () => {
         setLoading(true);
         try {
@@ -188,6 +199,30 @@ export default function Account() {
                     </Link>
 
                     <Link
+                        to="/account/size-profiles"
+                        className="border border-line-soft rounded-lg p-6 hover:shadow-md transition group"
+                    >
+                        <h3 className="text-lg font-semibold text-espresso mb-2 group-hover:text-maroon transition">
+                            My Size Profiles
+                        </h3>
+                        <p className="text-espresso/60 text-sm">
+                            Save measurements for faster, accurate sizing
+                        </p>
+                    </Link>
+
+                    <Link
+                        to="/account/bookings"
+                        className="border border-line-soft rounded-lg p-6 hover:shadow-md transition group"
+                    >
+                        <h3 className="text-lg font-semibold text-espresso mb-2 group-hover:text-maroon transition">
+                            My Bookings
+                        </h3>
+                        <p className="text-espresso/60 text-sm">
+                            Manage your live shopping sessions
+                        </p>
+                    </Link>
+
+                    <Link
                         to="/marketplace"
                         className="border border-line-soft rounded-lg p-6 hover:shadow-md transition group"
                     >
@@ -196,6 +231,18 @@ export default function Account() {
                         </h3>
                         <p className="text-espresso/60 text-sm">
                             Discover authentic Indian fashion
+                        </p>
+                    </Link>
+
+                    <Link
+                        to="/live-shopping"
+                        className="border border-line-soft rounded-lg p-6 hover:shadow-md transition group"
+                    >
+                        <h3 className="text-lg font-semibold text-espresso mb-2 group-hover:text-maroon transition">
+                            Live Video Shopping
+                        </h3>
+                        <p className="text-espresso/60 text-sm">
+                            Book a personal styling session
                         </p>
                     </Link>
 

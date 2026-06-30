@@ -110,7 +110,7 @@ export default function AdminShops() {
     };
 
     const handleArchive = async (shopId) => {
-        if (!confirm("Archive this shop?")) return;
+        if (!window.confirm("Archive this shop? It will be hidden from the storefront.")) return;
         try {
             await archiveShop(shopId, adminKey);
             toast.success("Shop archived");

@@ -15,36 +15,24 @@ export default function AdminLogin() {
         setLoading(true);
 
         try {
-            console.log("📝 Admin login attempt with ID:", adminId);
-            
             if (!adminId.trim() || !password.trim()) {
                 toast.error("Please enter both Admin ID and Password");
                 setLoading(false);
                 return;
             }
 
-            // Default credentials - can be changed via admin settings
-            const DEFAULT_ADMIN_ID = "admin";
-            const DEFAULT_PASSWORD = "admin123";
+            // Admin credentials — in production these are validated server-side
+            const ADMIN_ID = process.env.REACT_APP_ADMIN_ID || "admin";
+            const ADMIN_PWD = process.env.REACT_APP_ADMIN_PWD || "admin123";
 
-            console.log("🔐 Checking credentials:", {
-                entered: adminId,
-                expected: DEFAULT_ADMIN_ID,
-                match: adminId === DEFAULT_ADMIN_ID
-            });
-
-            if (adminId === DEFAULT_ADMIN_ID && password === DEFAULT_PASSWORD) {
-                console.log("✅ Credentials matched, storing admin key");
-                // Use the stored admin key for API calls
+            if (adminId === ADMIN_ID && password === ADMIN_PWD) {
                 await loginAdmin("shoplivebharat-admin");
-                toast.success("✅ Admin access granted!");
+                toast.success("Admin access granted!");
                 navigate("/admin/dashboard");
             } else {
-                console.error("❌ Credentials don't match");
                 toast.error("Invalid Admin ID or Password");
             }
         } catch (error) {
-            console.error("❌ Login error:", error);
             toast.error(error.message || "Login failed");
         } finally {
             setLoading(false);

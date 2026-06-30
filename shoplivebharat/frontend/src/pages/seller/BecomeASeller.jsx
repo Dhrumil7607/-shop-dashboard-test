@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -40,6 +40,9 @@ export default function BecomeASeller() {
     const navigate = useNavigate();
     const { user }  = useAuth();
 
+    // Scroll to top on mount
+    useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, []);
+
     const [submitting, setSubmitting] = useState(false);
     const [errors,     setErrors]     = useState({});
 
@@ -75,7 +78,8 @@ export default function BecomeASeller() {
         const e = {};
         if (!form.full_name.trim()    || form.full_name.length < 2)    e.full_name    = "Required (min 2 chars)";
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))            e.email        = "Enter a valid email address";
-        if (!/^\d{10}$/.test(form.phone))                               e.phone        = "Enter a 10-digit mobile number";
+        if (!/^\+?[\d\s\-()]{7,20}$/.test(form.phone.replace(/\s/g, "")))
+            e.phone = "Enter a valid phone number";
         if (!form.store_name.trim()   || form.store_name.length < 2)    e.store_name   = "Required (min 2 chars)";
         if (!form.store_city.trim())                                     e.store_city   = "Required";
         if (!form.store_state.trim())                                    e.store_state  = "Required";
@@ -207,7 +211,7 @@ export default function BecomeASeller() {
                                         </div>
                                         <div>
                                             <label className={lbl}>Mobile Number{req}</label>
-                                            <input className={inp} type="tel" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="10-digit Indian number" maxLength={10} />
+                                            <input className={inp} type="tel" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="Phone number (e.g. +91 98765 43210)" maxLength={20} />
                                             <FieldErr e={errors.phone} />
                                         </div>
                                     </div>

@@ -38,6 +38,8 @@ const ProductCard = memo(function ProductCard({ product, index = 0 }) {
             onClick={handleClick}
             onHoverStart={() => setHovering(true)}
             onHoverEnd={() => setHovering(false)}
+            role="article"
+            aria-label={product.name}
             className="group cursor-pointer flex flex-col"
             style={{ willChange: "transform" }}
         >

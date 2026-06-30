@@ -8,10 +8,12 @@ import Footer from "@/components/Footer";
 import CurrencySelector from "@/components/CurrencySelector";
 
 const NAV = [
-    { label: "Collections", to: "/marketplace" },
-    { label: "Stores",      to: "/shops" },
-    { label: "How It Works",to: "/about" },
-    { label: "About",       to: "/about" },
+    { label: "Home",          to: "/" },
+    { label: "Collections",   to: "/marketplace" },
+    { label: "Shop by Stores", to: "/shops" },
+    { label: "Live Shopping", to: "/live-shopping" },
+    { label: "About",         to: "/about" },
+    { label: "Contact",       to: "/contact" },
 ];
 
 const dropAnim = {
@@ -89,10 +91,10 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                     boxShadow: scrolled ? "0 2px 20px rgba(44,36,27,0.06), 0 1px 0 rgba(255,255,255,0.8)" : "none",
                 }}
             >
-                <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+                <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap min-w-0">
 
                     {/* Logo */}
-                    <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 group">
+                    <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 min-w-0 group">
                         <motion.div
                             className="w-8 h-8 rounded-full border-2 flex items-center justify-center"
                             style={{ borderColor: "#C9A84C" }}
@@ -113,10 +115,11 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                     </Link>
 
                     {/* Center nav */}
-                    <nav className="hidden lg:flex items-center gap-7 text-sm flex-1 justify-center">
+                    <nav className="hidden lg:flex items-center gap-5 text-sm flex-1 justify-center">
                         {NAV.map(link => (
                             <Link key={link.to} to={link.to}
-                                className="relative font-medium transition-colors py-1"
+                                className="relative font-medium transition-colors py-1 whitespace-nowrap"
+                                aria-current={isActive(link.to) ? "page" : undefined}
                                 style={{ color: isActive(link.to) ? "#1a1a1a" : "#6B5E52" }}
                             >
                                 {link.label}
@@ -225,7 +228,12 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                                                     <p className="text-sm font-semibold truncate" style={{ color: "#1a1a1a" }}>{user?.name}</p>
                                                     <p className="text-xs truncate" style={{ color: "#9B8B7A" }}>{user?.email}</p>
                                                 </div>
-                                                {[{ label: "My Account", to: "/account" }, { label: "My Orders", to: "/orders" }].map(item => (
+                                                {[
+                                                    { label: "My Account", to: "/account" },
+                                                    { label: "My Orders", to: "/orders" },
+                                                    { label: "My Size Profiles", to: "/account/size-profiles" },
+                                                    { label: "My Bookings", to: "/account/bookings" },
+                                                ].map(item => (
                                                     <Link key={item.to} to={item.to} onClick={() => setAccountOpen(false)}
                                                         className="block px-4 py-2.5 text-sm transition hover:bg-black/5"
                                                         style={{ color: "#1a1a1a" }}>
@@ -309,13 +317,14 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             </form>
                             {NAV.map(link => (
                                 <Link key={link.to} to={link.to}
-                                    className="block text-sm font-medium py-1.5"
+                                    className="flex items-center min-h-[44px] text-sm font-medium px-2"
+                                    aria-current={isActive(link.to) ? "page" : undefined}
                                     style={{ color: isActive(link.to) ? "#1a1a1a" : "#6B5E52" }}>
                                     {link.label}
                                 </Link>
                             ))}
                             <Link to="/become-a-seller"
-                                className="block text-sm font-semibold py-1.5"
+                                className="flex items-center min-h-[44px] text-sm font-semibold px-2"
                                 style={{ color: "#C9A84C" }}>
                                 ✦ Become a Seller
                             </Link>
@@ -323,7 +332,9 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             {/* Currency selector in mobile menu */}
                             <div className="pt-2 border-t" style={{ borderColor: "#E8E4DF" }}>
                                 <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: "#8B8680" }}>Currency</p>
-                                <CurrencySelector />
+                                <div className="flex items-center min-h-[44px]">
+                                    <CurrencySelector />
+                                </div>
                             </div>
                         </motion.div>
                     )}

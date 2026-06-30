@@ -86,6 +86,10 @@ export function AuthProvider({ children }) {
     }, [user]);
 
     const logoutUser = useCallback(() => {
+        if (user?.id) {
+            localStorage.removeItem(`slb_size_profiles_${user.id}`);
+            localStorage.removeItem(`slb_bookings_${user.id}`);
+        }
         localStorage.removeItem("slb_token");
         localStorage.removeItem("slb_user");
         setToken("");

@@ -68,7 +68,9 @@ export async function fetchShops(params = {}) {
         const { data } = await api.get("/shops", { params });
         return data || [];
     } catch (error) {
-        console.error("Failed to fetch shops:", error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error("Failed to fetch shops:", error);
+        }
         // Return empty array on error instead of throwing
         return [];
     }
@@ -79,7 +81,9 @@ export async function fetchProducts(params = {}) {
         const { data } = await api.get("/products", { params });
         return data || [];
     } catch (error) {
-        console.error("Failed to fetch products:", error);
+        if (process.env.NODE_ENV !== 'production') {
+            console.error("Failed to fetch products:", error);
+        }
         return [];
     }
 }
