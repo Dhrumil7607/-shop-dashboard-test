@@ -87,15 +87,15 @@ export function AuthProvider({ children }) {
 
     const logoutUser = useCallback(() => {
         if (user?.id) {
-            localStorage.removeItem(`slb_size_profiles_${user.id}`);
-            localStorage.removeItem(`slb_bookings_${user.id}`);
+            localStorage.removeItem(`slb_size_profiles_${user?.id}`);
+            localStorage.removeItem(`slb_bookings_${user?.id}`);
         }
         localStorage.removeItem("slb_token");
         localStorage.removeItem("slb_user");
         setToken("");
         setUser(null);
         setIsLoggedIn(false);
-    }, []);
+    }, [user?.id]);
 
     // ── Admin methods ────────────────────────────────────────────────────────
     const loginAdmin = useCallback(async (key) => {
