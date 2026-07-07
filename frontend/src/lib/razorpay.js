@@ -41,15 +41,24 @@ export async function openRazorpay({
   if (!window.Razorpay) throw new Error("Razorpay SDK unavailable.");
 
   // 1. Create the order on the backend
+  console.info("[pay] creating order…", { amount, currency });
   let order;
   try {
     order = await createRazorpayOrder(amount, currency);
   } catch (e) {
+    console.error("[pay] order creation failed", e);
     throw new Error(e?.response?.data?.detail || "Could not start payment. Please try again.");
   }
+  console.info("[pay] order created", order);
   if (!order?.id || !order?.key_id) {
     throw new Error("Payment gateway is not configured. Please contact support.");
   }
+
+  // Absolute logo URL (a relative path resolves against api.razorpay.com and 404s).
+  const logoUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/shop-assets/logo/logo.svg`
+      : undefined;
 
   // 2. Open checkout with the order_id
   const rzpResponse = await new Promise((resolve, reject) => {
@@ -61,7 +70,7 @@ export async function openRazorpay({
         currency: order.currency,
         name,
         description,
-        image: "/shop-assets/logo/logo.svg",
+        image: logoUrl,
         prefill: {
           name: prefill.name || "",
           email: prefill.email || "",
@@ -69,14 +78,30 @@ export async function openRazorpay({
         },
         notes,
         theme: { color: "#8B3A3A" },
-        modal: { ondismiss: () => reject({ dismissed: true }) },
-        handler: (resp) => resolve(resp),
+        // Disable Razorpay's internal retry so a failed method can't spin forever.
+        retry: { enabled: false },
+        // Auto-close the modal after 10 minutes if abandoned (prevents a stuck UI).
+        timeout: 600,
+        modal: {
+          escape: true,
+          ondismiss: () => {
+            console.info("[pay] modal dismissed by user");
+            reject({ dismissed: true });
+          },
+        },
+        handler: (resp) => {
+          console.info("[pay] payment success handler fired", resp);
+          resolve(resp);
+        },
       };
+      console.info("[pay] opening Razorpay checkout…");
       const rzp = new window.Razorpay(options);
-      rzp.on("payment.failed", (r) =>
-        reject(new Error(r?.error?.description || "Payment failed. Please try again."))
-      );
+      rzp.on("payment.failed", (r) => {
+        console.error("[pay] payment.failed", r?.error);
+        reject(new Error(r?.error?.description || "Payment failed. Please try again."));
+      });
       rzp.open();
+      console.info("[pay] rzp.open() called — modal should be visible now");
 
       // Ensure the Razorpay modal sits above any parent stacking context.
       // IMPORTANT: never move the container in the DOM (e.g. body.appendChild).
