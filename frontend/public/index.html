@@ -158,7 +158,11 @@
                 api_host: "https://us.i.posthog.com",
                 person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well,
                 session_recording: {
-                    recordCrossOriginIframes: true,
+                    // MUST stay false: recording cross-origin iframes injects
+                    // PostHog's rrweb script into third-party iframes (e.g. the
+                    // Razorpay checkout), which breaks their messaging/rendering
+                    // and makes the payment window spin/hang forever.
+                    recordCrossOriginIframes: false,
                     capturePerformance: false,
                 },
             });
