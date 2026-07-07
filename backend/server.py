@@ -136,6 +136,10 @@ else:
 
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "shoplivebharat-admin")
 JWT_SECRET    = os.environ.get("JWT_SECRET", "slb-secret-2026")
+# HASH_SALT is intentionally separate from JWT_SECRET so password hashes remain
+# consistent across deployments regardless of JWT_SECRET rotation.
+# On Railway/production, set HASH_SALT to a fixed value and never change it.
+HASH_SALT     = os.environ.get("HASH_SALT", "slb-pw-salt-fixed-2026")
 JWT_ALGO      = "HS256"
 JWT_EXPIRE_HOURS = 72
 
@@ -181,7 +185,9 @@ def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict
     return entry
 
 def _hash_pw(pw: str) -> str:
-    return hashlib.sha256((pw + JWT_SECRET).encode()).hexdigest()
+    # Uses HASH_SALT (not JWT_SECRET) so password hashes are stable
+    # even when JWT_SECRET is rotated.
+    return hashlib.sha256((pw + HASH_SALT).encode()).hexdigest()
 
 def _check_pw(pw: str, hashed: str) -> bool:
     return hmac.compare_digest(_hash_pw(pw), hashed)
@@ -281,8 +287,9 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
     payload = _decode_token(creds.credentials)
     if not payload:
         raise HTTPException(status_code=401, detail="Token expired or invalid")
-    user = mem_first("users", id=payload["sub"]) if USE_MEMORY_DB else None
-    if not user and USE_MEMORY_DB:
+    # Always verify the user still exists in the database (works for both mem and MongoDB)
+    user = mem_first("users", id=payload["sub"])
+    if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return payload
 
@@ -454,9 +461,22 @@ def _seed():
 _seed()
 _persist_db()
 
+# Log startup environment clearly so local/live differences are obvious in logs
+logger.info(f"[STARTUP] DB mode: {'memory+db.json' if USE_MEMORY_DB else ('MongoDB' if _mongo_db else 'memory-only (no MongoDB)')}")
+logger.info(f"[STARTUP] Admin key configured: {bool(ADMIN_API_KEY)}")
+logger.info(f"[STARTUP] JWT secret is default: {JWT_SECRET == 'slb-secret-2026'}")
+logger.info(f"[STARTUP] Hash salt is default: {HASH_SALT == 'slb-pw-salt-fixed-2026'}")
+if USE_MEMORY_DB:
+    logger.warning("[STARTUP] USE_MEMORY_DB=1 — data resets on every restart. Set MONGO_URL for persistence.")
+
 # ── Health ────────────────────────────────────────────────────────────────────
 @api.get("/")
-def root(): return {"service": "ShopLiveBharat API v2", "status": "ok"}
+def root():
+    return {
+        "service": "ShopLiveBharat API v2",
+        "status": "ok",
+        "db": "memory" if USE_MEMORY_DB else ("mongodb" if _mongo_db else "memory-fallback"),
+    }
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @api.post("/auth/register", status_code=201)

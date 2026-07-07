@@ -24,8 +24,8 @@ export const config = {
 
     // Security settings
     security: {
-        // Use sessionStorage for sensitive operations (not localStorage)
-        tokenStorage: "sessionStorage",
+        // localStorage is used for token persistence (survives browser refresh/tab close)
+        tokenStorage: "localStorage",
         // Token expires after (in minutes)
         tokenExpiry: 60 * 24, // 24 hours
         // Maximum login attempts before lockout
@@ -145,7 +145,7 @@ export function validateConfig() {
  * Get safe API headers (without exposing secrets)
  */
 export function getApiHeaders() {
-    const token = sessionStorage.getItem("slb_token");
+    const token = localStorage.getItem("slb_token");
     const headers = {
         "Content-Type": "application/json",
     };
