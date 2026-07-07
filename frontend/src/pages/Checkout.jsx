@@ -203,16 +203,34 @@ export default function Checkout() {
 
         // ── All payments go through Razorpay (handles cards, UPI, netbanking) ──
         setLoading(true);
+        let rzp = null;
         try {
-            const rzp = await openRazorpayCheckout({
+            rzp = await openRazorpayCheckout({
                 amountINR: total,
                 user,
                 description: `ShopLiveBharat — ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
             });
-            await saveOrder(rzp);
         } catch (err) {
+            setLoading(false);
             if (err?.dismissed) toast.info("Payment cancelled.");
             else toast.error(err?.message || "Payment failed. Please try again.");
+            return;
+        }
+
+        // Payment succeeded — now persist the order. Retry once on failure so a
+        // paid customer never loses their order due to a transient error.
+        try {
+            await saveOrder(rzp);
+        } catch (err) {
+            try {
+                await saveOrder(rzp); // one retry
+            } catch (err2) {
+                toast.error(
+                    `Payment successful (ID: ${rzp?.razorpay_payment_id || "—"}) but we couldn't save your order. ` +
+                    `Please contact support with this payment ID — you will not be charged twice.`,
+                    { duration: 12000 }
+                );
+            }
         } finally {
             setLoading(false);
         }
