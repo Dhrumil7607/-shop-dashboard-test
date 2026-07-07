@@ -85,7 +85,8 @@ def _load_from_mongo() -> Optional[Dict[str, list]]:
     return None
 
 def _persist_to_mongo():
-    """Write all in-memory state to MongoDB."""
+def _persist_to_mongo():
+    """Write all in-memory state to MongoDB — runs in background thread."""
     if _mongo_db is None:
         return
     try:
@@ -97,17 +98,31 @@ def _persist_to_mongo():
     except Exception as e:
         logger.warning(f"[DB] MongoDB persist error: {e}")
 
-def _persist_db():
-    """Persist state — to MongoDB if available, always to db.json as local fallback."""
-    _persist_to_mongo()
-    # Always write db.json locally so data survives restarts without MongoDB
+def _persist_collection(coll_name: str):
+    """Persist a single collection to MongoDB — faster than full persist."""
+    if _mongo_db is None:
+        return
     try:
-        import json as _json
-        _db_path = os.path.join(os.path.dirname(__file__), "db.json")
-        with open(_db_path, "w") as f:
-            _json.dump(mem, f, default=str)
+        docs = mem.get(coll_name, [])
+        _mongo_db[coll_name].delete_many({})
+        if docs:
+            _mongo_db[coll_name].insert_many([{k: v for k, v in d.items() if k != "_id"} for d in docs])
     except Exception as e:
-        logger.warning(f"[DB] db.json write error: {e}")
+        logger.warning(f"[DB] MongoDB persist error ({coll_name}): {e}")
+
+def _persist_db():
+    """Persist state in a background thread — never blocks the API response."""
+    import threading
+    def _do_persist():
+        _persist_to_mongo()
+        # Write db.json as local fallback
+        try:
+            _db_path = os.path.join(os.path.dirname(__file__), "db.json")
+            with open(_db_path, "w") as f:
+                _json.dump(mem, f, default=str)
+        except Exception as e:
+            logger.warning(f"[DB] db.json write error: {e}")
+    threading.Thread(target=_do_persist, daemon=True).start()
 
 # Try loading from MongoDB first, then db.json, then empty
 _persisted = _load_from_mongo()
