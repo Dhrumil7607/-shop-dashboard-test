@@ -26,6 +26,7 @@ import ReviewAndPay from "@/components/Booking/steps/ReviewAndPay";
 import { useAuth } from "@/contexts/AuthContext";
 import * as bookingService from "@/services/bookingService";
 import { createLiveBooking as createBackendLiveBooking } from "@/lib/api";
+import { openRazorpayBooking } from "@/lib/razorpay";
 
 // ── Timezone offset map (minutes from UTC) — mirrors TimezoneSelector ──────
 const TZ_OFFSETS = {
@@ -221,7 +222,6 @@ export default function LiveShopping() {
 
     try {
       // ── Open Razorpay for the ₹699 session fee ──
-      const { openRazorpayBooking } = await import("@/lib/razorpay");
       const rzp = await openRazorpayBooking({ user, storeName });
 
       // Payment succeeded — reserve slot if the customer picked a real one

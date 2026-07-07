@@ -11,6 +11,7 @@ import SizeProfileSelector from "@/components/SizeProfile/SizeProfileSelector";
 import GlassCard from "@/components/Checkout/GlassCard";
 import CouponField from "@/components/Checkout/CouponField";
 import TrustBadgeRow from "@/components/Checkout/TrustBadgeRow";
+import { openRazorpayCheckout } from "@/lib/razorpay";
 
 /* ─── Styled input ─────────────────────────────────────────── */
 const inp = "w-full px-3 py-2.5 border-b border-gray-200 bg-transparent text-sm outline-none focus:border-[#C9A84C] transition placeholder-gray-400";
@@ -203,7 +204,6 @@ export default function Checkout() {
         // ── All payments go through Razorpay (handles cards, UPI, netbanking) ──
         setLoading(true);
         try {
-            const { openRazorpayCheckout } = await import("@/lib/razorpay");
             const rzp = await openRazorpayCheckout({
                 amountINR: total,
                 user,
