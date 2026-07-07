@@ -6,7 +6,22 @@
 
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+// Resolve the backend URL safely.
+// Priority: explicit build-time env var → (in a real browser, non-localhost) the
+// shared Railway backend → localhost for local dev. This guarantees a deployed
+// build NEVER silently falls back to "localhost" (which only works on the machine
+// running a local server), so every device loads the same shared data.
+const RAILWAY_BACKEND = "https://shoplivebharat-backend-production.up.railway.app";
+function resolveBackendUrl() {
+    if (process.env.REACT_APP_BACKEND_URL) return process.env.REACT_APP_BACKEND_URL;
+    if (typeof window !== "undefined") {
+        const host = window.location.hostname;
+        const isLocal = host === "localhost" || host === "127.0.0.1" || host === "";
+        if (!isLocal) return RAILWAY_BACKEND; // deployed → always use the shared backend
+    }
+    return "http://localhost:8000";
+}
+const BACKEND_URL = resolveBackendUrl();
 export const API = `${BACKEND_URL}/api`;
 
 export const api = axios.create({
