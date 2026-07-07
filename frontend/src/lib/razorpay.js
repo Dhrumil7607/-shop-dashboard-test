@@ -27,7 +27,7 @@ function loadScript() {
  * Open the Razorpay payment modal.
  * @returns Promise<{razorpay_payment_id, razorpay_order_id, razorpay_signature}>
  */
-export function openRazorpay({
+export async function openRazorpay({
   amount,               // in paise
   currency = "INR",
   name = "ShopLiveBharat",
@@ -36,35 +36,43 @@ export function openRazorpay({
   prefill = {},
   notes = {},
 }) {
-  return new Promise(async (resolve, reject) => {
-    const loaded = await loadScript();
-    if (!loaded) return reject(new Error("Razorpay failed to load. Check your connection."));
-    if (!RZP_KEY) return reject(new Error("Razorpay key not configured (REACT_APP_RAZORPAY_KEY_ID)."));
+  // Load the SDK BEFORE creating the settlement promise so any load
+  // failure is surfaced immediately (never swallowed).
+  const loaded = await loadScript();
+  if (!loaded) throw new Error("Razorpay failed to load. Check your connection.");
+  if (!RZP_KEY) throw new Error("Razorpay key not configured (REACT_APP_RAZORPAY_KEY_ID).");
+  if (!window.Razorpay) throw new Error("Razorpay SDK unavailable.");
 
-    const options = {
-      key: RZP_KEY,
-      amount,
-      currency,
-      name,
-      description,
-      image: "/shop-assets/logo/logo.svg",
-      ...(orderId ? { order_id: orderId } : {}),
-      prefill: {
-        name: prefill.name || "",
-        email: prefill.email || "",
-        contact: prefill.contact || prefill.phone || "",
-      },
-      notes,
-      theme: { color: "#8B3A3A" },
-      modal: { ondismiss: () => reject({ dismissed: true }) },
-      handler: (resp) => resolve(resp),
-    };
+  return new Promise((resolve, reject) => {
+    // Synchronous executor — any throw here rejects the promise correctly.
+    try {
+      const options = {
+        key: RZP_KEY,
+        amount,
+        currency,
+        name,
+        description,
+        image: "/shop-assets/logo/logo.svg",
+        ...(orderId ? { order_id: orderId } : {}),
+        prefill: {
+          name: prefill.name || "",
+          email: prefill.email || "",
+          contact: prefill.contact || prefill.phone || "",
+        },
+        notes,
+        theme: { color: "#8B3A3A" },
+        modal: { ondismiss: () => reject({ dismissed: true }) },
+        handler: (resp) => resolve(resp),
+      };
 
-    const rzp = new window.Razorpay(options);
-    rzp.on("payment.failed", (r) =>
-      reject(new Error(r?.error?.description || "Payment failed. Please try again."))
-    );
-    rzp.open();
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", (r) =>
+        reject(new Error(r?.error?.description || "Payment failed. Please try again."))
+      );
+      rzp.open();
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Could not open payment window."));
+    }
   });
 }
 
