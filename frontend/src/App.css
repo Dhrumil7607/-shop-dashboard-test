@@ -1,0 +1,140 @@
+/* App container — kept minimal; design lives in index.css + Tailwind */
+.App {
+    min-height: 100vh;
+}
+
+/* ── Suppress browser visited-link colour override ──────────────────────────
+   React Router <Link> and plain <a> elements may show a purple "visited" state
+   that fights with inline-style colours. We reset it here once globally. */
+a, a:visited, a:active {
+    color: inherit;
+}
+a[style], a[style]:visited, a[style]:active {
+    color: inherit; /* still lets inline-style win via specificity */
+}
+
+/* Global smooth transitions — applied only to interactive elements to avoid
+   overriding Framer Motion animations or causing layout recalculations. */
+a, button, input, select, textarea {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    transition-duration: 200ms;
+    transition-timing-function: ease-out;
+}
+
+/* Note: smooth-transition class is still defined in tailwind.config.js and
+   works on individual elements. The wildcard application was removed above. */
+
+/* Glass effect containers */
+.glass-container {
+    @apply backdrop-blur-xl bg-white/20 border border-white/20 rounded-2xl shadow-lg;
+}
+
+.glass-card {
+    @apply backdrop-blur-md bg-white/30 border border-white/15 rounded-xl shadow-glass;
+}
+
+.glass-button {
+    @apply backdrop-blur-md bg-white/20 border border-white/20 rounded-lg hover:bg-white/30 hover:shadow-lg active:scale-95 transition-all duration-300;
+}
+
+/* Smooth hover animations */
+.hover-lift {
+    @apply hover:scale-105 hover:-translate-y-1 transition-all duration-300;
+}
+
+.hover-glow {
+    @apply hover:shadow-maroon-glow transition-all duration-300;
+}
+
+/* Smooth page transitions */
+@keyframes pageEnter {
+    from {
+        opacity: 0;
+        filter: blur(8px);
+    }
+    to {
+        opacity: 1;
+        filter: blur(0);
+    }
+}
+
+.page-enter {
+    animation: pageEnter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Smooth number counter */
+@keyframes countUp {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.count-up {
+    animation: countUp 0.4s ease-out;
+}
+
+/* Gradient text for highlights */
+.gradient-text {
+    @apply bg-gradient-to-r from-maroon via-gold to-champagne bg-clip-text text-transparent;
+}
+
+/* Smooth underlines */
+.under-link {
+    @apply relative inline-block hover:text-maroon transition-colors duration-300 after:content-[''] after:absolute after:w-full after:h-0.5 after:bg-maroon after:bottom-0 after:left-0 after:origin-right after:scale-x-0 after:hover:origin-left after:hover:scale-x-100 after:transition-transform after:duration-300;
+}
+
+/* Glass backdrop blur effect */
+.backdrop-blur-glass {
+    @apply backdrop-blur-xl;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(139, 58, 58, 0.3);
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 58, 58, 0.5);
+}
+
+/* Hide any stray text nodes that shouldn't be visible */
+body::after {
+    display: none !important;
+}
+
+html::after {
+    display: none !important;
+}
+
+#root::after {
+    display: none !important;
+}
+
+/* Force remove any text rendering after body/html elements */
+body > :last-child:after,
+body > :last-child::before {
+    display: none !important;
+    content: "" !important;
+}
+
+/* Hide any elements containing template text */
+div:has(> :contains("This HTML")) {
+    display: none !important;
+}
+
