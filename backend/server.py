@@ -113,15 +113,22 @@ def _persist_db():
     """Persist state in a background thread — never blocks the API response."""
     import threading
     import json as _json
+    # Use a lock to prevent concurrent persist threads overwriting each other
+    if not hasattr(_persist_db, "_lock"):
+        _persist_db._lock = threading.Lock()
+    if not _persist_db._lock.acquire(blocking=False):
+        return  # A persist is already running — skip this one
     def _do_persist():
-        _persist_to_mongo()
-        # Write db.json as local fallback
         try:
-            _db_path = os.path.join(os.path.dirname(__file__), "db.json")
-            with open(_db_path, "w") as f:
-                _json.dump(mem, f, default=str)
-        except Exception as e:
-            logger.warning(f"[DB] db.json write error: {e}")
+            _persist_to_mongo()
+            try:
+                _db_path = os.path.join(os.path.dirname(__file__), "db.json")
+                with open(_db_path, "w") as f:
+                    _json.dump(mem, f, default=str)
+            except Exception as e:
+                logger.warning(f"[DB] db.json write error: {e}")
+        finally:
+            _persist_db._lock.release()
     threading.Thread(target=_do_persist, daemon=True).start()
 
 # Try loading from MongoDB first, then db.json, then empty
