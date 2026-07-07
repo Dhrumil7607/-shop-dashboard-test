@@ -264,6 +264,16 @@ export async function createOrder(payload) {
     return data;
 }
 
+// ── Razorpay (server-side order + verify) ──────────────────────────────────────
+export async function createRazorpayOrder(amountPaise, currency = "INR") {
+    const { data } = await api.post("/razorpay/order", { amount: amountPaise, currency });
+    return data; // { id, amount, currency, key_id }
+}
+export async function verifyRazorpayPayment(payload) {
+    const { data } = await api.post("/razorpay/verify", payload);
+    return data; // { verified: true }
+}
+
 // ── Bookings ──────────────────────────────────────────────────────────────────
 export async function fetchBookings() {
     try {

@@ -1,15 +1,16 @@
 /**
- * razorpay.js — Razorpay Checkout integration (Promise-based)
+ * razorpay.js — Razorpay Checkout with server-side order creation.
  *
- * openRazorpay() loads the checkout script on demand and opens the modal.
- * Resolves with the payment response on success.
- * Rejects with { dismissed: true } if the user closes the modal,
- * or with an Error on payment failure / SDK load failure.
+ * Flow:
+ *  1. Ask backend to create a Razorpay Order (returns order_id + key_id).
+ *  2. Open Razorpay checkout with that order_id.
+ *  3. On success, verify the signature on the backend.
  *
- * Key is read from REACT_APP_RAZORPAY_KEY_ID.
+ * The key_id comes from the backend so there's no frontend env mismatch.
+ * The key_secret NEVER touches the frontend.
  */
 
-const RZP_KEY = process.env.REACT_APP_RAZORPAY_KEY_ID || "";
+import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/api";
 
 /** Load Razorpay checkout.js once (idempotent) */
 function loadScript() {
@@ -24,36 +25,43 @@ function loadScript() {
 }
 
 /**
- * Open the Razorpay payment modal.
- * @returns Promise<{razorpay_payment_id, razorpay_order_id, razorpay_signature}>
+ * Open Razorpay with a server-created order.
+ * @returns Promise<{razorpay_payment_id, razorpay_order_id, razorpay_signature, verified}>
  */
 export async function openRazorpay({
   amount,               // in paise
   currency = "INR",
   name = "ShopLiveBharat",
   description = "Secure Payment",
-  orderId,              // optional backend order_id
   prefill = {},
   notes = {},
 }) {
-  // Load the SDK BEFORE creating the settlement promise so any load
-  // failure is surfaced immediately (never swallowed).
   const loaded = await loadScript();
   if (!loaded) throw new Error("Razorpay failed to load. Check your connection.");
-  if (!RZP_KEY) throw new Error("Razorpay key not configured (REACT_APP_RAZORPAY_KEY_ID).");
   if (!window.Razorpay) throw new Error("Razorpay SDK unavailable.");
 
-  return new Promise((resolve, reject) => {
-    // Synchronous executor — any throw here rejects the promise correctly.
+  // 1. Create the order on the backend
+  let order;
+  try {
+    order = await createRazorpayOrder(amount, currency);
+  } catch (e) {
+    throw new Error(e?.response?.data?.detail || "Could not start payment. Please try again.");
+  }
+  if (!order?.id || !order?.key_id) {
+    throw new Error("Payment gateway is not configured. Please contact support.");
+  }
+
+  // 2. Open checkout with the order_id
+  const rzpResponse = await new Promise((resolve, reject) => {
     try {
       const options = {
-        key: RZP_KEY,
-        amount,
-        currency,
+        key: order.key_id,
+        order_id: order.id,
+        amount: order.amount,
+        currency: order.currency,
         name,
         description,
         image: "/shop-assets/logo/logo.svg",
-        ...(orderId ? { order_id: orderId } : {}),
         prefill: {
           name: prefill.name || "",
           email: prefill.email || "",
@@ -64,7 +72,6 @@ export async function openRazorpay({
         modal: { ondismiss: () => reject({ dismissed: true }) },
         handler: (resp) => resolve(resp),
       };
-
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (r) =>
         reject(new Error(r?.error?.description || "Payment failed. Please try again."))
@@ -74,6 +81,18 @@ export async function openRazorpay({
       reject(err instanceof Error ? err : new Error("Could not open payment window."));
     }
   });
+
+  // 3. Verify signature on the backend (non-blocking failure → still return)
+  try {
+    await verifyRazorpayPayment({
+      razorpay_order_id: rzpResponse.razorpay_order_id,
+      razorpay_payment_id: rzpResponse.razorpay_payment_id,
+      razorpay_signature: rzpResponse.razorpay_signature,
+    });
+    return { ...rzpResponse, verified: true };
+  } catch {
+    return { ...rzpResponse, verified: false };
+  }
 }
 
 /** Cart checkout — amountINR in rupees */
@@ -94,8 +113,4 @@ export function openRazorpayBooking({ user, storeName }) {
     description: `Live Shopping Session — ${storeName || "Store"}`,
     prefill: { name: user?.name, email: user?.email, contact: user?.phone },
   });
-}
-
-export function getRazorpayConfig() {
-  return { keyId: RZP_KEY, merchantName: "ShopLiveBharat" };
 }

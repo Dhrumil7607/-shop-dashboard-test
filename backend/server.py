@@ -165,6 +165,10 @@ HASH_SALT     = os.environ.get("HASH_SALT", "slb-pw-salt-fixed-2026")
 JWT_ALGO      = "HS256"
 JWT_EXPIRE_HOURS = 72
 
+# ── Razorpay ──────────────────────────────────────────────────────────────────
+RAZORPAY_KEY_ID     = os.environ.get("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -531,6 +535,56 @@ def root():
         "status": "ok",
         "db": "memory" if USE_MEMORY_DB else ("mongodb" if _mongo_db is not None else "memory-fallback"),
     }
+
+# ── Razorpay: server-side order creation + verification ───────────────────────
+@api.get("/razorpay/config")
+def razorpay_config():
+    """Public: returns key_id + whether payments are configured."""
+    return {"key_id": RAZORPAY_KEY_ID, "configured": bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)}
+
+@api.post("/razorpay/order")
+def razorpay_create_order(body: dict):
+    """Create a Razorpay order server-side (required for reliable checkout)."""
+    import base64 as _b64, json as _json2, urllib.request, urllib.error
+    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+        raise HTTPException(503, "Razorpay is not configured on the server.")
+    amount = int(body.get("amount", 0))            # in paise
+    currency = body.get("currency", "INR")
+    if amount <= 0:
+        raise HTTPException(400, "Invalid amount")
+    payload = _json2.dumps({
+        "amount": amount, "currency": currency,
+        "payment_capture": 1,
+        "notes": {"source": "shoplivebharat"},
+    }).encode()
+    auth = _b64.b64encode(f"{RAZORPAY_KEY_ID}:{RAZORPAY_KEY_SECRET}".encode()).decode()
+    req = urllib.request.Request("https://api.razorpay.com/v1/orders", data=payload, method="POST")
+    req.add_header("Authorization", f"Basic {auth}")
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = _json2.loads(resp.read().decode())
+        return {"id": data["id"], "amount": data["amount"], "currency": data["currency"], "key_id": RAZORPAY_KEY_ID}
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode() if hasattr(e, "read") else str(e)
+        logger.warning(f"[Razorpay] order create failed: {detail}")
+        raise HTTPException(502, "Could not create payment order. Please try again.")
+    except Exception as e:
+        logger.warning(f"[Razorpay] order error: {e}")
+        raise HTTPException(502, "Payment gateway unavailable. Please try again.")
+
+@api.post("/razorpay/verify")
+def razorpay_verify(body: dict):
+    """Verify the Razorpay payment signature after checkout."""
+    order_id  = body.get("razorpay_order_id", "")
+    payment_id = body.get("razorpay_payment_id", "")
+    signature = body.get("razorpay_signature", "")
+    if not (order_id and payment_id and signature and RAZORPAY_KEY_SECRET):
+        raise HTTPException(400, "Missing payment verification data")
+    expected = hmac.new(RAZORPAY_KEY_SECRET.encode(), f"{order_id}|{payment_id}".encode(), hashlib.sha256).hexdigest()
+    if hmac.compare_digest(expected, signature):
+        return {"verified": True}
+    raise HTTPException(400, "Payment signature verification failed")
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @api.post("/auth/register", status_code=201)
