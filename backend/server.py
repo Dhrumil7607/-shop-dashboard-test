@@ -17,6 +17,7 @@ Routes:
 from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import RedirectResponse
 from dotenv import load_dotenv
 import os, re, logging, uuid
 from pathlib import Path
@@ -162,6 +163,9 @@ JWT_SECRET    = os.environ.get("JWT_SECRET", "slb-secret-2026")
 # consistent across deployments regardless of JWT_SECRET rotation.
 # On Railway/production, set HASH_SALT to a fixed value and never change it.
 HASH_SALT     = os.environ.get("HASH_SALT", "slb-pw-salt-fixed-2026")
+# Public site URL used for Razorpay redirect/callback flows (must be the domain
+# customers actually browse — its /api proxies to this backend).
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://build-blush-eta.vercel.app").rstrip("/")
 JWT_ALGO      = "HS256"
 JWT_EXPIRE_HOURS = 72
 
@@ -632,6 +636,149 @@ def razorpay_verify(body: dict):
     if hmac.compare_digest(expected, signature):
         return {"verified": True}
     raise HTTPException(400, "Payment signature verification failed")
+
+# ── Razorpay Payment Link (full-page hosted checkout) ─────────────────────────
+# This avoids the in-page checkout iframe entirely: we create a hosted payment
+# link, redirect the whole browser to Razorpay, and Razorpay redirects back to
+# our callback. Robust against any in-page iframe/extension/analytics issues.
+class CheckoutLinkIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    items: List[OrderItemIn]
+    shipping_address: dict
+    amount_paise: int
+    currency: str = "INR"
+    description: str = "ShopLiveBharat Order"
+    size_profile_id: str = ""
+
+@api.post("/razorpay/checkout-link")
+def razorpay_checkout_link(body: CheckoutLinkIn, payload: dict = Depends(get_current_user)):
+    """Create a pending order + a Razorpay hosted payment link, return its URL."""
+    import base64 as _b64, json as _json2, urllib.request, urllib.error
+    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+        raise HTTPException(503, "Razorpay is not configured on the server.")
+
+    # Validate items (mirror create_order) and build the line items
+    subtotal = 0
+    items_out = []
+    for item in body.items:
+        prod = mem_first("products", id=item.product_id)
+        if not prod:
+            raise HTTPException(404, f"Product {item.product_id} not found")
+        status_ = prod.get("status", "live")
+        if status_ in ("hidden", "removed", "draft"):
+            raise HTTPException(400, f"Product '{prod['name']}' is unavailable and cannot be purchased")
+        if status_ == "out_of_stock" or prod.get("stock", 1) <= 0:
+            raise HTTPException(400, f"Product '{prod['name']}' is out of stock")
+        shop = mem_first("shops", id=prod.get("shop_id"))
+        if shop and not _shop_is_public(shop):
+            raise HTTPException(400, f"Product '{prod['name']}' is currently unavailable (store offline)")
+        line_total = prod["price"] * item.quantity
+        subtotal += line_total
+        items_out.append({
+            "product_id": item.product_id, "product_name": prod["name"],
+            "image_url": prod["image_url"], "price": prod["price"],
+            "quantity": item.quantity, "size": item.size, "color": item.color,
+            "line_total": line_total,
+        })
+
+    amount_paise = int(body.amount_paise)
+    if amount_paise <= 0:
+        raise HTTPException(400, "Invalid amount")
+
+    # Create the order in a pending state (stock is decremented only once paid).
+    order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+    buyer = mem_first("users", id=payload["sub"]) or {}
+    order = {
+        "id": order_id, "user_id": payload["sub"], "items": items_out,
+        "total": round(amount_paise / 100), "status": "pending_payment",
+        "payment_status": "pending", "shipping_address": body.shipping_address,
+        "payment_method": "razorpay", "currency": body.currency,
+        "razorpay_payment_id": "", "razorpay_order_id": "",
+        "created_at": _now(), "updated_at": _now(),
+    }
+    mem_insert("orders", order)
+
+    addr = body.shipping_address or {}
+    link_payload = _json2.dumps({
+        "amount": amount_paise,
+        "currency": body.currency or "INR",
+        "accept_partial": False,
+        "description": (body.description or "ShopLiveBharat Order")[:255],
+        "reference_id": order_id,
+        "customer": {
+            "name": addr.get("name") or buyer.get("name", "Customer"),
+            "email": addr.get("email") or buyer.get("email", ""),
+            "contact": addr.get("phone") or buyer.get("phone", ""),
+        },
+        "notify": {"sms": False, "email": False},
+        "reminder_enable": False,
+        "callback_url": f"{PUBLIC_BASE_URL}/api/razorpay/pl-callback",
+        "callback_method": "get",
+    }).encode()
+    auth = _b64.b64encode(f"{RAZORPAY_KEY_ID}:{RAZORPAY_KEY_SECRET}".encode()).decode()
+    req = urllib.request.Request("https://api.razorpay.com/v1/payment_links", data=link_payload, method="POST")
+    req.add_header("Authorization", f"Basic {auth}")
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = _json2.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode() if hasattr(e, "read") else str(e)
+        logger.warning(f"[Razorpay] payment link failed: {detail}")
+        raise HTTPException(502, "Could not start payment. Please try again.")
+    except Exception as e:
+        logger.warning(f"[Razorpay] payment link error: {e}")
+        raise HTTPException(502, "Payment gateway unavailable. Please try again.")
+
+    order["razorpay_payment_link_id"] = data.get("id", "")
+    _persist_db()
+    return {"short_url": data.get("short_url"), "order_id": order_id, "payment_link_id": data.get("id")}
+
+@api.get("/razorpay/pl-callback")
+def razorpay_pl_callback(
+    razorpay_payment_id: str = Query(default=""),
+    razorpay_payment_link_id: str = Query(default=""),
+    razorpay_payment_link_reference_id: str = Query(default=""),
+    razorpay_payment_link_status: str = Query(default=""),
+    razorpay_signature: str = Query(default=""),
+):
+    """Razorpay redirects the browser here after a hosted payment link is paid."""
+    order_id = razorpay_payment_link_reference_id
+    # Verify the payment-link signature
+    msg = f"{razorpay_payment_link_id}|{razorpay_payment_link_reference_id}|{razorpay_payment_link_status}|{razorpay_payment_id}"
+    expected = hmac.new(RAZORPAY_KEY_SECRET.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    ok = bool(razorpay_signature) and hmac.compare_digest(expected, razorpay_signature)
+
+    order = mem_first("orders", id=order_id) if order_id else None
+    if ok and razorpay_payment_link_status == "paid" and order and order.get("payment_status") != "paid":
+        order["status"] = "confirmed"
+        order["payment_status"] = "paid"
+        order["razorpay_payment_id"] = razorpay_payment_id
+        order["razorpay_order_id"] = razorpay_payment_link_id
+        order["updated_at"] = _now()
+        # Decrement stock now that payment is confirmed
+        for it in order.get("items", []):
+            prod = mem_first("products", id=it.get("product_id"))
+            if prod:
+                new_stock = max(0, prod.get("stock", 0) - it.get("quantity", 1))
+                prod["stock"] = new_stock
+                if new_stock == 0:
+                    prod["status"] = "out_of_stock"
+                prod["updated_at"] = _now()
+        # Clear the buyer's cart
+        cart = mem_first("carts", user_id=order.get("user_id"))
+        if cart:
+            cart["items"] = []
+        buyer = mem_first("users", id=order.get("user_id"))
+        if buyer and buyer.get("email"):
+            _send_email(to=buyer["email"], subject=f"Order confirmed — {order['id']}",
+                        body=f"Thank you for your order {order['id']}. Total: ₹{order.get('total',0):,}.",
+                        kind="order_placed")
+        _persist_db()
+        return RedirectResponse(url=f"{PUBLIC_BASE_URL}/checkout?paid={order_id}", status_code=303)
+
+    # Failed / unverified → send back to checkout with an error flag
+    return RedirectResponse(url=f"{PUBLIC_BASE_URL}/checkout?payment_failed=1", status_code=303)
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @api.post("/auth/register", status_code=201)

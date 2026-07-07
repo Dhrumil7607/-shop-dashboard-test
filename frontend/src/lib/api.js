@@ -319,6 +319,12 @@ export async function createRazorpayOrder(amountPaise, currency = "INR") {
     const { data } = await api.post("/razorpay/order", { amount: amountPaise, currency });
     return data; // { id, amount, currency, key_id }
 }
+export async function createRazorpayCheckoutLink({ items, shipping_address, amount_paise, currency = "INR", description }) {
+    const { data } = await api.post("/razorpay/checkout-link", {
+        items, shipping_address, amount_paise, currency, description,
+    });
+    return data; // { short_url, order_id, payment_link_id }
+}
 export async function verifyRazorpayPayment(payload) {
     const { data } = await api.post("/razorpay/verify", payload);
     return data; // { verified: true }

@@ -11,7 +11,6 @@ import SizeProfileSelector from "@/components/SizeProfile/SizeProfileSelector";
 import GlassCard from "@/components/Checkout/GlassCard";
 import CouponField from "@/components/Checkout/CouponField";
 import TrustBadgeRow from "@/components/Checkout/TrustBadgeRow";
-import { openRazorpayCheckout } from "@/lib/razorpay";
 
 /* ─── Styled input ─────────────────────────────────────────── */
 const inp = "w-full px-3 py-2.5 border-b border-gray-200 bg-transparent text-sm outline-none focus:border-[#C9A84C] transition placeholder-gray-400";
@@ -201,40 +200,83 @@ export default function Checkout() {
             return;
         }
 
-        // ── All payments go through Razorpay (handles cards, UPI, netbanking) ──
+        // ── Full-page redirect to Razorpay's hosted checkout ──────────────────
+        // We create a pending order + a Razorpay Payment Link on the backend, then
+        // send the whole browser to Razorpay. This avoids the in-page checkout
+        // iframe entirely (no spinner/hang from analytics, extensions, etc.).
         setLoading(true);
-        let rzp = null;
         try {
-            rzp = await openRazorpayCheckout({
-                amountINR: total,
-                user,
+            const { createRazorpayCheckoutLink } = await import("@/lib/api");
+            const items = cartItems.map(item => ({
+                product_id: item.product_id || item.id,
+                quantity:   item.quantity || 1,
+                size:       item.size  || "",
+                color:      item.color || "",
+            }));
+            const shipping_address = {
+                name:      form.full_name,
+                full_name: form.full_name,
+                email:     form.email,
+                phone:     form.phone,
+                address:   form.address,
+                city:      form.city,
+                state:     form.state,
+                zip:       form.zip,
+                pincode:   form.zip,
+                country:   form.country,
+            };
+            const { short_url } = await createRazorpayCheckoutLink({
+                items,
+                shipping_address,
+                amount_paise: Math.round(Number(total) * 100),
+                currency,
                 description: `ShopLiveBharat — ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
             });
+            if (!short_url) throw new Error("Could not start payment.");
+            toast.loading("Redirecting to secure payment…", { id: "pay-status" });
+            window.location.href = short_url;   // leave the SPA → Razorpay hosted page
         } catch (err) {
             setLoading(false);
-            if (err?.dismissed) toast.info("Payment cancelled.");
-            else toast.error(err?.message || "Payment failed. Please try again.");
+            toast.error(err?.response?.data?.detail || err?.message || "Could not start payment. Please try again.");
+        }
+    }, [form, cartItems, total, currency]);
+
+    // ── Handle the return from Razorpay's hosted checkout ─────────────────────
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const paidId = params.get("paid");
+        const failed = params.get("payment_failed");
+        if (failed) {
+            toast.error("Payment was not completed. Please try again.");
+            window.history.replaceState({}, "", "/checkout");
             return;
         }
-
-        // Payment succeeded — now persist the order. Retry once on failure so a
-        // paid customer never loses their order due to a transient error.
-        try {
-            await saveOrder(rzp);
-        } catch (err) {
+        if (!paidId) return;
+        // Show success immediately (avoids the empty-cart flash), then enrich.
+        clearCart();
+        setOrderData({
+            orderId: paidId, email: "", items: [],
+            subtotal: 0, shipping: 0, tax: 0, total: 0, payMethod: "razorpay",
+        });
+        (async () => {
             try {
-                await saveOrder(rzp); // one retry
-            } catch (err2) {
-                toast.error(
-                    `Payment successful (ID: ${rzp?.razorpay_payment_id || "—"}) but we couldn't save your order. ` +
-                    `Please contact support with this payment ID — you will not be charged twice.`,
-                    { duration: 12000 }
-                );
-            }
-        } finally {
-            setLoading(false);
-        }
-    }, [form, payMethod, total, user, cartItems, saveOrder]);
+                const { api } = await import("@/lib/api");
+                const res = await api.get("/orders");
+                const ord = (res.data?.orders || []).find(o => o.id === paidId);
+                if (ord) {
+                    setOrderData({
+                        orderId: paidId,
+                        email:   ord.shipping_address?.email || "",
+                        items:   ord.items || [],
+                        subtotal: ord.total || 0, shipping: 0, tax: 0,
+                        total:   ord.total || 0,
+                        payMethod: "razorpay",
+                    });
+                }
+            } catch { /* keep minimal success screen */ }
+            window.history.replaceState({}, "", "/checkout");
+        })();
+    }, [clearCart]);
 
     if (cartItems.length === 0 && !orderData) {
         return (
