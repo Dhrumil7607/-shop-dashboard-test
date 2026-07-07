@@ -12,17 +12,23 @@ import axios from "axios";
 // build NEVER silently falls back to "localhost" (which only works on the machine
 // running a local server), so every device loads the same shared data.
 const RAILWAY_BACKEND = "https://shoplivebharat-backend-production.up.railway.app";
-function resolveBackendUrl() {
-    if (process.env.REACT_APP_BACKEND_URL) return process.env.REACT_APP_BACKEND_URL;
+function resolveApiBase() {
     if (typeof window !== "undefined") {
         const host = window.location.hostname;
         const isLocal = host === "localhost" || host === "127.0.0.1" || host === "";
-        if (!isLocal) return RAILWAY_BACKEND; // deployed → always use the shared backend
+        if (!isLocal) {
+            // Deployed: call the SAME-ORIGIN "/api", which Vercel proxies to the
+            // shared Railway backend (see vercel.json). This means every device hits
+            // exactly one backend with no cross-origin/CORS variability, so all
+            // devices always see the same data.
+            return "/api";
+        }
     }
-    return "http://localhost:8000";
+    // Local dev (or SSR): use the explicit env var or the local server.
+    const backend = process.env.REACT_APP_BACKEND_URL || "http://localhost:8000";
+    return `${backend}/api`;
 }
-const BACKEND_URL = resolveBackendUrl();
-export const API = `${BACKEND_URL}/api`;
+export const API = resolveApiBase();
 
 export const api = axios.create({
     baseURL: API,
