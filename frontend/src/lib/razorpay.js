@@ -77,6 +77,29 @@ export async function openRazorpay({
         reject(new Error(r?.error?.description || "Payment failed. Please try again."))
       );
       rzp.open();
+
+      // Force the Razorpay modal to be visible & on top — bypasses any
+      // stacking-context / overflow issues from parent layouts.
+      const forceVisible = () => {
+        const el = document.querySelector(".razorpay-container");
+        if (el) {
+          // Move to be a direct child of body so no transformed ancestor traps it
+          if (el.parentElement !== document.body) {
+            document.body.appendChild(el);
+          }
+          el.style.setProperty("z-index", "2147483647", "important");
+          el.style.setProperty("position", "fixed", "important");
+          el.style.setProperty("inset", "0", "important");
+          el.style.setProperty("display", "block", "important");
+          el.style.setProperty("visibility", "visible", "important");
+          el.style.setProperty("opacity", "1", "important");
+        }
+        // Release any scroll-lock a previous modal may have left on body
+        document.body.style.removeProperty("overflow");
+        document.documentElement.style.removeProperty("overflow");
+      };
+      // Run a few times as Razorpay injects the DOM asynchronously
+      [100, 400, 900, 1600].forEach((t) => setTimeout(forceVisible, t));
     } catch (err) {
       reject(err instanceof Error ? err : new Error("Could not open payment window."));
     }
