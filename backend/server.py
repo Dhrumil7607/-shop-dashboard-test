@@ -524,6 +524,28 @@ _DEFAULT_CATEGORIES = [
     {"id":"cat-8","slug":"festival-collection","label":"Festival Collection","caption":"Celebrate every season","image_url":"https://images.unsplash.com/photo-1468234847176-28606331216a?w=800&q=80","display_order":8,"visible":True},
 ]
 
+def _ensure_seed_account_passwords():
+    """Self-heal: guarantee the documented seed accounts can always log in with
+    their known passwords. Stored hashes can become stale if they were created
+    under a different HASH_SALT (e.g. before HASH_SALT was configured on the
+    server), which locks out admin@shoplivebharat.com / customer@shoplivebharat.com
+    even though the auth system itself is fine. This re-syncs them on startup."""
+    known = {
+        "admin@shoplivebharat.com": "admin123",
+        "customer@shoplivebharat.com": "customer123",
+    }
+    changed = False
+    for u in mem.get("users", []):
+        pw = known.get((u.get("email") or "").lower())
+        if pw:
+            correct = _hash_pw(pw)
+            if u.get("password_hash") != correct:
+                u["password_hash"] = correct
+                changed = True
+    if changed:
+        logger.info("[DB] Repaired seed account password hashes (admin/customer)")
+    return changed
+
 def _ensure_default_categories():
     """Self-heal: if the categories collection is empty (e.g. on a live DB seeded
     before categories existed), populate the 8 default homepage categories so the
@@ -540,6 +562,7 @@ def _ensure_default_categories():
 _dedup_collections()
 _seed()
 _ensure_default_categories()
+_ensure_seed_account_passwords()
 _persist_db()
 
 # Log startup environment clearly so local/live differences are obvious in logs
