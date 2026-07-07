@@ -559,6 +559,16 @@ export async function adminRestoreSeller(shopId, adminKey) {
     return data;
 }
 
+export async function adminDeleteSeller(shopId, adminKey) {
+    const { data } = await api.delete(`/admin/sellers/${shopId}`, adminHeaders(adminKey));
+    return data;
+}
+
+export async function adminBulkDeleteSellers(shopIds, adminKey) {
+    const { data } = await api.post(`/admin/sellers/bulk-delete`, { shop_ids: shopIds }, adminHeaders(adminKey));
+    return data;
+}
+
 // ── Categories ────────────────────────────────────────────────────────────────
 export async function fetchCategories() {
     try {

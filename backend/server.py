@@ -2488,6 +2488,58 @@ def admin_restore_seller(shop_id: str):
     _persist_db()
     return {"success": True, "shop": doc}
 
+@api.delete("/admin/sellers/{shop_id}", dependencies=[Depends(require_admin)])
+def admin_delete_seller(shop_id: str):
+    """Permanently delete a seller — removes shop, user, products, slots, bookings.
+    Cannot delete the admin/head store."""
+    shop = mem_first("shops", id=shop_id)
+    if not shop:
+        raise HTTPException(404, "Shop not found")
+    if shop.get("is_admin_store"):
+        raise HTTPException(400, "Cannot delete the admin store")
+    # Delete all products belonging to this shop
+    mem["products"] = [p for p in mem.get("products", []) if p.get("shop_id") != shop_id]
+    # Delete all slots
+    mem["slots"] = [s for s in mem.get("slots", []) if s.get("shop_id") != shop_id]
+    # Remove the seller user
+    mem["users"] = [u for u in mem.get("users", []) if u.get("store_id") != shop_id or u.get("role") != "seller"]
+    # Remove the shop itself
+    mem["shops"] = [s for s in mem.get("shops", []) if s.get("id") != shop_id]
+    # Mark related seller applications as deleted
+    for app in mem.get("seller_applications", []):
+        if app.get("store_id") == shop_id:
+            app["status"] = "deleted"
+    _persist_db()
+    return {"success": True, "deleted_shop_id": shop_id}
+
+@api.post("/admin/sellers/bulk-delete", dependencies=[Depends(require_admin)])
+def admin_bulk_delete_sellers(body: dict):
+    """Permanently delete multiple sellers at once.
+    Body: { "shop_ids": ["shop-xxx", "shop-yyy"] }"""
+    shop_ids = body.get("shop_ids", [])
+    if not shop_ids:
+        raise HTTPException(400, "No shop_ids provided")
+    deleted = []
+    skipped = []
+    for shop_id in shop_ids:
+        shop = mem_first("shops", id=shop_id)
+        if not shop:
+            skipped.append(shop_id)
+            continue
+        if shop.get("is_admin_store"):
+            skipped.append(shop_id)
+            continue
+        mem["products"] = [p for p in mem.get("products", []) if p.get("shop_id") != shop_id]
+        mem["slots"] = [s for s in mem.get("slots", []) if s.get("shop_id") != shop_id]
+        mem["users"] = [u for u in mem.get("users", []) if u.get("store_id") != shop_id or u.get("role") != "seller"]
+        mem["shops"] = [s for s in mem.get("shops", []) if s.get("id") != shop_id]
+        for app in mem.get("seller_applications", []):
+            if app.get("store_id") == shop_id:
+                app["status"] = "deleted"
+        deleted.append(shop_id)
+    _persist_db()
+    return {"success": True, "deleted": deleted, "skipped": skipped}
+
 # ── Mount app ─────────────────────────────────────────────────────────────────
 app.include_router(api)
 

@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Eye, EyeOff, Check, RefreshCw, Plus, X, ImageIcon, Ban, Trash2, RotateCcw, Star, Search, AlertTriangle, ShieldCheck, Calendar } from "lucide-react";
+import { Eye, EyeOff, Check, RefreshCw, Plus, X, ImageIcon, Ban, Trash2, RotateCcw, Star, Search, AlertTriangle, ShieldCheck, Calendar, CheckSquare, Square } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AdminLayout from "@/layouts/AdminLayout";
-import { api, adminAddSeller, adminSuspendSeller, adminUnsuspendSeller, adminArchiveSeller, adminRestoreSeller } from "@/lib/api";
+import { api, adminAddSeller, adminSuspendSeller, adminUnsuspendSeller, adminArchiveSeller, adminRestoreSeller, adminDeleteSeller, adminBulkDeleteSellers } from "@/lib/api";
 import { toast } from "sonner";
 import ImageUpload from "@/components/ImageUpload";
 
@@ -56,6 +56,7 @@ export default function AdminSellers() {
   const [search, setSearch] = useState("");
   const [confirm, setConfirm] = useState(null); // { type, shopId, name }
   const [actionLoading, setActionLoading] = useState(false);
+  const [selected, setSelected] = useState(new Set()); // bulk selection
   const location = useLocation();
   const adminKey = localStorage.getItem("slb_admin_key") || "shoplivebharat-admin";
 
@@ -130,7 +131,28 @@ export default function AdminSellers() {
     () => api.patch(`/admin/shops/${shopId}`, { online: !current, is_active: true, status: !current ? "active" : "offline" }, { headers: { "X-Admin-Key": adminKey } }),
     !current ? "Seller is now online" : "Seller is now offline", "Failed to update"
   );
-  const toggleLiveVideo = (shopId, disabled) => doAction(
+
+  // ── Selection helpers ─────────────────────────────────────────────────────
+  const toggleSelect = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+
+  const selectablIds = filtered.filter(i => i.shop?.id && !i.shop?.is_admin_store).map(i => i.shop.id);
+
+  const toggleSelectAll = () => {
+    if (selected.size === selectablIds.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(selectablIds));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selected.size === 0) return;
+    setConfirm({ type: "bulk-delete", shopIds: [...selected], name: `${selected.size} seller${selected.size > 1 ? "s" : ""}` });
+  };  const toggleLiveVideo = (shopId, disabled) => doAction(
     () => api.patch(`/admin/shops/${shopId}`, { admin_live_disabled: !disabled }, { headers: { "X-Admin-Key": adminKey } }),
     !disabled ? "Seller live video disabled" : "Seller live video re-enabled", "Failed to update"
   );
@@ -158,6 +180,13 @@ export default function AdminSellers() {
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-3xl font-bold" style={{ color: "#1a1a1a" }}>Sellers</h1>
           <div className="flex items-center gap-2">
+            {selected.size > 0 && (
+              <button onClick={handleBulkDelete}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                style={{ backgroundColor: "#C0392B" }}>
+                <Trash2 size={14} /> Delete Selected ({selected.size})
+              </button>
+            )}
             <button onClick={() => setShowAdd(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white"
               style={{ backgroundColor: "#1a1a1a" }}>
@@ -211,6 +240,20 @@ export default function AdminSellers() {
         ) : (
           <AnimatePresence>
             <div className="space-y-3">
+              {/* Select all bar */}
+              {selectablIds.length > 0 && (
+                <div className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ backgroundColor: "#F0EBE3" }}>
+                  <button onClick={toggleSelectAll} className="flex items-center gap-2 text-xs font-semibold" style={{ color: "#6B5E52" }}>
+                    {selected.size === selectablIds.length && selectablIds.length > 0
+                      ? <CheckSquare size={15} style={{ color: "#1a1a1a" }} />
+                      : <Square size={15} />}
+                    {selected.size === selectablIds.length && selectablIds.length > 0 ? "Deselect All" : "Select All"}
+                  </button>
+                  {selected.size > 0 && (
+                    <span className="text-xs font-medium" style={{ color: "#9B8B7A" }}>{selected.size} selected</span>
+                  )}
+                </div>
+              )}
               {filtered.map((item, idx) => {
                 const shop = item.shop || {};
                 const seller = item.seller || {};
@@ -245,21 +288,30 @@ export default function AdminSellers() {
                       boxShadow: isHeadStore ? "0 0 0 1px rgba(201,168,76,0.3), 0 2px 8px rgba(201,168,76,0.1)" : "none",
                     }}>
                     <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                      {/* Avatar */}
-                      <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                        <div className="w-11 h-11 rounded-xl overflow-hidden" style={{ backgroundColor: "#F0EBE3" }}>
-                          {shop.image_url
-                            ? <img src={shop.image_url} alt="" className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-xs font-bold" style={{ color: "#9B8B7A" }}>{(name || "?").slice(0,2).toUpperCase()}</div>
-                          }
-                        </div>
-                        {hasShop && (
-                          <button onClick={() => setEditImageFor({ shopId: shop.id, logo: shop.image_url || "", banner: shop.banner_image || "" })}
-                            className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border"
-                            style={{ borderColor: "#E8E4DF", color: "#9B8B7A" }}>
-                            <ImageIcon size={10} /> img
+                      {/* Checkbox + Avatar */}
+                      <div className="flex items-start gap-2 flex-shrink-0">
+                        {!isHeadStore && hasShop && (
+                          <button onClick={() => toggleSelect(shop.id)} className="mt-1 flex-shrink-0" aria-label="Select seller">
+                            {selected.has(shop.id)
+                              ? <CheckSquare size={16} style={{ color: "#1a1a1a" }} />
+                              : <Square size={16} style={{ color: "#C4B9AE" }} />}
                           </button>
                         )}
+                        <div className="flex flex-col items-center gap-1">
+                          <div className="w-11 h-11 rounded-xl overflow-hidden" style={{ backgroundColor: "#F0EBE3" }}>
+                            {shop.image_url
+                              ? <img src={shop.image_url} alt="" className="w-full h-full object-cover" />
+                              : <div className="w-full h-full flex items-center justify-center text-xs font-bold" style={{ color: "#9B8B7A" }}>{(name || "?").slice(0,2).toUpperCase()}</div>
+                            }
+                          </div>
+                          {hasShop && (
+                            <button onClick={() => setEditImageFor({ shopId: shop.id, logo: shop.image_url || "", banner: shop.banner_image || "" })}
+                              className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded border"
+                              style={{ borderColor: "#E8E4DF", color: "#9B8B7A" }}>
+                              <ImageIcon size={10} /> img
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Info */}
@@ -394,6 +446,15 @@ export default function AdminSellers() {
                             className="px-2.5 py-1.5 rounded-lg text-xs font-semibold"
                             style={{ backgroundColor: "#1a1a1a", color: "#ffffff" }}>Manage →</Link>
                         )}
+                        {/* Permanent Delete */}
+                        {hasShop && !isHeadStore && (
+                          <button onClick={() => setConfirm({ type: "delete", shopId: shop.id, name })}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                            style={{ backgroundColor: "rgba(192,57,43,0.1)", color: "#C0392B" }}
+                            title="Permanently delete this seller">
+                            <Trash2 size={11} className="inline mr-1" />Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                   </motion.div>
@@ -407,20 +468,24 @@ export default function AdminSellers() {
       {/* Confirmation modal */}
       {confirm && (
         <ConfirmModal
-          title={confirm.type === "suspend" ? "Suspend Seller" : confirm.type === "archive" ? "Archive Seller" : confirm.type === "unsuspend" ? "Unsuspend Seller" : "Restore Seller"}
+          title={confirm.type === "suspend" ? "Suspend Seller" : confirm.type === "archive" ? "Archive Seller" : confirm.type === "unsuspend" ? "Unsuspend Seller" : confirm.type === "delete" ? "Permanently Delete Seller" : confirm.type === "bulk-delete" ? `Delete ${confirm.name}` : "Restore Seller"}
           message={
             confirm.type === "suspend" ? `Suspend "${confirm.name}"? They will be hidden from the public storefront and cannot go online.`
             : confirm.type === "archive" ? `Archive "${confirm.name}"? This will soft-delete the account and hide all products. Historical orders are preserved.`
             : confirm.type === "unsuspend" ? `Unsuspend "${confirm.name}"? They can come back online according to normal visibility rules.`
+            : confirm.type === "delete" ? `Permanently delete "${confirm.name}"? This removes the seller, all their products and slots. This cannot be undone.`
+            : confirm.type === "bulk-delete" ? `Permanently delete ${confirm.name}? All their products and slots will be removed. This cannot be undone.`
             : `Restore "${confirm.name}"? Their account and products will be reactivated.`
           }
-          danger={confirm.type === "suspend" || confirm.type === "archive"}
+          danger={confirm.type === "suspend" || confirm.type === "archive" || confirm.type === "delete" || confirm.type === "bulk-delete"}
           loading={actionLoading}
           onClose={() => !actionLoading && setConfirm(null)}
           onConfirm={() => {
             if (confirm.type === "suspend") doAction(() => adminSuspendSeller(confirm.shopId, "Suspended by admin", adminKey), "Seller suspended", "Failed to suspend");
             else if (confirm.type === "archive") doAction(() => adminArchiveSeller(confirm.shopId, adminKey), "Seller archived", "Failed to archive");
             else if (confirm.type === "unsuspend") doAction(() => adminUnsuspendSeller(confirm.shopId, adminKey), "Seller unsuspended", "Failed to unsuspend");
+            else if (confirm.type === "delete") doAction(() => adminDeleteSeller(confirm.shopId, adminKey), "Seller permanently deleted", "Failed to delete");
+            else if (confirm.type === "bulk-delete") doAction(() => adminBulkDeleteSellers(confirm.shopIds, adminKey).then(() => setSelected(new Set())), `${confirm.shopIds.length} seller(s) deleted`, "Bulk delete failed");
             else doAction(() => adminRestoreSeller(confirm.shopId, adminKey), "Seller restored", "Failed to restore");
           }}
         />
