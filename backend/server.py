@@ -513,9 +513,33 @@ def _dedup_collections():
         logger.info(f"[DB] Deduplication removed {deduped} duplicate document(s)")
     return deduped
 
+_DEFAULT_CATEGORIES = [
+    {"id":"cat-1","slug":"sarees","label":"Sarees","caption":"Draped in tradition","image_url":"https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=800&q=80","display_order":1,"visible":True},
+    {"id":"cat-2","slug":"lehengas","label":"Lehengas","caption":"For the grandest moments","image_url":"https://images.unsplash.com/photo-1503160865267-af4660ce7bf2?w=800&q=80","display_order":2,"visible":True},
+    {"id":"cat-3","slug":"kurtas","label":"Kurtas","caption":"Everyday elegance","image_url":"https://images.unsplash.com/photo-1744551358303-46edae8b374b?w=800&q=80","display_order":3,"visible":True},
+    {"id":"cat-4","slug":"sherwanis","label":"Sherwanis","caption":"The groom's finest","image_url":"https://images.unsplash.com/photo-1760080838961-4208536db385?w=800&q=80","display_order":4,"visible":True},
+    {"id":"cat-5","slug":"chaniya-choli","label":"Chaniya Choli","caption":"Celebrate in colour","image_url":"https://images.unsplash.com/photo-1668371679302-a8ec781e876e?w=800&q=80","display_order":5,"visible":True},
+    {"id":"cat-6","slug":"kids-traditional","label":"Kids Traditional","caption":"Little ones, big style","image_url":"https://images.unsplash.com/photo-1605292356183-a77d0a9c9d1d?w=800&q=80","display_order":6,"visible":True},
+    {"id":"cat-7","slug":"wedding-collection","label":"Wedding Collection","caption":"A lifetime of memories","image_url":"https://images.unsplash.com/photo-1703045199207-5312874d9e54?w=800&q=80","display_order":7,"visible":True},
+    {"id":"cat-8","slug":"festival-collection","label":"Festival Collection","caption":"Celebrate every season","image_url":"https://images.unsplash.com/photo-1468234847176-28606331216a?w=800&q=80","display_order":8,"visible":True},
+]
+
+def _ensure_default_categories():
+    """Self-heal: if the categories collection is empty (e.g. on a live DB seeded
+    before categories existed), populate the 8 default homepage categories so the
+    admin panel and homepage 'Shop by Category' section stay in sync."""
+    cats = mem.setdefault("categories", [])
+    if len(cats) == 0:
+        for c in _DEFAULT_CATEGORIES:
+            cats.append({**c, "created_at": _now(), "updated_at": _now()})
+        logger.info(f"[DB] Seeded {len(_DEFAULT_CATEGORIES)} default categories (collection was empty)")
+        return True
+    return False
+
 # Run dedup first, then seed on startup
 _dedup_collections()
 _seed()
+_ensure_default_categories()
 _persist_db()
 
 # Log startup environment clearly so local/live differences are obvious in logs

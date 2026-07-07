@@ -112,6 +112,7 @@ export default function AdminOrders() {
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Order ID</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Customer</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Amount</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Payment</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Status</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Date</th>
                                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase">Shipment</th>
@@ -123,6 +124,26 @@ export default function AdminOrders() {
                                         <td className="px-4 py-3 font-mono font-bold">{o.id}</td>
                                         <td className="px-4 py-3">{o.customer_name || "Customer"}</td>
                                         <td className="px-4 py-3 font-semibold">₹{(o.total || 0).toLocaleString("en-IN")}</td>
+                                        <td className="px-4 py-3">
+                                            {o.razorpay_payment_id ? (
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold" style={{ color: "#0B6E4F" }}>
+                                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: "#0B6E4F" }} />
+                                                        {o.razorpay_payment_id}
+                                                    </span>
+                                                    {o.razorpay_order_id && (
+                                                        <span className="text-[10px] font-mono" style={{ color: "#9B8B7A" }}>
+                                                            {o.razorpay_order_id}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                                                    style={{ backgroundColor: "#F3F4F6", color: "#9B8B7A" }}>
+                                                    {o.payment_method === "cod" ? "COD" : "No payment ID"}
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-3">
                                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${STATUS_STYLE[o.status] || "bg-gray-100 text-gray-600"}`}>
                                                 {o.status}
