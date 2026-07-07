@@ -472,3 +472,13 @@
     .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
     .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
 }
+
+/* ── Razorpay modal z-index fix ─────────────────────────────────────────────
+   The sticky header backdrop-filter creates a stacking context that can trap
+   the Razorpay iframe. Force it above all page elements. */
+#razorpay-backdrop,
+.razorpay-container,
+iframe[id^="razorpay"],
+div[id^="razorpay"] {
+  z-index: 999999 !important;
+}
