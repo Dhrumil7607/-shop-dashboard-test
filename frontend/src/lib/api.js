@@ -12,15 +12,44 @@ export const API = `${BACKEND_URL}/api`;
 export const api = axios.create({
     baseURL: API,
     headers: { "Content-Type": "application/json" },
-    timeout: 15000,  // increased timeout for Railway cold starts
+    timeout: 30000,  // generous timeout to survive Railway cold starts (esp. on mobile networks)
 });
 
 // Warm up the backend immediately on page load (prevents cold-start delay on first real request)
 if (typeof window !== "undefined") {
     setTimeout(() => {
-        axios.get(`${API}/`, { timeout: 20000 }).catch(() => {});
+        axios.get(`${API}/`, { timeout: 30000 }).catch(() => {});
     }, 100);
 }
+
+// ── Cold-start / network resilience ───────────────────────────────────────────
+// Railway sleeps when idle. A device that opens the site "cold" (e.g. your phone)
+// can hit a timeout on the very first requests while the backend wakes up, which
+// makes products/orders look empty even though the data exists on the shared DB.
+// Retry idempotent GET requests a few times with backoff so every device loads
+// the same data regardless of whether the backend was already warm.
+const MAX_RETRIES = 3;
+api.interceptors.response.use(undefined, async (error) => {
+    const config = error.config;
+    const method = (config?.method || "get").toLowerCase();
+    const isTransient =
+        error.code === "ECONNABORTED" ||          // timeout
+        error.code === "ERR_NETWORK" ||            // network dropped / backend waking
+        error.code === "ECONNREFUSED" ||
+        (error.response && error.response.status >= 500 && error.response.status < 600);
+
+    // Only auto-retry safe, idempotent reads
+    if (config && method === "get" && isTransient) {
+        config.__retryCount = config.__retryCount || 0;
+        if (config.__retryCount < MAX_RETRIES) {
+            config.__retryCount += 1;
+            const delay = 800 * config.__retryCount; // 0.8s, 1.6s, 2.4s
+            await new Promise((r) => setTimeout(r, delay));
+            return api(config);
+        }
+    }
+    return Promise.reject(error);
+});
 
 // Attach JWT token
 api.interceptors.request.use((config) => {
