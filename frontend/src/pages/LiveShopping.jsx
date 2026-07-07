@@ -225,79 +225,71 @@ export default function LiveShopping() {
       slotId,
     } = bookingState;
 
-    await openRazorpayBooking({
-      user,
-      storeName,
-      onSuccess: async (rzpResponse) => {        try {
-          // If a real slot was picked, reserve it now
-          if (slotId) {
-            try {
-              await createBackendLiveBooking({
-                slot_id: slotId,
-                store_id: storeId,
-                store_name: storeName,
-                customer_name: user?.name || "Customer",
-                customer_email: user?.email || "",
-                customer_phone: user?.phone || "",
-                selected_products: (selectedProducts || []).map((p) => ({ id: p.id, name: p.name })),
-                date: appointmentDate,
-                time: appointmentTime,
-                timezone,
-                session_fee: 699,
-                razorpay_payment_id: rzpResponse.razorpay_payment_id,
-                razorpay_order_id:   rzpResponse.razorpay_order_id,
-                razorpay_signature:  rzpResponse.razorpay_signature,
-              });
-            } catch (err) {
-              setIsPaying(false);
-              setValidationError(
-                err?.response?.status === 409
-                  ? "Sorry, that slot was just booked. Please choose another time."
-                  : "Payment received but slot reservation failed. Please contact support."
-              );
-              setDirection(-1);
-              setCurrentStep(3);
-              return;
-            }
-          }
+    try {
+      const rzpResponse = await openRazorpayBooking({ user, storeName });
 
-          const appointmentIST    = buildAppointmentIST(appointmentDate, appointmentTime);
-          const appointmentUserTz = buildAppointmentUserTz(appointmentDate, appointmentTime, timezone);
-
-          const booking = {
-            bookingId: generateBookingId(),
-            userId: user?.id || "guest",
-            storeId,
-            storeName,
-            selectedProducts,
-            appointmentIST,
-            appointmentUserTz,
+      // Payment succeeded — reserve slot if applicable
+      if (slotId) {
+        try {
+          await createBackendLiveBooking({
+            slot_id: slotId,
+            store_id: storeId,
+            store_name: storeName,
+            customer_name: user?.name || "Customer",
+            customer_email: user?.email || "",
+            customer_phone: user?.phone || "",
+            selected_products: (selectedProducts || []).map((p) => ({ id: p.id, name: p.name })),
+            date: appointmentDate,
+            time: appointmentTime,
             timezone,
-            googleMeetLink: null,
-            status: "confirmed",
+            session_fee: 699,
             razorpay_payment_id: rzpResponse.razorpay_payment_id,
-            createdAt: new Date().toISOString(),
-            sessionFee: 699,
-          };
-
-          bookingService.save(user?.id || "guest", booking);
-          navigate("/booking-confirmation", { state: { booking } });
-        } catch {
-          setIsPaying(false);
-          setValidationError("Something went wrong after payment. Please contact support.");
+            razorpay_order_id:   rzpResponse.razorpay_order_id,
+            razorpay_signature:  rzpResponse.razorpay_signature,
+          });
+        } catch (err) {
+          setValidationError(
+            err?.response?.status === 409
+              ? "Sorry, that slot was just booked. Please choose another time."
+              : "Payment received but slot reservation failed. Please contact support."
+          );
+          setDirection(-1);
+          setCurrentStep(3);
+          return;
         }
-      },
-      onDismiss: () => {
-        setIsPaying(false);
+      }
+
+      const appointmentIST    = buildAppointmentIST(appointmentDate, appointmentTime);
+      const appointmentUserTz = buildAppointmentUserTz(appointmentDate, appointmentTime, timezone);
+
+      const booking = {
+        bookingId: generateBookingId(),
+        userId: user?.id || "guest",
+        storeId,
+        storeName,
+        selectedProducts,
+        appointmentIST,
+        appointmentUserTz,
+        timezone,
+        googleMeetLink: null,
+        status: "confirmed",
+        razorpay_payment_id: rzpResponse.razorpay_payment_id,
+        createdAt: new Date().toISOString(),
+        sessionFee: 699,
+      };
+
+      bookingService.save(user?.id || "guest", booking);
+      navigate("/booking-confirmation", { state: { booking } });
+
+    } catch (err) {
+      if (err?.dismissed) {
         setValidationError("Payment was cancelled. You can try again.");
-      },
-      onError: (err) => {
-        setIsPaying(false);
+      } else {
         setValidationError(err?.message || "Payment failed. Please try again.");
-      },
-    });
-    // Reset button state right after modal opens — modal is now in control
-    setIsPaying(false);
+      }
+    } finally {
+      setIsPaying(false);
+    }
   }
 
   // ── Active step renderer ──────────────────────────────────────────────────

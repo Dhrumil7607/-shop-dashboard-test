@@ -162,72 +162,61 @@ export default function Checkout() {
             return;
         }
 
-        // ── Razorpay: open modal, place order only after payment confirmed ──
+        // ── Razorpay: open modal, await result ──
         if (payMethod === "razorpay") {
-            // Show brief loading while script loads, then reset — modal handles its own UI
             setLoading(true);
-            await openRazorpayCheckout({
-                amountINR: total,
-                user,
-                description: `ShopLiveBharat Order — ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
-                onSuccess: async (rzpResponse) => {
-                    // Payment confirmed — now save the order
-                    setLoading(true);
-                    try {
-                        const { createOrder } = await import("@/lib/api");
-                        const payload = {
-                            items: cartItems.map(item => ({
-                                product_id: item.product_id || item.id,
-                                quantity:   item.quantity,
-                                size:       item.size  || "",
-                                color:      item.color || "",
-                            })),
-                            shipping_address: {
-                                full_name: form.full_name,
-                                email:     form.email,
-                                phone:     form.phone,
-                                address:   form.address,
-                                city:      form.city,
-                                state:     form.state,
-                                zip:       form.zip,
-                                country:   form.country,
-                            },
-                            payment_method: "razorpay",
-                            razorpay_payment_id: rzpResponse.razorpay_payment_id,
-                            razorpay_order_id:   rzpResponse.razorpay_order_id,
-                            razorpay_signature:  rzpResponse.razorpay_signature,
-                            currency,
-                            coupon_discount: couponDiscount,
-                            ...(selectedSizeProfileId ? { size_profile_id: selectedSizeProfileId } : {}),
-                        };
-                        const saved = await createOrder(payload);
-                        clearCart();
-                        setOrderData({
-                            orderId: saved.id || saved.order_id || `SLB-${Date.now().toString(36).toUpperCase()}`,
-                            email:   form.email,
-                            items:   saved.items || cartItems,
-                            subtotal, shipping, tax,
-                            total:   saved.total ?? total,
-                            payMethod: "razorpay",
-                        });
-                    } catch (err) {
-                        toast.error(err?.response?.data?.detail || "Payment received but order save failed. Contact support.");
-                    } finally {
-                        setLoading(false);
-                    }
-                },
-                onDismiss: () => {
-                    // Modal closed without paying — reset button immediately
-                    setLoading(false);
+            try {
+                const rzpResponse = await openRazorpayCheckout({
+                    amountINR: total,
+                    user,
+                    description: `ShopLiveBharat Order — ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
+                });
+                // Payment succeeded — save order
+                const { createOrder } = await import("@/lib/api");
+                const payload = {
+                    items: cartItems.map(item => ({
+                        product_id: item.product_id || item.id,
+                        quantity:   item.quantity,
+                        size:       item.size  || "",
+                        color:      item.color || "",
+                    })),
+                    shipping_address: {
+                        full_name: form.full_name,
+                        email:     form.email,
+                        phone:     form.phone,
+                        address:   form.address,
+                        city:      form.city,
+                        state:     form.state,
+                        zip:       form.zip,
+                        country:   form.country,
+                    },
+                    payment_method: "razorpay",
+                    razorpay_payment_id: rzpResponse.razorpay_payment_id,
+                    razorpay_order_id:   rzpResponse.razorpay_order_id,
+                    razorpay_signature:  rzpResponse.razorpay_signature,
+                    currency,
+                    coupon_discount: couponDiscount,
+                    ...(selectedSizeProfileId ? { size_profile_id: selectedSizeProfileId } : {}),
+                };
+                const saved = await createOrder(payload);
+                clearCart();
+                setOrderData({
+                    orderId: saved.id || saved.order_id || `SLB-${Date.now().toString(36).toUpperCase()}`,
+                    email:   form.email,
+                    items:   saved.items || cartItems,
+                    subtotal, shipping, tax,
+                    total:   saved.total ?? total,
+                    payMethod: "razorpay",
+                });
+            } catch (err) {
+                if (err?.dismissed) {
                     toast.info("Payment cancelled.");
-                },
-                onError: (err) => {
-                    setLoading(false);
+                } else {
                     toast.error(err?.message || "Payment failed. Please try again.");
-                },
-            });
-            // Reset loading right after modal opens — modal is now in control
-            setLoading(false);
+                }
+            } finally {
+                setLoading(false);
+            }
             return;
         }
 
