@@ -85,7 +85,6 @@ def _load_from_mongo() -> Optional[Dict[str, list]]:
     return None
 
 def _persist_to_mongo():
-def _persist_to_mongo():
     """Write all in-memory state to MongoDB — runs in background thread."""
     if _mongo_db is None:
         return
@@ -113,6 +112,7 @@ def _persist_collection(coll_name: str):
 def _persist_db():
     """Persist state in a background thread — never blocks the API response."""
     import threading
+    import json as _json
     def _do_persist():
         _persist_to_mongo()
         # Write db.json as local fallback
