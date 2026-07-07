@@ -479,7 +479,28 @@ def _seed():
     mem["_meta"] = [{"seed_version": _SEED_VERSION, "seeded_at": _now()}]
     logger.info(f"[DB] Fresh seed applied (version {_SEED_VERSION})")
 
-# Run seed on startup
+def _dedup_collections():
+    """Remove duplicate documents (same id) from all collections — fixes MongoDB race condition duplicates."""
+    deduped = 0
+    for coll in _COLLECTIONS:
+        docs = mem.get(coll, [])
+        seen = set()
+        unique = []
+        for doc in docs:
+            key = doc.get("id") or doc.get("_id") or id(doc)
+            if key not in seen:
+                seen.add(key)
+                unique.append(doc)
+        removed = len(docs) - len(unique)
+        if removed > 0:
+            mem[coll] = unique
+            deduped += removed
+    if deduped:
+        logger.info(f"[DB] Deduplication removed {deduped} duplicate document(s)")
+    return deduped
+
+# Run dedup first, then seed on startup
+_dedup_collections()
 _seed()
 _persist_db()
 
