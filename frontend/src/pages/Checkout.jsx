@@ -164,12 +164,15 @@ export default function Checkout() {
 
         // ── Razorpay: open modal, place order only after payment confirmed ──
         if (payMethod === "razorpay") {
+            // Show brief loading while script loads, then reset — modal handles its own UI
             setLoading(true);
             await openRazorpayCheckout({
                 amountINR: total,
                 user,
                 description: `ShopLiveBharat Order — ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
                 onSuccess: async (rzpResponse) => {
+                    // Payment confirmed — now save the order
+                    setLoading(true);
                     try {
                         const { createOrder } = await import("@/lib/api");
                         const payload = {
@@ -214,6 +217,7 @@ export default function Checkout() {
                     }
                 },
                 onDismiss: () => {
+                    // Modal closed without paying — reset button immediately
                     setLoading(false);
                     toast.info("Payment cancelled.");
                 },
@@ -222,6 +226,8 @@ export default function Checkout() {
                     toast.error(err?.message || "Payment failed. Please try again.");
                 },
             });
+            // Reset loading right after modal opens — modal is now in control
+            setLoading(false);
             return;
         }
 

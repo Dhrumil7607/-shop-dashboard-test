@@ -228,8 +228,7 @@ export default function LiveShopping() {
     await openRazorpayBooking({
       user,
       storeName,
-      onSuccess: async (rzpResponse) => {
-        try {
+      onSuccess: async (rzpResponse) => {        try {
           // If a real slot was picked, reserve it now
           if (slotId) {
             try {
@@ -297,6 +296,8 @@ export default function LiveShopping() {
         setValidationError(err?.message || "Payment failed. Please try again.");
       },
     });
+    // Reset button state right after modal opens — modal is now in control
+    setIsPaying(false);
   }
 
   // ── Active step renderer ──────────────────────────────────────────────────
