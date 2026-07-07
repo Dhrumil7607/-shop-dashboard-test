@@ -1,6 +1,6 @@
 /**
  * SellerProducts.jsx — /seller/products
- * Seller product management: list, add, archive/unarchive, live toggle.
+ * Seller product management: list, add, edit, archive/unarchive, live toggle.
  */
 
 import { useState, useCallback } from "react";
@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Archive, Eye, EyeOff, Search, Package,
-  ChevronLeft, Edit3, Trash2, Radio, CheckCircle2,
+  Edit3, Trash2, CheckCircle2, AlertTriangle, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -18,8 +18,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { getSellerProducts, sellerCreateProduct, sellerUpdateProduct, sellerDeleteProduct } from "@/lib/api";
 import ImageUpload from "@/components/ImageUpload";
+import {
+  ALL_CATEGORIES, getSizeType, getDefaultSizeOptions,
+  MENS_STANDARD_SIZES, MENS_NUMERIC_SIZES, WOMENS_STANDARD_SIZES, KIDS_SIZES
+} from "@/lib/sizeConfig";
 
-const CATS = ["Lehengas","Sarees","Kurtas","Sherwanis","Chaniya Choli","Wedding Wear","Gown","Kids Traditional","Jewellery","Accessories"];
+const inp = "w-full px-3 py-2.5 rounded-xl border text-sm outline-none focus:border-maroon transition";
+const lbl = "block text-xs font-semibold uppercase tracking-wider mb-1.5" ;
 
 const STATUS_BADGE = {
   live:         { label: "Live",         bg: "rgba(45,122,58,0.1)",  text: "#2D7A3A" },
@@ -28,12 +33,305 @@ const STATUS_BADGE = {
   draft:        { label: "Draft",        bg: "rgba(27,42,107,0.1)",  text: "#1B2A6B" },
 };
 
-function AddProductModal({ onClose, onAdd, storeId, storeName }) {
-  const [form, setForm] = useState({
+// ── Size selector chips (reused from admin) ───────────────────────────────────
+function SizeChips({ sizeType, category, value, onChange }) {
+  if (sizeType === "none") return (
+    <p className="text-xs italic" style={{ color: "#9B8B7A" }}>No size needed — free size / one size fits all.</p>
+  );
+  let presets = [];
+  if (sizeType === "men") {
+    const lower = (category || "").toLowerCase();
+    const isNumeric = ["sherwani","kurta","shirt","jacket","blazer"].some(k => lower.includes(k));
+    presets = isNumeric ? MENS_NUMERIC_SIZES : MENS_STANDARD_SIZES;
+  } else if (sizeType === "women") {
+    presets = WOMENS_STANDARD_SIZES;
+  } else if (sizeType === "kids") {
+    presets = KIDS_SIZES;
+  }
+  const current = value.split(",").map(s => s.trim()).filter(Boolean);
+  const allSelected = presets.every(s => current.includes(s));
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map(size => {
+          const active = current.includes(size);
+          return (
+            <button key={size} type="button"
+              onClick={() => {
+                const next = active ? current.filter(s => s !== size) : [...current, size];
+                onChange(next.join(","));
+              }}
+              className="px-3 py-1 rounded-full text-xs font-semibold border transition"
+              style={{ backgroundColor: active ? "#A2466B" : "white", color: active ? "white" : "#6B5E52", borderColor: active ? "#A2466B" : "#E8E4DF" }}>
+              {size}
+            </button>
+          );
+        })}
+        <button type="button"
+          onClick={() => onChange(allSelected ? "" : presets.join(","))}
+          className="px-3 py-1 rounded-full text-xs border transition"
+          style={{ backgroundColor: "#F0EBE3", color: "#6B5E52", borderColor: "#E8E4DF" }}>
+          {allSelected ? "Clear All" : "Select All"}
+        </button>
+      </div>
+      {sizeType === "women" ? (
+        <>
+          <input value={value} onChange={e => onChange(e.target.value)}
+            placeholder="Or enter custom sizes e.g. 32,34,36 or XS,S,M,L,Free Size"
+            className={inp + " text-xs"} style={{ borderColor: "#E8E4DF" }} />
+          <p className="text-[10px]" style={{ color: "#9B8B7A" }}>
+            Women's sizing: use standard sizes above OR enter custom measurements (bust size in inches, waist, etc.)
+          </p>
+        </>
+      ) : (
+        <input value={value} onChange={e => onChange(e.target.value)}
+          placeholder="Or type custom sizes separated by commas"
+          className={inp + " text-xs"} style={{ borderColor: "#E8E4DF" }} />
+      )}
+    </div>
+  );
+}
+
+// ── Add / Edit Product Modal ───────────────────────────────────────────────────
+function ProductModal({ onClose, onSave, storeId, storeName, editProduct }) {
+  const isEdit = !!editProduct;
+  const [form, setForm] = useState(editProduct ? { ...editProduct } : {
     name: "", category: "", price: "", compare_at_price: "",
     description: "", stock: "", sku: "", color: "", size_options: "",
-    image_url: "", status: "live",
+    image_url: "", hover_image_url: "", badge: "", ready_to_ship: false, status: "live",
   });
+
+  const sizeType = getSizeType(form.category);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Auto-fill sizes when category changes (only on new product)
+  const handleCategoryChange = (cat) => {
+    set("category", cat);
+    if (!isEdit) set("size_options", getDefaultSizeOptions(cat));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.name?.trim()) { toast.error("Product name is required"); return; }
+    if (!form.price || Number(form.price) <= 0) { toast.error("Price must be greater than 0"); return; }
+    if (!form.image_url) { toast.error("Please upload a product image"); return; }
+    if (!form.description?.trim()) { toast.error("Description is required"); return; }
+    if (!form.category) { toast.error("Please select a category"); return; }
+    if (form.stock === "" || form.stock === undefined) { toast.error("Stock quantity is required"); return; }
+    onSave({
+      name: form.name.trim(),
+      category: form.category,
+      price: Number(form.price),
+      compare_at_price: form.compare_at_price ? Number(form.compare_at_price) : undefined,
+      description: form.description.trim(),
+      stock: Number(form.stock) || 0,
+      sku: form.sku || "",
+      color: form.color || "",
+      size_options: form.size_options || "",
+      image_url: form.image_url,
+      hover_image_url: form.hover_image_url || "",
+      badge: form.badge || "",
+      ready_to_ship: !!form.ready_to_ship,
+      shop_id: storeId,
+      shop_name: storeName,
+      is_active: form.status === "live",
+      status: form.status || "live",
+    });
+    onClose();
+  };
+
+  return (
+    <motion.div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-2xl rounded-2xl p-6" style={{ backgroundColor: "white", maxHeight: "90vh", overflowY: "auto" }}>
+
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-serif text-xl" style={{ color: "#1a1a1a" }}>{isEdit ? "Edit Product" : "Add New Product"}</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            {/* Product Image */}
+            <div className="sm:col-span-2 rounded-xl border p-4" style={{ borderColor: "#E8E4DF" }}>
+              <ImageUpload label="Product Image *" hint="Main image shown on marketplace"
+                value={form.image_url} onUpload={url => set("image_url", url)} />
+            </div>
+
+            {/* Hover Image */}
+            <div className="sm:col-span-2 rounded-xl border p-4" style={{ borderColor: "#E8E4DF" }}>
+              <ImageUpload label="Hover Image (optional)" hint="Shown when customer hovers over product card"
+                value={form.hover_image_url} onUpload={url => set("hover_image_url", url)} />
+            </div>
+
+            {/* Name */}
+            <div className="sm:col-span-2">
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Product Name *</label>
+              <input value={form.name} onChange={e => set("name", e.target.value)}
+                placeholder="e.g. Maharani Bridal Lehenga" required className={inp} style={{ borderColor: "#E8E4DF" }} />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Category *</label>
+              <select value={form.category} onChange={e => handleCategoryChange(e.target.value)} required
+                className={inp} style={{ borderColor: "#E8E4DF" }}>
+                <option value="">Select category</option>
+                {ALL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {form.category && (
+                <p className="text-[10px] mt-1" style={{ color: "#9B8B7A" }}>
+                  {sizeType === "none" ? "✓ Free size / no size selection needed"
+                    : sizeType === "men" ? "✓ Men's sizing — XS to XXL or numeric"
+                    : sizeType === "women" ? "✓ Women's sizing — standard or custom measurements"
+                    : "✓ Kids sizing"}
+                </p>
+              )}
+            </div>
+
+            {/* SKU */}
+            <div>
+              <label className={lbl} style={{ color: "#9B8B7A" }}>SKU (optional)</label>
+              <input value={form.sku} onChange={e => set("sku", e.target.value)}
+                placeholder="e.g. LHG-001-RED" className={inp} style={{ borderColor: "#E8E4DF" }} />
+            </div>
+
+            {/* Price */}
+            <div>
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Price (₹) *</label>
+              <input type="number" min="1" value={form.price} onChange={e => set("price", e.target.value)} required
+                placeholder="e.g. 2999" className={inp} style={{ borderColor: "#E8E4DF" }} />
+            </div>
+
+            {/* Compare at Price */}
+            <div>
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Original / MRP (₹)</label>
+              <input type="number" min="0" value={form.compare_at_price}
+                onChange={e => set("compare_at_price", e.target.value)}
+                placeholder="Shows as strikethrough price" className={inp} style={{ borderColor: "#E8E4DF" }} />
+            </div>
+
+            {/* Stock */}
+            <div>
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Stock Quantity *</label>
+              <input type="number" min="0" value={form.stock}
+                onChange={e => set("stock", e.target.value)} required
+                className={inp} style={{ borderColor: "#E8E4DF" }} />
+              {Number(form.stock) > 0 && Number(form.stock) <= 5 && (
+                <p className="flex items-center gap-1 text-[11px] mt-1 font-semibold" style={{ color: "#C0392B" }}>
+                  <AlertTriangle size={11} /> Only {form.stock} left — "Only X left" badge will show on product page
+                </p>
+              )}
+              {Number(form.stock) === 0 && form.stock !== "" && (
+                <p className="text-[11px] mt-1" style={{ color: "#9B7520" }}>⚠ Product will show as Out of Stock</p>
+              )}
+            </div>
+
+            {/* Badge */}
+            <div>
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Badge</label>
+              <input value={form.badge} onChange={e => set("badge", e.target.value)}
+                placeholder="e.g. New, Bestseller, Sale" className={inp} style={{ borderColor: "#E8E4DF" }} />
+            </div>
+
+            {/* Color */}
+            <div className="sm:col-span-2">
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Colors Available</label>
+              <input value={form.color} onChange={e => set("color", e.target.value)}
+                placeholder="e.g. Red, Royal Blue, Ivory Gold (comma separated)"
+                className={inp} style={{ borderColor: "#E8E4DF" }} />
+            </div>
+
+            {/* Size Options — smart based on category */}
+            {form.category && (
+              <div className="sm:col-span-2 rounded-xl border p-4" style={{ borderColor: "#E8E4DF", backgroundColor: "#FAFAF8" }}>
+                <label className={lbl} style={{ color: "#9B8B7A" }}>
+                  {sizeType === "none" ? "Size / Fit Info" : `Available Sizes`}
+                </label>
+                <SizeChips sizeType={sizeType} category={form.category}
+                  value={form.size_options} onChange={v => set("size_options", v)} />
+              </div>
+            )}
+
+            {/* Description */}
+            <div className="sm:col-span-2">
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Description *</label>
+              <textarea rows={4} value={form.description} onChange={e => set("description", e.target.value)}
+                placeholder="Describe the product — fabric, occasion, care instructions, measurements…" required
+                className={inp} style={{ borderColor: "#E8E4DF" }} />
+            </div>
+
+            {/* Ready to ship + Status */}
+            <div className="flex items-center gap-3 rounded-xl border px-4 py-3" style={{ borderColor: "#E8E4DF" }}>
+              <input type="checkbox" id="rts" checked={!!form.ready_to_ship}
+                onChange={e => set("ready_to_ship", e.target.checked)}
+                className="w-4 h-4 cursor-pointer accent-maroon" />
+              <label htmlFor="rts" className="cursor-pointer text-sm" style={{ color: "#1a1a1a" }}>
+                Ready to Ship (dispatches in 24–48 hrs)
+              </label>
+            </div>
+
+            <div>
+              <label className={lbl} style={{ color: "#9B8B7A" }}>Visibility</label>
+              <select value={form.status} onChange={e => set("status", e.target.value)}
+                className={inp} style={{ borderColor: "#E8E4DF" }}>
+                <option value="live">Live — visible to customers</option>
+                <option value="hidden">Hidden — not visible publicly</option>
+                <option value="draft">Draft — save for later</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
+              style={{ backgroundColor: "#A2466B" }}>
+              {isEdit ? "Save Changes" : "Add Product"}
+            </button>
+            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl text-sm border transition hover:bg-gray-50"
+              style={{ borderColor: "#E8E4DF", color: "#6B5E52" }}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+export default function SellerProducts() {
+  const { isLoggedIn, isSeller, user } = useAuth();
+  const { formatPrice } = useCurrency();
+  const navigate = useNavigate();
+
+  const storeId = user?.store_id || "";
+  const storeName = user?.store_name || "";
+
+  const [products, setProducts] = useState([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [showAdd, setShowAdd] = useState(false);
+  const [editProduct, setEditProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const list = await getSellerProducts();
+      setProducts((list || []).filter(p => p.status !== "removed"));
+    } catch { setProducts([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn || !isSeller) { navigate("/login", { replace: true }); return; }
+    refresh();
+  }, [isLoggedIn, isSeller, navigate, refresh]);
+
+  const toggleStatus = useCallback(async (id, newStatus) => {
+    try {
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -164,198 +462,3 @@ function AddProductModal({ onClose, onAdd, storeId, storeName }) {
       </motion.div>
     </motion.div>
   );
-}
-export default function SellerProducts() {
-  const { isLoggedIn, isSeller, user } = useAuth();
-  const { formatPrice } = useCurrency();
-  const navigate = useNavigate();
-
-  const storeId = user?.store_id || "";
-  const storeName = user?.store_name || "";
-
-  const [products, setProducts] = useState([]);
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
-  const [showAdd, setShowAdd] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  const refresh = useCallback(async () => {
-    try {
-      const list = await getSellerProducts();
-      // Seller sees everything except hard-removed products
-      setProducts((list || []).filter(p => p.status !== "removed"));
-    } catch {
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isLoggedIn || !isSeller) { navigate("/login", { replace: true }); return; }
-    refresh();
-  }, [isLoggedIn, isSeller, navigate, refresh]);
-
-  const toggleStatus = useCallback(async (id, newStatus) => {
-    try {
-      await sellerUpdateProduct(id, { status: newStatus });
-      await refresh();
-      const labels = {
-        live: "set live", hidden: "hidden from storefront", out_of_stock: "marked out of stock",
-      };
-      toast.success(`Product ${labels[newStatus] || newStatus}`);
-    } catch { toast.error("Could not update product"); }
-  }, [refresh]);
-
-  const deleteProduct = useCallback(async (id, name) => {
-    if (!window.confirm(`Delete "${name}"?`)) return;
-    try { await sellerDeleteProduct(id); await refresh(); toast.success("Product deleted"); }
-    catch { toast.error("Could not delete product"); }
-  }, [refresh]);
-
-  const addProduct = useCallback(async (p) => {
-    try { await sellerCreateProduct({ ...p, status: "live" }); await refresh(); }
-    catch { toast.error("Could not add product"); }
-  }, [refresh]);
-
-  const visible = products.filter(p => {
-    if (filter !== "all" && p.status !== filter) return false;
-    if (search.trim().length >= 2 && !p.name.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  });
-
-  if (!isLoggedIn || !isSeller) return null;
-
-  return (
-    <SellerLayout>
-      <div style={{ backgroundColor: "#FAF9F6", minHeight: "80vh" }}>
-        <div className="max-w-6xl mx-auto px-6 md:px-12 py-10">
-
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-8">
-            <Link to="/seller/dashboard" className="p-2 rounded-xl hover:bg-stone-100 transition">
-              <ChevronLeft size={20} style={{ color: "#6B5E52" }} />
-            </Link>
-            <div className="flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#C9A84C" }}>SELLER PORTAL</p>
-              <h1 className="font-serif text-2xl md:text-3xl" style={{ color: "#1a1a1a", fontWeight: 400 }}>My Products</h1>
-            </div>
-            <button onClick={() => setShowAdd(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition hover:opacity-90"
-              style={{ backgroundColor: "#A2466B" }}>
-              <Plus size={15} /> Add Product
-            </button>
-          </div>
-
-          {/* Filter bar */}
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <div className="relative flex-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "#9B8B7A" }} />
-              <input type="search" value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search products…" className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm outline-none"
-                style={{ borderColor: "#E8E4DF", backgroundColor: "white" }} />
-            </div>
-            <div className="flex gap-2">
-              {["all","live","hidden","out_of_stock"].map(f => (
-                <button key={f} onClick={() => setFilter(f)}
-                  className="px-4 py-2.5 rounded-xl text-sm font-medium transition capitalize whitespace-nowrap"
-                  style={{ backgroundColor: filter === f ? "#1a1a1a" : "white",
-                    color: filter === f ? "white" : "#6B5E52",
-                    border: filter === f ? "none" : "1px solid #E8E4DF" }}>
-                  {f === "all" ? "All" : f === "out_of_stock" ? "Out of Stock" : f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Product grid */}
-          {visible.length === 0 ? (
-            <div className="text-center py-20">
-              <Package size={40} style={{ color: "#E8E4DF" }} className="mx-auto mb-3" />
-              <p style={{ color: "#9B8B7A" }}>No products found. Add your first product.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <AnimatePresence>
-                {visible.map((p) => {
-                  const badge = STATUS_BADGE[p.status] || STATUS_BADGE.live;
-                  return (
-                    <motion.div key={p.id} layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.22 }}
-                      className="flex items-center gap-4 p-4 rounded-2xl border"
-                      style={{ backgroundColor: "white", borderColor: "#E8E4DF" }}>
-                      {/* Image */}
-                      <img src={p.image_url} alt={p.name}
-                        className="w-16 h-20 rounded-xl object-cover flex-shrink-0"
-                        style={{ backgroundColor: "#F0EBE3" }}
-                        onError={e => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=200&q=60"; }} />
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "#C9A84C" }}>
-                            {p.category}
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                            style={{ backgroundColor: badge.bg, color: badge.text }}>
-                            {p.status === "live" && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 mr-1 animate-pulse" />}
-                            {badge.label}
-                          </span>
-                        </div>
-                        <p className="font-serif text-base mt-0.5 truncate" style={{ color: "#1a1a1a" }}>{p.name}</p>
-                        <p className="text-sm font-semibold mt-0.5" style={{ color: "#A2466B" }}>₹{p.price?.toLocaleString("en-IN")}</p>
-                      </div>
-                      {/* Actions */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <Link to={`/product/${p.id}`}
-                          className="p-2 rounded-xl hover:bg-stone-50 transition" title="View product">
-                          <Eye size={16} style={{ color: "#6B5E52" }} />
-                        </Link>
-                        {/* Set live (from hidden/out_of_stock/draft) */}
-                        {p.status !== "live" && (
-                          <button onClick={() => toggleStatus(p.id, "live")}
-                            className="p-2 rounded-xl hover:bg-green-50 transition" title="Set live">
-                            <CheckCircle2 size={16} style={{ color: "#2D7A3A" }} />
-                          </button>
-                        )}
-                        {/* Out of stock toggle */}
-                        {p.status !== "out_of_stock" ? (
-                          <button onClick={() => toggleStatus(p.id, "out_of_stock")}
-                            className="p-2 rounded-xl hover:bg-amber-50 transition" title="Mark out of stock">
-                            <Package size={16} style={{ color: "#9B7520" }} />
-                          </button>
-                        ) : (
-                          <button onClick={() => toggleStatus(p.id, "live")}
-                            className="p-2 rounded-xl hover:bg-green-50 transition" title="Back in stock">
-                            <Radio size={16} style={{ color: "#2D7A3A" }} />
-                          </button>
-                        )}
-                        {/* Hide / show toggle */}
-                        {p.status !== "hidden" ? (
-                          <button onClick={() => toggleStatus(p.id, "hidden")}
-                            className="p-2 rounded-xl hover:bg-stone-50 transition" title="Hide from storefront">
-                            <EyeOff size={16} style={{ color: "#9B8B7A" }} />
-                          </button>
-                        ) : (
-                          <button onClick={() => toggleStatus(p.id, "live")}
-                            className="p-2 rounded-xl hover:bg-green-50 transition" title="Show on storefront">
-                            <Eye size={16} style={{ color: "#2D7A3A" }} />
-                          </button>
-                        )}
-                        <button onClick={() => deleteProduct(p.id, p.name)}
-                          className="p-2 rounded-xl hover:bg-red-50 transition" title="Remove product">
-                          <Trash2 size={16} style={{ color: "#C0392B" }} />
-                        </button>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {showAdd && <AddProductModal onClose={() => setShowAdd(false)} onAdd={addProduct} storeId={storeId} storeName={storeName} />}
-    </SellerLayout>
-  );
-}

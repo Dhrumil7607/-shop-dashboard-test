@@ -221,7 +221,7 @@ export default function ProductDetail() {
                                 </div>
                             )}
 
-                            {/* ── Size Selection — gender-aware ── */}
+                            {/* ── Size Selection — uses product size_options if set, else category defaults ── */}
                             {needsSizeSelection(product.category) && (
                             <div className="mb-5">
 
@@ -249,9 +249,13 @@ export default function ProductDetail() {
                                 </div>
 
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    {(isMensCategory(product.category)
-                                        ? getMensSizes(product.category)
-                                        : getSizesForCategory(product.category)
+                                    {(
+                                        // Use product's own size_options if seller set them
+                                        product.size_options
+                                            ? product.size_options.split(",").map(s => s.trim()).filter(Boolean)
+                                            : isMensCategory(product.category)
+                                                ? getMensSizes(product.category)
+                                                : getSizesForCategory(product.category)
                                     ).map(size => (
                                         <button
                                             key={size}
@@ -268,6 +272,14 @@ export default function ProductDetail() {
                                     ))}
                                 </div>
                             </div>
+                            )}
+
+                            {/* ── Low stock warning ── */}
+                            {product.stock > 0 && product.stock <= 5 && (
+                                <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg text-xs font-semibold"
+                                    style={{ backgroundColor: "rgba(192,57,43,0.08)", color: "#C0392B" }}>
+                                    <span>⚡</span> Only {product.stock} left in stock — order soon!
+                                </div>
                             )}
 
                             {/* Color */}

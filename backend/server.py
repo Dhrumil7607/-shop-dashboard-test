@@ -374,6 +374,8 @@ class ProductIn(BaseModel):
     currency: str = "INR"; image_url: str = ""; hover_image_url: str = ""
     stock: int = 0; badge: str = ""; is_featured: bool = False; is_active: bool = True
     color: str = ""; ready_to_ship: bool = False
+    size_options: str = ""   # comma-separated sizes e.g. "XS,S,M,L,XL" or custom
+    sku: str = ""            # seller SKU reference
 
 class ProductOut(ProductIn):
     id: str; slug: str; shop_name: str = ""; created_at: str; updated_at: str
@@ -872,6 +874,15 @@ def create_order(body: OrderIn, payload: dict = Depends(get_current_user)):
         "created_at": _now(), "updated_at": _now(),
     }
     mem_insert("orders", order)
+    # ── Decrement stock for each item ordered ──────────────────────────────
+    for item in body.items:
+        prod = mem_first("products", id=item.product_id)
+        if prod:
+            new_stock = max(0, prod.get("stock", 0) - item.quantity)
+            prod["stock"] = new_stock
+            if new_stock == 0:
+                prod["status"] = "out_of_stock"
+            prod["updated_at"] = _now()
     # Clear cart after order
     cart = mem_first("carts", user_id=payload["sub"])
     if cart:
