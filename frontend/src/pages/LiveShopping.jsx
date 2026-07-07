@@ -26,7 +26,6 @@ import ReviewAndPay from "@/components/Booking/steps/ReviewAndPay";
 import { useAuth } from "@/contexts/AuthContext";
 import * as bookingService from "@/services/bookingService";
 import { createLiveBooking as createBackendLiveBooking } from "@/lib/api";
-import { openRazorpayBooking } from "@/lib/razorpay";
 
 // ── Timezone offset map (minutes from UTC) — mirrors TimezoneSelector ──────
 const TZ_OFFSETS = {
@@ -205,7 +204,7 @@ export default function LiveShopping() {
     setCurrentStep((s) => Math.max(s - 1, 1));
   }
 
-  // ── Payment via Razorpay (Req 8.7, 8.8) ───────────────────────────────────
+  // ── Payment simulation (Req 8.7, 8.8) ─────────────────────────────────────
   async function handlePay() {
     if (!isLoggedIn) {
       navigate("/login?returnTo=/live-shopping");
@@ -213,22 +212,23 @@ export default function LiveShopping() {
     }
 
     setIsPaying(true);
-    setValidationError("");
-
-    const {
-      storeId,
-      storeName,
-      selectedProducts,
-      appointmentDate,
-      appointmentTime,
-      timezone,
-      slotId,
-    } = bookingState;
-
     try {
-      const rzpResponse = await openRazorpayBooking({ user, storeName });
+      // 1400ms payment simulation delay (matching Checkout.jsx pattern)
+      await new Promise((resolve) => setTimeout(resolve, 1400));
 
-      // Payment succeeded — reserve slot if applicable
+      const userId = user?.id || "guest";
+      const {
+        storeId,
+        storeName,
+        selectedProducts,
+        appointmentDate,
+        appointmentTime,
+        timezone,
+        slotId,
+      } = bookingState;
+
+      // If the customer picked a real seller-published slot, reserve it now.
+      // Backend reserveSlot prevents double-booking (409 if taken).
       if (slotId) {
         try {
           await createBackendLiveBooking({
@@ -243,15 +243,13 @@ export default function LiveShopping() {
             time: appointmentTime,
             timezone,
             session_fee: 699,
-            razorpay_payment_id: rzpResponse.razorpay_payment_id,
-            razorpay_order_id:   rzpResponse.razorpay_order_id,
-            razorpay_signature:  rzpResponse.razorpay_signature,
           });
         } catch (err) {
+          setIsPaying(false);
           setValidationError(
             err?.response?.status === 409
               ? "Sorry, that slot was just booked. Please choose another time."
-              : "Payment received but slot reservation failed. Please contact support."
+              : "Could not reserve that slot. Please try again."
           );
           setDirection(-1);
           setCurrentStep(3);
@@ -259,12 +257,17 @@ export default function LiveShopping() {
         }
       }
 
-      const appointmentIST    = buildAppointmentIST(appointmentDate, appointmentTime);
-      const appointmentUserTz = buildAppointmentUserTz(appointmentDate, appointmentTime, timezone);
+      // Build ISO timestamps
+      const appointmentIST = buildAppointmentIST(appointmentDate, appointmentTime);
+      const appointmentUserTz = buildAppointmentUserTz(
+        appointmentDate,
+        appointmentTime,
+        timezone
+      );
 
       const booking = {
         bookingId: generateBookingId(),
-        userId: user?.id || "guest",
+        userId,
         storeId,
         storeName,
         selectedProducts,
@@ -272,22 +275,18 @@ export default function LiveShopping() {
         appointmentUserTz,
         timezone,
         googleMeetLink: null,
-        status: "confirmed",
-        razorpay_payment_id: rzpResponse.razorpay_payment_id,
+        status: "pending",
         createdAt: new Date().toISOString(),
         sessionFee: 699,
       };
 
-      bookingService.save(user?.id || "guest", booking);
-      navigate("/booking-confirmation", { state: { booking } });
+      // Persist to localStorage (Req 8.8)
+      bookingService.save(userId, booking);
 
-    } catch (err) {
-      if (err?.dismissed) {
-        setValidationError("Payment was cancelled. You can try again.");
-      } else {
-        setValidationError(err?.message || "Payment failed. Please try again.");
-      }
-    } finally {
+      // Navigate to confirmation with booking in state (Req 8.7)
+      navigate("/booking-confirmation", { state: { booking } });
+    } catch {
+      // If save fails, still navigate — graceful degradation
       setIsPaying(false);
     }
   }

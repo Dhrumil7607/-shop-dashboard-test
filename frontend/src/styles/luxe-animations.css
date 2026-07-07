@@ -187,14 +187,6 @@
   transform: translateY(0);
 }
 
-/* ── Razorpay modal z-index fix ───────────────────────────────────────────── */
-/* The sticky header with backdrop-filter creates a stacking context that can
-   trap the Razorpay iframe behind it. Force it above everything. */
-#razorpay-backdrop,
-.razorpay-container,
-iframe[id^="razorpay"],
-div[id^="razorpay-checkout"] {
-  z-index: 999999 !important;
-  position: fixed !important;
-}
-
+/* ── Hide scrollbars ──────────────────────────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

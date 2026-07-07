@@ -372,20 +372,12 @@ class OrderItemIn(BaseModel):
     product_id: str; quantity: int = 1; size: str = ""; color: str = ""
 
 class OrderIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
     items: List[OrderItemIn]
     shipping_address: dict
     payment_method: str = "razorpay"
     coupon_code: str = ""
-    coupon_discount: float = 0   # percentage discount already applied
-    currency: str = "INR"
-    razorpay_payment_id: str = ""
-    razorpay_order_id: str = ""
-    razorpay_signature: str = ""
-    size_profile_id: str = ""
 
 class OrderOut(BaseModel):
-    model_config = ConfigDict(extra="ignore")
     id: str; user_id: str; items: list; total: int
     status: str; payment_status: str; shipping_address: dict
     created_at: str; updated_at: str
@@ -833,9 +825,6 @@ def create_order(body: OrderIn, payload: dict = Depends(get_current_user)):
         "total": total, "status": "confirmed", "payment_status": "paid",
         "shipping_address": body.shipping_address,
         "payment_method": body.payment_method,
-        "currency": body.currency,
-        "razorpay_payment_id": body.razorpay_payment_id,
-        "razorpay_order_id": body.razorpay_order_id,
         "created_at": _now(), "updated_at": _now(),
     }
     mem_insert("orders", order)
