@@ -77,6 +77,25 @@ module.exports = {
                     from: { height: 'var(--radix-accordion-content-height)' },
                     to: { height: '0' },
                 },
+                // ── Luxe animation system (from SHOPLiveRealest) ───────────────
+                'fade-up': {
+                    '0%':   { opacity: '0', transform: 'translateY(24px)' },
+                    '100%': { opacity: '1', transform: 'translateY(0)' },
+                },
+                'ken-burns': {
+                    '0%':   { transform: 'scale(1.05)' },
+                    '100%': { transform: 'scale(1.15)' },
+                },
+                'pulse-dot': {
+                    '0%':   { boxShadow: '0 0 0 0 rgba(247,211,117,0.9)' },
+                    '70%':  { boxShadow: '0 0 0 8px rgba(247,211,117,0)' },
+                    '100%': { boxShadow: '0 0 0 0 rgba(247,211,117,0)' },
+                },
+                'marquee-scroll': {
+                    from: { transform: 'translateX(0)' },
+                    to:   { transform: 'translateX(-50%)' },
+                },
+                // ──────────────────────────────────────────────────────────────
                 'shimmer': {
                     '0%': { backgroundPosition: '-200% 0' },
                     '100%': { backgroundPosition: '200% 0' },
@@ -125,6 +144,12 @@ module.exports = {
             animation: {
                 'accordion-down': 'accordion-down 0.2s ease-out',
                 'accordion-up': 'accordion-up 0.2s ease-out',
+                // ── Luxe animation system (from SHOPLiveRealest) ───────────────
+                'fade-up':       'fade-up 0.9s ease-out both',
+                'ken-burns':     'ken-burns 22s ease-out infinite alternate',
+                'pulse-dot':     'pulse-dot 2s infinite',
+                'marquee-scroll':'marquee-scroll 40s linear infinite',
+                // ──────────────────────────────────────────────────────────────
                 'shimmer': 'shimmer 3s linear infinite',
                 'float-slow': 'float-slow 6s ease-in-out infinite',
                 'grain': 'grain 8s steps(10) infinite',

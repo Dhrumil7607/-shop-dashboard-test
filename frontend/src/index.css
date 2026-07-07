@@ -4,6 +4,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Luxe animation system — ported from SHOPLiveRealest, kept isolated */
+@import './styles/luxe-animations.css';
+
 /* ═══════════════════════════════════════════════════════════════
    DESIGN TOKENS — Spatial UI System
    ═══════════════════════════════════════════════════════════════ */

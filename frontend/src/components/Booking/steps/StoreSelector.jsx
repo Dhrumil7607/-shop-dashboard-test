@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Star, MapPin, CheckCircle2 } from "lucide-react";
+import { BrandedLoader } from "@/components/LuxeAnimations";
 
 export default function StoreSelector({ bookingState, onUpdate }) {
   const [shops, setShops] = useState([]);
@@ -51,8 +52,8 @@ export default function StoreSelector({ bookingState, onUpdate }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <div className="w-8 h-8 border-4 border-maroon border-t-transparent rounded-full animate-spin" aria-label="Loading stores" />
+      <div className="py-8">
+        <BrandedLoader message="Finding available stores…" />
       </div>
     );
   }
@@ -82,11 +83,12 @@ export default function StoreSelector({ bookingState, onUpdate }) {
               whileTap={{ scale: 0.97 }}
               aria-pressed={isSelected}
               aria-label={`Select ${shop.name}`}
-              className={`relative text-left rounded-2xl overflow-hidden border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-maroon focus-visible:ring-offset-2 min-h-[44px] ${
+              className={`animate-fade-up relative text-left rounded-2xl overflow-hidden border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-maroon focus-visible:ring-offset-2 min-h-[44px] ${
                 isSelected
                   ? "border-maroon shadow-lg shadow-maroon/20"
                   : "border-stone/20 hover:border-stone/40 hover:shadow-md"
               }`}
+              style={{ animationDelay: `${shops.indexOf(shop) * 60}ms` }}
             >
               {/* Banner image */}
               <div className="relative h-36 w-full overflow-hidden bg-stone/10">

@@ -51,44 +51,47 @@ const ProductCard = memo(function ProductCard({ product, index = 0, darkBg = fal
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: Math.min(index * 0.05, 0.35) }}
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.6, delay: Math.min((index % 8) * 0.06, 0.35), ease: [0.22, 1, 0.36, 1] }}
+            whileHover={{ y: -6 }}
             onClick={handleClick}
             onHoverStart={() => setHovering(true)}
             onHoverEnd={() => setHovering(false)}
             role="article"
             aria-label={product.name}
-            className="group cursor-pointer flex flex-col"
+            className="group cursor-pointer flex flex-col luxe-card overflow-hidden"
             style={{ willChange: "transform" }}
         >
             {/* ── IMAGE ── */}
-            <motion.div
-                animate={hovering
-                    ? { y: -5, boxShadow: "0 16px 40px rgba(44,36,27,0.13)" }
-                    : { y: 0,  boxShadow: "0 2px 8px rgba(44,36,27,0.06)" }
-                }
-                transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
-                className="relative overflow-hidden rounded-xl mb-3"
+            <div
+                className="img-swap-wrap relative rounded-xl mb-3 overflow-hidden"
                 style={{ aspectRatio: "3/4", backgroundColor: "#F0EBE3" }}
             >
-                <motion.img
+                {/* Primary image */}
+                <img
                     src={imgError ? "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=400&q=60" : product.image_url}
                     alt={product.name}
                     loading="lazy"
                     decoding="async"
-                    animate={hovering ? { scale: 1.07 } : { scale: 1 }}
-                    transition={{ duration: 0.55, ease: [0.22, 0.61, 0.36, 1] }}
-                    className="w-full h-full object-cover"
+                    className="img-primary w-full h-full object-cover"
                     style={{ willChange: "transform" }}
                     onError={() => setImgError(true)}
                 />
+                {/* Hover image (same or second image) */}
+                <img
+                    src={product.hover_image_url || (imgError ? "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=400&q=60" : product.image_url)}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    decoding="async"
+                    className="img-hover"
+                />
 
-                {/* Soft scrim on hover */}
-                <motion.div
-                    animate={{ opacity: hovering ? 1 : 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="absolute inset-0 pointer-events-none"
+                {/* Soft scrim */}
+                <div
+                    className="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                     style={{ background: "linear-gradient(to top, rgba(26,10,10,0.15) 0%, transparent 60%)" }}
                 />
 
@@ -97,15 +100,15 @@ const ProductCard = memo(function ProductCard({ product, index = 0, darkBg = fal
                     <motion.span
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 20, delay: index * 0.05 }}
-                        className="absolute top-2.5 left-2.5 text-white text-[10px] font-bold px-2 py-0.5 rounded-md"
+                        transition={{ type: "spring", stiffness: 400, damping: 20, delay: Math.min(index * 0.05, 0.35) }}
+                        className="absolute top-2.5 left-2.5 text-white text-[10px] font-bold px-2 py-0.5 rounded-md z-10"
                         style={{ backgroundColor: "#1a1a1a" }}
                     >
                         {discount}% OFF
                     </motion.span>
                 )}
 
-                {/* Permanent wishlist heart — always visible, top-right */}
+                {/* Wishlist heart */}
                 <motion.button
                     onClick={handleFav}
                     whileTap={{ scale: 0.85 }}
@@ -117,16 +120,30 @@ const ProductCard = memo(function ProductCard({ product, index = 0, darkBg = fal
                     aria-label={fav ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
                     aria-pressed={fav}
                 >
-                    <Heart
-                        size={14}
-                        className={fav ? "fill-white text-white" : "text-gray-500"}
-                    />
+                    <motion.span animate={fav ? { scale: [1, 1.4, 1] } : {}} transition={{ duration: 0.35 }}>
+                        <Heart size={14} className={fav ? "fill-white text-white" : "text-gray-500"} />
+                    </motion.span>
+                    {/* Floating heart on wishlist */}
+                    <AnimatePresence>
+                        {fav && (
+                            <motion.span
+                                key="float-heart"
+                                initial={{ opacity: 1, y: 0, scale: 1 }}
+                                animate={{ opacity: 0, y: -18, scale: 1.4 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.6 }}
+                                className="absolute -top-2 text-red-500 pointer-events-none"
+                            >
+                                <Heart size={12} className="fill-current" />
+                            </motion.span>
+                        )}
+                    </AnimatePresence>
                 </motion.button>
 
-                {/* Ready to ship */}
+                {/* Ready to ship badge */}
                 {isReadyToShip && !isOutOfStock && (
                     <span
-                        className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 text-white text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide"
+                        className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 text-white text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide z-10"
                         style={{ backgroundColor: "#2D7A3A" }}
                     >
                         <Check size={9} strokeWidth={3} /> Ready to Ship
@@ -135,7 +152,7 @@ const ProductCard = memo(function ProductCard({ product, index = 0, darkBg = fal
 
                 {/* Out of stock overlay */}
                 {isOutOfStock && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
                         style={{ backgroundColor: "rgba(250,249,246,0.55)" }}>
                         <span className="text-[11px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-md"
                             style={{ backgroundColor: "#1a1a1a", color: "white" }}>
@@ -144,59 +161,26 @@ const ProductCard = memo(function ProductCard({ product, index = 0, darkBg = fal
                     </div>
                 )}
 
-                {/* Hover action row — always visible on touch devices */}
-                <AnimatePresence>
-                    {hovering && (
-                        <motion.div
-                            key="actions"
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 4 }}
-                            transition={{ duration: 0.18 }}
-                            className="absolute bottom-2.5 left-2.5 right-2.5 hidden md:flex items-center justify-between"
+                {/* Quick-add bar — slides up on hover */}
+                <div className="quick-add-bar z-10">
+                    <div className="flex gap-2">
+                        <span className="flex-1 inline-flex items-center justify-center rounded-full bg-white text-xs px-4 py-2 shadow-sm"
+                            style={{ color: "#1a1a1a" }}>
+                            View Details
+                        </span>
+                        <motion.button
+                            onClick={handleCart}
+                            disabled={!inStock}
+                            whileTap={{ scale: 0.93 }}
+                            className="inline-flex items-center justify-center rounded-full bg-espresso text-white text-xs px-3 py-2 disabled:opacity-30 transition-colors hover:bg-maroon"
+                            aria-label={`Add ${product.name} to cart`}
+                            style={{ backgroundColor: "#2C241B" }}
                         >
-                            <motion.button
-                                onClick={handleCart}
-                                disabled={!inStock}
-                                whileTap={{ scale: 0.93 }}
-                                className="w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center disabled:opacity-30"
-                                aria-label={`Add ${product.name} to cart`}
-                            >
-                                <ShoppingCart size={13} style={{ color: "#1a1a1a" }} />
-                            </motion.button>
-                            <motion.button
-                                onClick={handleFav}
-                                whileTap={{ scale: 0.9 }}
-                                className="w-8 h-8 bg-white rounded-full shadow-md flex items-center justify-center"
-                                aria-label={fav ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
-                            >
-                                <Heart size={13} className={fav ? "fill-red-500 text-red-500" : "text-gray-400"} />
-                            </motion.button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Mobile always-visible action buttons */}
-                <div className="absolute bottom-2.5 left-2.5 right-2.5 flex md:hidden items-center justify-between">
-                    <motion.button
-                        onClick={handleCart}
-                        disabled={!inStock}
-                        whileTap={{ scale: 0.93 }}
-                        className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center disabled:opacity-30"
-                        aria-label={`Add ${product.name} to cart`}
-                    >
-                        <ShoppingCart size={15} style={{ color: "#1a1a1a" }} />
-                    </motion.button>
-                    <motion.button
-                        onClick={handleFav}
-                        whileTap={{ scale: 0.9 }}
-                        className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center"
-                        aria-label={fav ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}
-                    >
-                        <Heart size={15} className={fav ? "fill-red-500 text-red-500" : "text-gray-400"} />
-                    </motion.button>
+                            <ShoppingCart size={13} />
+                        </motion.button>
+                    </div>
                 </div>
-            </motion.div>
+            </div>
 
             {/* ── INFO ── */}
             <div className="flex flex-col gap-1 flex-1 px-0.5">
