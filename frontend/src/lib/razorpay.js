@@ -83,20 +83,17 @@ export async function openRazorpay({
       const forceVisible = () => {
         const el = document.querySelector(".razorpay-container");
         if (el) {
-          // Move to be a direct child of body so no transformed ancestor traps it
+          // Move to be a direct child of body so no transformed ancestor traps
+          // it and no sibling overlay intercepts its clicks.
           if (el.parentElement !== document.body) {
             document.body.appendChild(el);
           }
+          // Only lift z-index and guarantee it can receive clicks.
+          // Do NOT override position/inset/display — that breaks Razorpay's
+          // own layout and causes a transparent layer to block clicks.
           el.style.setProperty("z-index", "2147483647", "important");
-          el.style.setProperty("position", "fixed", "important");
-          el.style.setProperty("inset", "0", "important");
-          el.style.setProperty("display", "block", "important");
-          el.style.setProperty("visibility", "visible", "important");
-          el.style.setProperty("opacity", "1", "important");
+          el.style.setProperty("pointer-events", "auto", "important");
         }
-        // Release any scroll-lock a previous modal may have left on body
-        document.body.style.removeProperty("overflow");
-        document.documentElement.style.removeProperty("overflow");
       };
       // Run a few times as Razorpay injects the DOM asynchronously
       [100, 400, 900, 1600].forEach((t) => setTimeout(forceVisible, t));
