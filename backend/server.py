@@ -470,7 +470,7 @@ _seed()
 _persist_db()
 
 # Log startup environment clearly so local/live differences are obvious in logs
-logger.info(f"[STARTUP] DB mode: {'memory+db.json' if USE_MEMORY_DB else ('MongoDB' if _mongo_db is not None else 'memory-only (no MongoDB)')}")
+logger.info(f"[STARTUP] DB mode: {'memory+db.json' if USE_MEMORY_DB else ('MongoDB' if _mongo_db else 'memory-only (no MongoDB)')}")
 logger.info(f"[STARTUP] Admin key configured: {bool(ADMIN_API_KEY)}")
 logger.info(f"[STARTUP] JWT secret is default: {JWT_SECRET == 'slb-secret-2026'}")
 logger.info(f"[STARTUP] Hash salt is default: {HASH_SALT == 'slb-pw-salt-fixed-2026'}")

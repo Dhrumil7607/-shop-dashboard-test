@@ -113,7 +113,7 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
 
             {/* ── HEADER ── */}
             <motion.header
-                className="sticky top-0 z-30 border-b transition-all duration-300"
+                className="sticky top-0 z-40 border-b transition-all duration-300"
                 style={{
                     backgroundColor: scrolled ? "rgba(250,249,246,0.88)" : "#FAF9F6",
                     borderColor: "#E8E4DF",
