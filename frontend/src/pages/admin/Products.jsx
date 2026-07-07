@@ -332,19 +332,3 @@ export default function AdminProducts() {
         </AdminLayout>
     );
 }
-
-const emptyProduct = {
-    shop_id: "",
-    name: "",
-    category: "",
-    description: "",
-    price: 0,
-    compare_at_price: null,
-    currency: "INR",
-    image_url: "",
-    hover_image_url: "",
-    stock: 0,
-    badge: "New",
-    is_featured: false,
-    is_active: true,
-};
