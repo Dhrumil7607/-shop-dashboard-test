@@ -10,7 +10,21 @@
  * The key_secret NEVER touches the frontend.
  */
 
+import { toast } from "sonner";
 import { createRazorpayOrder, verifyRazorpayPayment } from "@/lib/api";
+
+// Visible step indicator (one updating toast) so we can SEE exactly where the
+// flow stops without digging through console noise.
+const PAY_TOAST = "pay-status";
+function step(msg, kind = "loading") {
+  console.info("[pay]", msg);
+  try {
+    if (kind === "loading") toast.loading(msg, { id: PAY_TOAST });
+    else if (kind === "success") toast.success(msg, { id: PAY_TOAST });
+    else if (kind === "error") toast.error(msg, { id: PAY_TOAST });
+    else if (kind === "dismiss") toast.dismiss(PAY_TOAST);
+  } catch { /* toast optional */ }
+}
 
 /** Load Razorpay checkout.js once (idempotent) */
 function loadScript() {
@@ -36,21 +50,24 @@ export async function openRazorpay({
   prefill = {},
   notes = {},
 }) {
+  step("1/4 Loading payment library…");
   const loaded = await loadScript();
-  if (!loaded) throw new Error("Razorpay failed to load. Check your connection.");
-  if (!window.Razorpay) throw new Error("Razorpay SDK unavailable.");
+  if (!loaded) { step("Razorpay failed to load. Check your connection.", "error"); throw new Error("Razorpay failed to load. Check your connection."); }
+  if (!window.Razorpay) { step("Razorpay SDK unavailable.", "error"); throw new Error("Razorpay SDK unavailable."); }
 
   // 1. Create the order on the backend
-  console.info("[pay] creating order…", { amount, currency });
+  step("2/4 Creating payment order…");
   let order;
   try {
     order = await createRazorpayOrder(amount, currency);
   } catch (e) {
     console.error("[pay] order creation failed", e);
+    step("Could not start payment. Please try again.", "error");
     throw new Error(e?.response?.data?.detail || "Could not start payment. Please try again.");
   }
   console.info("[pay] order created", order);
   if (!order?.id || !order?.key_id) {
+    step("Payment gateway is not configured.", "error");
     throw new Error("Payment gateway is not configured. Please contact support.");
   }
 
@@ -85,23 +102,24 @@ export async function openRazorpay({
         modal: {
           escape: true,
           ondismiss: () => {
-            console.info("[pay] modal dismissed by user");
+            step("Payment cancelled.", "dismiss");
             reject({ dismissed: true });
           },
         },
         handler: (resp) => {
-          console.info("[pay] payment success handler fired", resp);
+          step("Payment received — saving your order…", "loading");
           resolve(resp);
         },
       };
-      console.info("[pay] opening Razorpay checkout…");
+      step("3/4 Opening Razorpay checkout…");
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (r) => {
         console.error("[pay] payment.failed", r?.error);
+        step(r?.error?.description || "Payment failed. Please try again.", "error");
         reject(new Error(r?.error?.description || "Payment failed. Please try again."));
       });
       rzp.open();
-      console.info("[pay] rzp.open() called — modal should be visible now");
+      step("4/4 Payment window open — complete payment");
 
       // Ensure the Razorpay modal sits above any parent stacking context.
       // IMPORTANT: never move the container in the DOM (e.g. body.appendChild).
@@ -130,8 +148,10 @@ export async function openRazorpay({
       razorpay_payment_id: rzpResponse.razorpay_payment_id,
       razorpay_signature: rzpResponse.razorpay_signature,
     });
+    step("Payment verified", "dismiss");
     return { ...rzpResponse, verified: true };
   } catch {
+    step("Payment verified", "dismiss");
     return { ...rzpResponse, verified: false };
   }
 }
