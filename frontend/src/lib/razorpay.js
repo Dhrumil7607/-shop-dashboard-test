@@ -78,25 +78,21 @@ export async function openRazorpay({
       );
       rzp.open();
 
-      // Force the Razorpay modal to be visible & on top — bypasses any
-      // stacking-context / overflow issues from parent layouts.
-      const forceVisible = () => {
+      // Ensure the Razorpay modal sits above any parent stacking context.
+      // IMPORTANT: never move the container in the DOM (e.g. body.appendChild).
+      // Re-parenting the element forces its internal <iframe> to RELOAD, which
+      // restarts Razorpay's checkout over and over — an endless loop / perpetual
+      // spinner. We only adjust z-index and pointer-events in place, which does
+      // NOT reload the iframe.
+      const liftModal = () => {
         const el = document.querySelector(".razorpay-container");
         if (el) {
-          // Move to be a direct child of body so no transformed ancestor traps
-          // it and no sibling overlay intercepts its clicks.
-          if (el.parentElement !== document.body) {
-            document.body.appendChild(el);
-          }
-          // Only lift z-index and guarantee it can receive clicks.
-          // Do NOT override position/inset/display — that breaks Razorpay's
-          // own layout and causes a transparent layer to block clicks.
           el.style.setProperty("z-index", "2147483647", "important");
           el.style.setProperty("pointer-events", "auto", "important");
         }
       };
-      // Run a few times as Razorpay injects the DOM asynchronously
-      [100, 400, 900, 1600].forEach((t) => setTimeout(forceVisible, t));
+      // Run once shortly after Razorpay injects its DOM (no reparenting, no loop).
+      setTimeout(liftModal, 300);
     } catch (err) {
       reject(err instanceof Error ? err : new Error("Could not open payment window."));
     }
