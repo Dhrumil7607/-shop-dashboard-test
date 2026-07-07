@@ -473,22 +473,10 @@
     .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
 }
 
-/* ── Razorpay modal — force above everything, never clipped ─────────────────── */
-.razorpay-container,
-.razorpay-checkout-frame,
-iframe.razorpay-checkout-frame,
-iframe[src*="razorpay"],
-div[class*="razorpay"] {
+/* ── Razorpay modal — only lift the top-level container above headers ────────── */
+.razorpay-container {
   z-index: 2147483647 !important;
-  position: fixed !important;
-  inset: 0 !important;
 }
 .razorpay-backdrop {
   z-index: 2147483646 !important;
-  position: fixed !important;
-}
-/* Prevent any ancestor from clipping the Razorpay overlay */
-body.razorpay-open,
-html.razorpay-open {
-  overflow: visible !important;
 }
