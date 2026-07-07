@@ -472,3 +472,13 @@
     .stagger-children > *:nth-child(7) { animation-delay: 360ms; }
     .stagger-children > *:nth-child(8) { animation-delay: 420ms; }
 }
+
+/* ── Razorpay modal — ensure it renders above sticky headers ────────────────── */
+.razorpay-container,
+iframe.razorpay-checkout-frame,
+iframe[src*="razorpay"] {
+  z-index: 2147483647 !important;
+}
+.razorpay-backdrop {
+  z-index: 2147483646 !important;
+}

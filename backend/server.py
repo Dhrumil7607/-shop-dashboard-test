@@ -396,12 +396,20 @@ class OrderItemIn(BaseModel):
     product_id: str; quantity: int = 1; size: str = ""; color: str = ""
 
 class OrderIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     items: List[OrderItemIn]
     shipping_address: dict
     payment_method: str = "razorpay"
     coupon_code: str = ""
+    coupon_discount: float = 0
+    currency: str = "INR"
+    razorpay_payment_id: str = ""
+    razorpay_order_id: str = ""
+    razorpay_signature: str = ""
+    size_profile_id: str = ""
 
 class OrderOut(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     id: str; user_id: str; items: list; total: int
     status: str; payment_status: str; shipping_address: dict
     created_at: str; updated_at: str
@@ -871,6 +879,9 @@ def create_order(body: OrderIn, payload: dict = Depends(get_current_user)):
         "total": total, "status": "confirmed", "payment_status": "paid",
         "shipping_address": body.shipping_address,
         "payment_method": body.payment_method,
+        "currency": body.currency,
+        "razorpay_payment_id": body.razorpay_payment_id,
+        "razorpay_order_id": body.razorpay_order_id,
         "created_at": _now(), "updated_at": _now(),
     }
     mem_insert("orders", order)
@@ -1542,6 +1553,7 @@ def seller_delete_slot(slot_id: str, payload: dict = Depends(require_seller)):
 
 # ── Bookings (slot-aware, with customer contact) ──────────────────────────────
 class LiveBookingIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     slot_id: Optional[str] = None
     store_id: str
     store_name: str = ""
@@ -1554,6 +1566,9 @@ class LiveBookingIn(BaseModel):
     time: str = ""
     timezone: str = "IST"
     session_fee: int = 699
+    razorpay_payment_id: str = ""
+    razorpay_order_id: str = ""
+    razorpay_signature: str = ""
 
 @api.post("/live-bookings", status_code=201)
 def create_live_booking(body: LiveBookingIn, payload: dict = Depends(get_current_user)):

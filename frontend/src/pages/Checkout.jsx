@@ -154,59 +154,85 @@ export default function Checkout() {
         { id: "applepay",title: "Apple Pay / Google Pay",  sub: "One tap checkout" },
     ];
 
+    // Saves the order to backend. Optionally includes razorpay payment IDs.
+    const saveOrder = useCallback(async (rzp = null) => {
+        const { createOrder } = await import("@/lib/api");
+        const payload = {
+            items: cartItems.map(item => ({
+                product_id: item.product_id || item.id,
+                quantity:   item.quantity,
+                size:       item.size  || "",
+                color:      item.color || "",
+            })),
+            shipping_address: {
+                full_name: form.full_name,
+                email:     form.email,
+                phone:     form.phone,
+                address:   form.address,
+                city:      form.city,
+                state:     form.state,
+                zip:       form.zip,
+                country:   form.country,
+            },
+            payment_method: payMethod,
+            currency,
+            coupon_discount: couponDiscount,
+            ...(rzp ? {
+                razorpay_payment_id: rzp.razorpay_payment_id,
+                razorpay_order_id:   rzp.razorpay_order_id,
+                razorpay_signature:  rzp.razorpay_signature,
+            } : {}),
+            ...(selectedSizeProfileId ? { size_profile_id: selectedSizeProfileId } : {}),
+        };
+        const saved = await createOrder(payload);
+        clearCart();
+        setOrderData({
+            orderId: saved.id || saved.order_id || `SLB-${Date.now().toString(36).toUpperCase()}`,
+            email:   form.email,
+            items:   saved.items || cartItems,
+            subtotal, shipping, tax,
+            total:   saved.total ?? total,
+            payMethod,
+        });
+    }, [form, cartItems, subtotal, shipping, tax, total, payMethod, currency, couponDiscount, clearCart, selectedSizeProfileId]);
+
     const handlePlaceOrder = useCallback(async (e) => {
         e.preventDefault();
         if (!form.full_name || !form.email || !form.address) {
             toast.error("Please fill in all required fields.");
             return;
         }
+
+        // ── Razorpay flow: open modal, save order only after payment ──
+        if (payMethod === "razorpay") {
+            setLoading(true);
+            try {
+                const { openRazorpayCheckout } = await import("@/lib/razorpay");
+                const rzp = await openRazorpayCheckout({
+                    amountINR: total,
+                    user,
+                    description: `ShopLiveBharat — ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
+                });
+                await saveOrder(rzp);
+            } catch (err) {
+                if (err?.dismissed) toast.info("Payment cancelled.");
+                else toast.error(err?.message || "Payment failed. Please try again.");
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
+        // ── Other methods: save order directly ──
         setLoading(true);
         try {
-            const { createOrder } = await import("@/lib/api");
-
-            // Build the payload the backend expects
-            const payload = {
-                items: cartItems.map(item => ({
-                    product_id: item.product_id || item.id,
-                    quantity:   item.quantity,
-                    size:       item.size  || "",
-                    color:      item.color || "",
-                })),
-                shipping_address: {
-                    full_name: form.full_name,
-                    email:     form.email,
-                    phone:     form.phone,
-                    address:   form.address,
-                    city:      form.city,
-                    state:     form.state,
-                    zip:       form.zip,
-                    country:   form.country,
-                },
-                payment_method: payMethod,
-                currency,
-                coupon_discount: couponDiscount,
-                ...(selectedSizeProfileId ? { size_profile_id: selectedSizeProfileId } : {}),
-            };
-
-            const saved = await createOrder(payload);
-
-            clearCart();
-            setOrderData({
-                orderId: saved.id || saved.order_id || `SLB-${Date.now().toString(36).toUpperCase()}`,
-                email:   form.email,
-                items:   saved.items || cartItems,
-                subtotal,
-                shipping,
-                tax,
-                total:   saved.total ?? total,
-                payMethod,
-            });
+            await saveOrder(null);
         } catch (err) {
             toast.error(err?.response?.data?.detail || "Order could not be placed. Please try again.");
         } finally {
             setLoading(false);
         }
-    }, [form, cartItems, subtotal, shipping, tax, total, payMethod, currency, couponDiscount, clearCart, selectedSizeProfileId]);
+    }, [form, payMethod, total, user, cartItems, saveOrder]);
 
     if (cartItems.length === 0 && !orderData) {
         return (

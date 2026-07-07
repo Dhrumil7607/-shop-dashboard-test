@@ -212,23 +212,19 @@ export default function LiveShopping() {
     }
 
     setIsPaying(true);
+    setValidationError("");
+
+    const {
+      storeId, storeName, selectedProducts,
+      appointmentDate, appointmentTime, timezone, slotId,
+    } = bookingState;
+
     try {
-      // 1400ms payment simulation delay (matching Checkout.jsx pattern)
-      await new Promise((resolve) => setTimeout(resolve, 1400));
+      // ── Open Razorpay for the ₹699 session fee ──
+      const { openRazorpayBooking } = await import("@/lib/razorpay");
+      const rzp = await openRazorpayBooking({ user, storeName });
 
-      const userId = user?.id || "guest";
-      const {
-        storeId,
-        storeName,
-        selectedProducts,
-        appointmentDate,
-        appointmentTime,
-        timezone,
-        slotId,
-      } = bookingState;
-
-      // If the customer picked a real seller-published slot, reserve it now.
-      // Backend reserveSlot prevents double-booking (409 if taken).
+      // Payment succeeded — reserve slot if the customer picked a real one
       if (slotId) {
         try {
           await createBackendLiveBooking({
@@ -243,13 +239,14 @@ export default function LiveShopping() {
             time: appointmentTime,
             timezone,
             session_fee: 699,
+            razorpay_payment_id: rzp.razorpay_payment_id,
           });
         } catch (err) {
           setIsPaying(false);
           setValidationError(
             err?.response?.status === 409
               ? "Sorry, that slot was just booked. Please choose another time."
-              : "Could not reserve that slot. Please try again."
+              : "Payment received but slot reservation failed. Please contact support."
           );
           setDirection(-1);
           setCurrentStep(3);
@@ -257,17 +254,12 @@ export default function LiveShopping() {
         }
       }
 
-      // Build ISO timestamps
       const appointmentIST = buildAppointmentIST(appointmentDate, appointmentTime);
-      const appointmentUserTz = buildAppointmentUserTz(
-        appointmentDate,
-        appointmentTime,
-        timezone
-      );
+      const appointmentUserTz = buildAppointmentUserTz(appointmentDate, appointmentTime, timezone);
 
       const booking = {
         bookingId: generateBookingId(),
-        userId,
+        userId: user?.id || "guest",
         storeId,
         storeName,
         selectedProducts,
@@ -275,19 +267,18 @@ export default function LiveShopping() {
         appointmentUserTz,
         timezone,
         googleMeetLink: null,
-        status: "pending",
+        status: "confirmed",
+        razorpay_payment_id: rzp.razorpay_payment_id,
         createdAt: new Date().toISOString(),
         sessionFee: 699,
       };
 
-      // Persist to localStorage (Req 8.8)
-      bookingService.save(userId, booking);
-
-      // Navigate to confirmation with booking in state (Req 8.7)
+      bookingService.save(user?.id || "guest", booking);
       navigate("/booking-confirmation", { state: { booking } });
-    } catch {
-      // If save fails, still navigate — graceful degradation
+    } catch (err) {
       setIsPaying(false);
+      if (err?.dismissed) setValidationError("Payment was cancelled. You can try again.");
+      else setValidationError(err?.message || "Payment failed. Please try again.");
     }
   }
 

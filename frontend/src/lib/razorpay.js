@@ -1,162 +1,93 @@
 /**
- * Razorpay Payment Integration
- * Handles all Razorpay payment operations
+ * razorpay.js — Razorpay Checkout integration (Promise-based)
+ *
+ * openRazorpay() loads the checkout script on demand and opens the modal.
+ * Resolves with the payment response on success.
+ * Rejects with { dismissed: true } if the user closes the modal,
+ * or with an Error on payment failure / SDK load failure.
+ *
+ * Key is read from REACT_APP_RAZORPAY_KEY_ID.
  */
 
-// Initialize Razorpay script
-export const initRazorpay = () => {
-    return new Promise((resolve) => {
-        const script = document.createElement("script");
-        script.src = "https://checkout.razorpay.com/v1/checkout.js";
-        script.onload = () => {
-            resolve(true);
-        };
-        script.onerror = () => {
-            resolve(false);
-        };
-        document.body.appendChild(script);
-    });
-};
+const RZP_KEY = process.env.REACT_APP_RAZORPAY_KEY_ID || "";
 
-// Create Razorpay order
-export const createRazorpayOrder = async (amount, currency = "INR", orderId = null) => {
-    try {
-        const response = await fetch("/api/razorpay/order", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                amount: Math.round(amount * 100), // Convert to paise
-                currency,
-                orderId,
-            }),
-        });
+/** Load Razorpay checkout.js once (idempotent) */
+function loadScript() {
+  return new Promise((resolve) => {
+    if (typeof window !== "undefined" && window.Razorpay) return resolve(true);
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
 
-        if (!response.ok) {
-            throw new Error("Failed to create order");
-        }
+/**
+ * Open the Razorpay payment modal.
+ * @returns Promise<{razorpay_payment_id, razorpay_order_id, razorpay_signature}>
+ */
+export function openRazorpay({
+  amount,               // in paise
+  currency = "INR",
+  name = "ShopLiveBharat",
+  description = "Secure Payment",
+  orderId,              // optional backend order_id
+  prefill = {},
+  notes = {},
+}) {
+  return new Promise(async (resolve, reject) => {
+    const loaded = await loadScript();
+    if (!loaded) return reject(new Error("Razorpay failed to load. Check your connection."));
+    if (!RZP_KEY) return reject(new Error("Razorpay key not configured (REACT_APP_RAZORPAY_KEY_ID)."));
 
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error("Error creating Razorpay order:", error);
-        throw error;
-    }
-};
-
-// Handle Razorpay payment
-export const handleRazorpayPayment = async (options) => {
-    const {
-        orderId,
-        amount,
-        currency = "INR",
-        customerName,
-        customerEmail,
-        customerPhone,
-        onSuccess,
-        onError,
-    } = options;
-
-    try {
-        await initRazorpay();
-
-        const orderData = await createRazorpayOrder(amount, currency, orderId);
-
-        const razorpayOptions = {
-            key: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_1DP5MMOk9HrPPG",
-            amount: orderData.amount,
-            currency: orderData.currency,
-            order_id: orderData.id,
-            name: "ShopLiveBharat",
-            description: `Order ${orderId || ""}`,
-            image: "/shoplivebharat-logo.png",
-            prefill: {
-                name: customerName || "",
-                email: customerEmail || "",
-                contact: customerPhone || "",
-            },
-            theme: {
-                color: "#8B4513", // Maroon color
-            },
-            handler: async (response) => {
-                try {
-                    // Verify payment
-                    const verifyResponse = await fetch("/api/razorpay/verify", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            orderId: response.razorpay_order_id,
-                            paymentId: response.razorpay_payment_id,
-                            signature: response.razorpay_signature,
-                        }),
-                    });
-
-                    const verifyData = await verifyResponse.json();
-
-                    if (verifyData.success) {
-                        onSuccess && onSuccess(response);
-                    } else {
-                        onError && onError(new Error("Payment verification failed"));
-                    }
-                } catch (error) {
-                    onError && onError(error);
-                }
-            },
-            modal: {
-                ondismiss: () => {
-                    onError && onError(new Error("Payment cancelled"));
-                },
-            },
-        };
-
-        const rzp = new window.Razorpay(razorpayOptions);
-        rzp.open();
-    } catch (error) {
-        console.error("Error initializing Razorpay:", error);
-        onError && onError(error);
-    }
-};
-
-// Process payment for cart
-export const processCheckoutPayment = async (cartItems, totalAmount, customerInfo, onSuccess, onError) => {
-    try {
-        const orderId = `ORDER_${Date.now()}`;
-
-        await handleRazorpayPayment({
-            orderId,
-            amount: totalAmount,
-            currency: "INR",
-            customerName: customerInfo.name,
-            customerEmail: customerInfo.email,
-            customerPhone: customerInfo.phone,
-            onSuccess: (response) => {
-                onSuccess({
-                    orderId,
-                    paymentId: response.razorpay_payment_id,
-                    signature: response.razorpay_signature,
-                    amount: totalAmount,
-                    items: cartItems,
-                    customer: customerInfo,
-                });
-            },
-            onError,
-        });
-    } catch (error) {
-        onError(error);
-    }
-};
-
-// Get Razorpay configuration
-export const getRazorpayConfig = () => {
-    return {
-        keyId: process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_1DP5MMOk9HrPPG",
-        merchantName: "ShopLiveBharat",
-        merchantLogo: "/shoplivebharat-logo.png",
-        theme: {
-            color: "#8B4513",
-        },
+    const options = {
+      key: RZP_KEY,
+      amount,
+      currency,
+      name,
+      description,
+      image: "/shop-assets/logo/logo.svg",
+      ...(orderId ? { order_id: orderId } : {}),
+      prefill: {
+        name: prefill.name || "",
+        email: prefill.email || "",
+        contact: prefill.contact || prefill.phone || "",
+      },
+      notes,
+      theme: { color: "#8B3A3A" },
+      modal: { ondismiss: () => reject({ dismissed: true }) },
+      handler: (resp) => resolve(resp),
     };
-};
+
+    const rzp = new window.Razorpay(options);
+    rzp.on("payment.failed", (r) =>
+      reject(new Error(r?.error?.description || "Payment failed. Please try again."))
+    );
+    rzp.open();
+  });
+}
+
+/** Cart checkout — amountINR in rupees */
+export function openRazorpayCheckout({ amountINR, user, description }) {
+  return openRazorpay({
+    amount: Math.round(Number(amountINR) * 100),
+    currency: "INR",
+    description: description || "Order Payment",
+    prefill: { name: user?.name, email: user?.email, contact: user?.phone },
+  });
+}
+
+/** Live shopping session fee — ₹699 */
+export function openRazorpayBooking({ user, storeName }) {
+  return openRazorpay({
+    amount: 69900,
+    currency: "INR",
+    description: `Live Shopping Session — ${storeName || "Store"}`,
+    prefill: { name: user?.name, email: user?.email, contact: user?.phone },
+  });
+}
+
+export function getRazorpayConfig() {
+  return { keyId: RZP_KEY, merchantName: "ShopLiveBharat" };
+}
