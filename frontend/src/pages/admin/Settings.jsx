@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Save, AlertCircle } from "lucide-react";
 import AdminLayout from "@/layouts/AdminLayout";
+import ChangePasswordCard from "@/components/ChangePasswordCard";
+import { adminChangePassword } from "@/lib/api";
 import { toast } from "sonner";
 
 const DEFAULT_SETTINGS = {
@@ -319,6 +321,11 @@ export default function AdminSettings() {
                         </button>
                     </div>
                 </form>
+
+                {/* ── ADMIN ACCOUNT SECURITY ─────────────────────────────── */}
+                <div className="mt-8">
+                    <ChangePasswordCard submitFn={(cur, next) => adminChangePassword(cur, next)} />
+                </div>
             </div>
         </AdminLayout>
     );

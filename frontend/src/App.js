@@ -38,6 +38,7 @@ const ShopsDirectory = lazy(() => import("@/pages/ShopsDirectory"));
 const StorePage = lazy(() => import("@/pages/StorePage"));
 const WishlistPage = lazy(() => import("@/pages/Wishlist"));
 const ForgotPassword = lazy(() => import("@/pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/ResetPassword"));
 const OrderTracking = lazy(() => import("@/pages/OrderTracking"));
 const PartnerStores = lazy(() => import("@/pages/PartnerStores"));
 const LiveShopping = lazy(() => import("@/pages/LiveShopping"));
@@ -60,6 +61,7 @@ const AdminReturns = lazy(() => import("@/pages/admin/Returns"));
 const AdminStaff = lazy(() => import("@/pages/admin/Staff"));
 const AdminStoreOrdering = lazy(() => import("@/pages/admin/StoreOrdering"));
 const AdminCategories = lazy(() => import("@/pages/admin/Categories"));
+const AdminCustomers = lazy(() => import("@/pages/admin/Customers"));
 const AdminOrders = lazy(() => import("@/pages/admin/Orders"));
 const AdminBookings = lazy(() => import("@/pages/admin/Bookings"));
 const AdminSellerApplications = lazy(() => import("@/pages/admin/SellerApplications"));
@@ -134,6 +136,7 @@ function AppRoutes() {
                 <Route path="/stores/:shopId" element={<StorePage />} />
                 <Route path="/wishlist" element={<WishlistPage />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/order-tracking" element={<OrderTracking />} />
                 <Route path="/live-shopping" element={<LiveShopping />} />
                 <Route path="/product/:productId" element={<ProductDetail />} />
@@ -218,6 +221,14 @@ function AppRoutes() {
                     element={
                         <ProtectedAdminRoute>
                             <AdminOrders />
+                        </ProtectedAdminRoute>
+                    }
+                />
+                <Route
+                    path="/admin/customers"
+                    element={
+                        <ProtectedAdminRoute>
+                            <AdminCustomers />
                         </ProtectedAdminRoute>
                     }
                 />

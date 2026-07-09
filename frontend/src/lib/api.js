@@ -142,6 +142,52 @@ export async function updateUserProfile(payload) {
     return data;
 }
 
+// ── Password management (all roles) ────────────────────────────────────────────
+export async function changePassword(currentPassword, newPassword) {
+    const { data } = await api.post("/auth/change-password", {
+        current_password: currentPassword, new_password: newPassword,
+    });
+    return data;
+}
+
+// ── Admin: customers ───────────────────────────────────────────────────────────
+function _adminAuthHeaders() {
+    return { headers: { "X-Admin-Key": localStorage.getItem("slb_admin_key") || "shoplivebharat-admin" } };
+}
+export async function fetchAdminCustomers(params = {}) {
+    const { data } = await api.get("/admin/customers", { params, ..._adminAuthHeaders() });
+    return data; // { customers, total }
+}
+export async function fetchAdminCustomer(userId) {
+    const { data } = await api.get(`/admin/customers/${userId}`, _adminAuthHeaders());
+    return data;
+}
+export async function suspendCustomer(userId) {
+    const { data } = await api.post(`/admin/customers/${userId}/suspend`, {}, _adminAuthHeaders());
+    return data;
+}
+export async function reactivateCustomer(userId) {
+    const { data } = await api.post(`/admin/customers/${userId}/reactivate`, {}, _adminAuthHeaders());
+    return data;
+}
+export async function adminResetCustomerPassword(userId, password) {
+    const { data } = await api.patch(`/admin/customers/${userId}/password`, { password }, _adminAuthHeaders());
+    return data;
+}
+export async function deleteCustomer(userId) {
+    const { data } = await api.delete(`/admin/customers/${userId}`, _adminAuthHeaders());
+    return data;
+}
+export function adminCustomersExportUrl() {
+    return `${API}/admin/customers-export`;
+}
+export async function adminChangePassword(currentPassword, newPassword) {
+    const email = (() => { try { return JSON.parse(localStorage.getItem("slb_user") || "{}").email; } catch { return ""; } })();
+    const { data } = await api.post("/admin/change-password",
+        { email, current_password: currentPassword, new_password: newPassword }, _adminAuthHeaders());
+    return data;
+}
+
 export async function forgotPassword(email) {
     const { data } = await api.post("/auth/forgot-password", { email });
     return data;

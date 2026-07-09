@@ -26,11 +26,17 @@ export default function ForgotPassword() {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    setSent(true);
-    toast.success("Reset link sent! Check your inbox.");
+    try {
+      const { forgotPassword } = await import("@/lib/api");
+      await forgotPassword(email.trim());
+      setSent(true);
+      toast.success("If an account exists, a reset link has been sent.");
+    } catch {
+      // Still show the neutral success state (don't reveal if the email exists)
+      setSent(true);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import SellerLayout from "@/layouts/SellerLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import ImageUpload from "@/components/ImageUpload";
+import ChangePasswordCard from "@/components/ChangePasswordCard";
 
 const SELLER_STORE_ID = "shop-heritage-couture";
 
@@ -396,6 +397,11 @@ export default function SellerSettings() {
               style={{ backgroundColor: "#1a1a1a" }}>
               {saving ? (<><Loader2 size={15} className="animate-spin" /> Saving…</>) : "Save Changes"}
             </button>
+          </div>
+
+          {/* ── ACCOUNT SECURITY ──────────────────────────────────────── */}
+          <div className="mt-6">
+            <ChangePasswordCard />
           </div>
         </div>
       </div>

@@ -282,23 +282,92 @@ def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict
     return entry
 
 def _hash_pw(pw: str) -> str:
-    # Uses HASH_SALT (not JWT_SECRET) so password hashes are stable
-    # even when JWT_SECRET is rotated.
+    """Hash a password with bcrypt (industry standard, salted per-password).
+    Falls back to a salted SHA-256 only if bcrypt is unavailable."""
+    try:
+        import bcrypt as _bcrypt
+        return _bcrypt.hashpw(pw.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
+    except Exception:  # pragma: no cover — should not happen in prod
+        return "sha256$" + hashlib.sha256((pw + HASH_SALT).encode()).hexdigest()
+
+def _legacy_sha256(pw: str) -> str:
     return hashlib.sha256((pw + HASH_SALT).encode()).hexdigest()
 
 def _check_pw(pw: str, hashed: str) -> bool:
-    return hmac.compare_digest(_hash_pw(pw), hashed)
+    """Verify a password against a stored hash. Supports bcrypt (new) and the
+    legacy salted-SHA256 hashes so existing accounts keep working."""
+    if not hashed:
+        return False
+    if hashed.startswith("$2"):  # bcrypt
+        try:
+            import bcrypt as _bcrypt
+            return _bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
+        except Exception:
+            return False
+    # Legacy salted SHA-256 (optionally "sha256$"-prefixed)
+    candidate = hashed.split("$", 1)[1] if hashed.startswith("sha256$") else hashed
+    return hmac.compare_digest(_legacy_sha256(pw), candidate)
+
+def _needs_rehash(hashed: str) -> bool:
+    """True if the stored hash is a legacy (non-bcrypt) hash and should be upgraded."""
+    return not (hashed or "").startswith("$2")
+
+def _maybe_upgrade_hash(user: dict, pw: str) -> None:
+    """Transparently migrate a legacy hash to bcrypt after a successful login."""
+    try:
+        if user and _needs_rehash(user.get("password_hash", "")):
+            user["password_hash"] = _hash_pw(pw)
+            user["updated_at"] = _now()
+            _persist_db()
+    except Exception:
+        pass
+
+def _validate_password_strength(pw: str) -> None:
+    """Enforce a strong password policy. Raises HTTPException(400) on failure."""
+    pw = pw or ""
+    problems = []
+    if len(pw) < 8:
+        problems.append("at least 8 characters")
+    if not re.search(r"[a-z]", pw):
+        problems.append("a lowercase letter")
+    if not re.search(r"[A-Z]", pw):
+        problems.append("an uppercase letter")
+    if not re.search(r"\d", pw):
+        problems.append("a number")
+    if not re.search(r"[^A-Za-z0-9]", pw):
+        problems.append("a special character")
+    if len(pw) > 128:
+        problems.append("no more than 128 characters")
+    if problems:
+        raise HTTPException(400, "Password must contain " + ", ".join(problems) + ".")
+
+# ── Signed, tamper-proof tokens (HMAC-SHA256 over the payload) ─────────────────
+def _b64u(data: bytes) -> str:
+    import base64
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+def _b64u_decode(s: str) -> bytes:
+    import base64
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 def _make_token(user_id: str, role: str) -> str:
-    import base64, json
+    import json
     payload = {"sub": user_id, "role": role,
                "exp": (datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS)).isoformat()}
-    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+    body = _b64u(json.dumps(payload).encode())
+    sig = _b64u(hmac.new(JWT_SECRET.encode(), body.encode(), hashlib.sha256).digest())
+    return f"{body}.{sig}"
 
 def _decode_token(token: str) -> Optional[dict]:
     try:
-        import base64, json
-        payload = json.loads(base64.urlsafe_b64decode(token + "==").decode())
+        import json
+        if not token or "." not in token:
+            return None  # reject legacy/unsigned tokens — they can be forged
+        body, sig = token.split(".", 1)
+        expected = _b64u(hmac.new(JWT_SECRET.encode(), body.encode(), hashlib.sha256).digest())
+        if not hmac.compare_digest(expected, sig):
+            return None  # signature mismatch → forged/tampered
+        payload = json.loads(_b64u_decode(body).decode())
         exp = datetime.fromisoformat(payload["exp"])
         if exp < datetime.now(timezone.utc):
             return None
@@ -388,6 +457,9 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
     user = mem_first("users", id=payload["sub"])
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    # Suspended accounts (customer or seller) lose access immediately, even mid-session
+    if user.get("is_suspended") and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Your account has been suspended. Please contact ShopLiveBharat support.")
     return payload
 
 async def optional_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer)):
@@ -396,9 +468,19 @@ async def optional_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(
     payload = _decode_token(creds.credentials)
     return payload
 
-def require_admin(x_admin_key: Optional[str] = Header(default=None)):
-    if x_admin_key != ADMIN_API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid admin key")
+def require_admin(x_admin_key: Optional[str] = Header(default=None),
+                  creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer)):
+    # Accept the shared admin key (legacy) …
+    if x_admin_key and hmac.compare_digest(x_admin_key, ADMIN_API_KEY):
+        return
+    # … or a valid, signed admin-role JWT (preferred — no shared secret in the frontend)
+    if creds:
+        payload = _decode_token(creds.credentials)
+        if payload and payload.get("role") == "admin":
+            user = mem_first("users", id=payload.get("sub"))
+            if user and user.get("role") == "admin" and not user.get("is_suspended"):
+                return
+    raise HTTPException(status_code=401, detail="Admin authentication required")
 
 async def require_seller(payload: dict = Depends(get_current_user)):
     if payload.get("role") not in ("seller", "admin"):
@@ -616,11 +698,14 @@ def _ensure_seed_account_passwords():
     changed = False
     for u in mem.get("users", []):
         pw = known.get((u.get("email") or "").lower())
-        if pw:
-            correct = _hash_pw(pw)
-            if u.get("password_hash") != correct:
-                u["password_hash"] = correct
-                changed = True
+        # Never override a password the user has deliberately changed.
+        if u.get("password_customized"):
+            continue
+        # Only reset if the documented password does NOT currently verify
+        # (bcrypt hashes differ every time, so compare via _check_pw, not ==).
+        if pw and not _check_pw(pw, u.get("password_hash", "")):
+            u["password_hash"] = _hash_pw(pw)
+            changed = True
     if changed:
         logger.info("[DB] Repaired seed account password hashes (admin/customer)")
     return changed
@@ -908,17 +993,171 @@ def order_summary(order_id: str):
         "razorpay_payment_id": o.get("razorpay_payment_id", ""),
     }
 
+# ── Razorpay hosted checkout for a Live Shopping booking (session fee) ─────────
+class BookingLinkIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    slot_id: Optional[str] = None
+    store_id: str
+    store_name: str = ""
+    selected_products: list = []
+    customer_name: str = ""
+    customer_email: str = ""
+    customer_phone: str = ""
+    date: str = ""
+    time: str = ""
+    timezone: str = "IST"
+    amount_paise: int = 69900
+    return_origin: str = ""
+
+@api.post("/razorpay/booking-link")
+async def razorpay_booking_link(body: BookingLinkIn, payload: Optional[dict] = Depends(optional_user)):
+    """Create a pending booking + a Razorpay hosted payment link for the session fee."""
+    import base64 as _b64, json as _json2, urllib.request, urllib.error
+    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+        raise HTTPException(503, "Razorpay is not configured on the server.")
+    # Validate slot availability (reserved only after payment)
+    slot = None
+    if body.slot_id:
+        slot = mem_first("slots", id=body.slot_id)
+        if not slot:
+            raise HTTPException(404, "Slot not found")
+        if slot.get("status") != "available":
+            raise HTTPException(409, "Slot no longer available")
+    amount_paise = int(body.amount_paise or 69900)
+    if amount_paise <= 0:
+        raise HTTPException(400, "Invalid amount")
+
+    user = mem_first("users", id=payload["sub"]) if payload else None
+    booking_id = f"BK-{uuid.uuid4().hex[:6].upper()}"
+    return_base = _return_base(body.return_origin)
+    cust_email = body.customer_email or (user or {}).get("email", "")
+    booking = {
+        "id": booking_id, "bookingId": booking_id,
+        "user_id": (payload or {}).get("sub") or (f"guest:{cust_email}" if cust_email else "guest"),
+        "slot_id": body.slot_id,
+        "store_id": body.store_id, "store_name": body.store_name,
+        "shop_id": body.store_id, "shop_name": body.store_name,
+        "selected_products": body.selected_products,
+        "customer_name": body.customer_name or (user or {}).get("name", ""),
+        "customer_email": cust_email,
+        "customer_phone": body.customer_phone or (user or {}).get("phone", ""),
+        "date": body.date, "time": body.time, "timezone": body.timezone,
+        "session_fee": round(amount_paise / 100),
+        "status": "pending_payment", "payment_status": "pending",
+        "google_meet_link": None,
+        "appointmentIST": f"{body.date}T{body.time}:00.000+05:30",
+        "return_base": return_base,
+        "created_at": _now(), "updated_at": _now(),
+    }
+    mem_insert("bookings", booking)
+
+    link_payload = _json2.dumps({
+        "amount": amount_paise, "currency": "INR", "accept_partial": False,
+        "description": f"Live Shopping Session — {body.store_name or 'Store'}"[:255],
+        "reference_id": booking_id,
+        "customer": {"name": booking["customer_name"] or "Customer", "email": cust_email, "contact": booking["customer_phone"]},
+        "notify": {"sms": False, "email": False}, "reminder_enable": False,
+        "callback_url": f"{return_base}/api/razorpay/booking-callback",
+        "callback_method": "get",
+    }).encode()
+    auth = _b64.b64encode(f"{RAZORPAY_KEY_ID}:{RAZORPAY_KEY_SECRET}".encode()).decode()
+    req = urllib.request.Request("https://api.razorpay.com/v1/payment_links", data=link_payload, method="POST")
+    req.add_header("Authorization", f"Basic {auth}")
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = _json2.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        logger.warning(f"[Razorpay] booking link failed: {e.read().decode() if hasattr(e,'read') else e}")
+        raise HTTPException(502, "Could not start payment. Please try again.")
+    except Exception as e:
+        logger.warning(f"[Razorpay] booking link error: {e}")
+        raise HTTPException(502, "Payment gateway unavailable. Please try again.")
+
+    booking["razorpay_payment_link_id"] = data.get("id", "")
+    _persist_db()
+    return {"short_url": data.get("short_url"), "booking_id": booking_id}
+
+@api.get("/razorpay/booking-callback")
+def razorpay_booking_callback(
+    razorpay_payment_id: str = Query(default=""),
+    razorpay_payment_link_id: str = Query(default=""),
+    razorpay_payment_link_reference_id: str = Query(default=""),
+    razorpay_payment_link_status: str = Query(default=""),
+    razorpay_signature: str = Query(default=""),
+):
+    """Razorpay redirects here after a booking session fee is paid."""
+    booking_id = razorpay_payment_link_reference_id
+    msg = f"{razorpay_payment_link_id}|{razorpay_payment_link_reference_id}|{razorpay_payment_link_status}|{razorpay_payment_id}"
+    expected = hmac.new(RAZORPAY_KEY_SECRET.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    ok = bool(razorpay_signature) and hmac.compare_digest(expected, razorpay_signature)
+
+    booking = mem_first("bookings", id=booking_id) if booking_id else None
+    if ok and razorpay_payment_link_status == "paid" and booking and booking.get("payment_status") != "paid":
+        booking["status"] = "pending"  # awaiting seller confirmation
+        booking["payment_status"] = "paid"
+        booking["razorpay_payment_id"] = razorpay_payment_id
+        booking["razorpay_order_id"] = razorpay_payment_link_id
+        booking["updated_at"] = _now()
+        # Reserve the slot now that payment is confirmed
+        if booking.get("slot_id"):
+            slot = mem_first("slots", id=booking["slot_id"])
+            if slot and slot.get("status") == "available":
+                slot["bookings_count"] = slot.get("bookings_count", 0) + 1
+                slot["booking_id"] = booking_id
+                if slot["bookings_count"] >= slot.get("max_bookings", 1):
+                    slot["status"] = "booked"
+                slot["updated_at"] = _now()
+        if booking.get("customer_email"):
+            _send_email(
+                to=booking["customer_email"],
+                subject=f"Live shopping session booked — {booking_id}",
+                body=(
+                    f"<p>Your live shopping session with <strong>{booking.get('store_name') or 'the store'}</strong> "
+                    f"is booked for <strong>{booking.get('date')} {booking.get('time')} ({booking.get('timezone')})</strong>.</p>"
+                    f"<p>Payment ID: <code>{razorpay_payment_id}</code></p>"
+                    "<p>You'll receive the meeting link once the seller confirms your session.</p>"
+                ),
+                kind="booking_confirmed",
+            )
+        _persist_db()
+        base = booking.get("return_base") or PUBLIC_BASE_URL
+        return RedirectResponse(url=f"{base}/booking-confirmation?paid={booking_id}", status_code=303)
+
+    base = (booking.get("return_base") if booking else None) or PUBLIC_BASE_URL
+    return RedirectResponse(url=f"{base}/live-shopping?payment_failed=1", status_code=303)
+
+@api.get("/bookings/{booking_id}/summary")
+def booking_summary(booking_id: str):
+    """Public, minimal booking info for the post-payment confirmation screen."""
+    b = mem_first("bookings", id=booking_id)
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    return {
+        "id": b["id"], "bookingId": b.get("bookingId", b["id"]),
+        "store_name": b.get("store_name", ""), "store_id": b.get("store_id", ""),
+        "date": b.get("date", ""), "time": b.get("time", ""), "timezone": b.get("timezone", "IST"),
+        "session_fee": b.get("session_fee", 699),
+        "status": b.get("status"), "payment_status": b.get("payment_status"),
+        "selected_products": b.get("selected_products", []),
+        "customer_email": b.get("customer_email", ""),
+        "appointmentIST": b.get("appointmentIST", ""),
+        "razorpay_payment_id": b.get("razorpay_payment_id", ""),
+    }
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @api.post("/auth/register", status_code=201)
 def register(body: RegisterIn):
     email = body.email.lower()
     if mem_first("users", email=email):
         raise HTTPException(409, "This email is already in use. Please log in or use Forgot Password.")
+    _validate_password_strength(body.password)
     user = {
         "id": str(uuid.uuid4()), "name": body.name,
         "email": email, "password_hash": _hash_pw(body.password),
         "role": body.role if body.role in ("customer","seller") else "customer",
         "phone": "", "city": "", "created_at": _now(),
+        "last_login_at": None,
     }
     mem_insert("users", user)
     # Welcome email on profile creation
@@ -947,6 +1186,13 @@ def login(body: LoginIn):
         raise HTTPException(401, "Invalid email or password")
     if user.get("role") == "seller" and (user.get("is_suspended") or user.get("is_archived")):
         raise HTTPException(403, "Your seller account is no longer active. Please contact ShopLiveBharat support.")
+    if user.get("role") == "customer" and user.get("is_suspended"):
+        raise HTTPException(403, "Your account has been suspended. Please contact ShopLiveBharat support.")
+    # Transparently upgrade legacy password hashes to bcrypt on successful login
+    _maybe_upgrade_hash(user, body.password)
+    # Record last login for admin visibility
+    user["last_login_at"] = _now()
+    _persist_db()
     token = _make_token(user["id"], user["role"])
     return {"token": token, "user": UserOut(**{k:v for k,v in user.items() if k != "password_hash"})}
 
@@ -965,32 +1211,93 @@ def update_profile(changes: dict, payload: dict = Depends(get_current_user)):
         raise HTTPException(404, "User not found")
     return UserOut(**{k:v for k,v in user.items() if k != "password_hash"})
 
+@api.post("/auth/change-password")
+def change_password(body: dict, payload: dict = Depends(get_current_user)):
+    """Authenticated password change — requires the current password.
+    Works for admin, seller and customer accounts."""
+    current = body.get("current_password") or body.get("currentPassword") or ""
+    new_password = body.get("new_password") or body.get("newPassword") or ""
+    user = mem_first("users", id=payload["sub"])
+    if not user:
+        raise HTTPException(404, "User not found")
+    if not _check_pw(current, user.get("password_hash", "")):
+        raise HTTPException(400, "Your current password is incorrect.")
+    if _check_pw(new_password, user.get("password_hash", "")):
+        raise HTTPException(400, "New password must be different from your current password.")
+    _validate_password_strength(new_password)
+    user["password_hash"] = _hash_pw(new_password)
+    user["password_customized"] = True
+    user["updated_at"] = _now()
+    _persist_db()
+    if user.get("email"):
+        _send_email(to=user["email"], subject="Your ShopLiveBharat password was changed",
+                    body=("<p>Your account password was just changed. If this was you, no action is needed.</p>"
+                          "<p>If you did <strong>not</strong> make this change, please contact "
+                          "<a href='mailto:support@shoplivebharat.com'>support@shoplivebharat.com</a> immediately.</p>"),
+                    kind="password_changed")
+    return {"success": True, "message": "Password updated successfully."}
+
 @api.post("/auth/forgot-password")
 def forgot_password(body: dict):
     email = (body.get("email") or "").lower().strip()
     if not email:
         raise HTTPException(400, "Email is required")
     user = mem_first("users", email=email)
+    # Always return the same response so we never reveal whether an email exists.
+    generic = {"success": True, "message": "If an account exists for this email, a reset link has been sent."}
     if not user:
-        # Don't reveal if email exists for security; always return success
-        return {"success": True, "message": "If this email exists, a reset link has been sent."}
-    # Generate a temp reset token (in production this would be emailed)
-    reset_token = "reset-" + uuid.uuid4().hex[:12]
+        return generic
+    # Secure single-use token with a 1-hour expiry
+    reset_token = uuid.uuid4().hex + uuid.uuid4().hex
     user["reset_token"] = reset_token
-    return {"success": True, "message": "If this email exists, a reset link has been sent.",
-            "test_mode_token": reset_token}
+    user["reset_token_exp"] = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    _persist_db()
+    reset_link = f"{PUBLIC_BASE_URL}/reset-password?token={reset_token}"
+    _send_email(
+        to=email, subject="Reset your ShopLiveBharat password",
+        body=(
+            f"<p>Hi {user.get('name','there')},</p>"
+            "<p>We received a request to reset your ShopLiveBharat password. "
+            "Click the button below to choose a new one. This link expires in 1 hour.</p>"
+            f"<p style='margin:24px 0;'><a href='{reset_link}' style='background:#C9A84C;color:#1a1a1a;"
+            "text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;display:inline-block;'>"
+            "Reset Password</a></p>"
+            f"<p style='font-size:12px;color:#9B8B7A;'>Or paste this link into your browser:<br>{reset_link}</p>"
+            "<p>If you didn't request this, you can safely ignore this email.</p>"
+        ),
+        kind="password_reset",
+    )
+    return generic
 
 @api.post("/auth/reset-password")
 def reset_password(body: dict):
     token = body.get("token", "")
-    new_password = body.get("password", "")
-    if not token or not new_password or len(new_password) < 6:
-        raise HTTPException(400, "Token and password (min 6 chars) required")
+    new_password = body.get("password", "") or body.get("new_password", "")
+    if not token:
+        raise HTTPException(400, "Reset token is required")
+    _validate_password_strength(new_password)
     user = next((u for u in mem["users"] if u.get("reset_token") == token), None)
     if not user:
-        raise HTTPException(400, "Invalid or expired reset token")
+        raise HTTPException(400, "Invalid or expired reset link. Please request a new one.")
+    exp = user.get("reset_token_exp")
+    try:
+        if exp and datetime.fromisoformat(exp) < datetime.now(timezone.utc):
+            user.pop("reset_token", None); user.pop("reset_token_exp", None)
+            raise HTTPException(400, "This reset link has expired. Please request a new one.")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     user["password_hash"] = _hash_pw(new_password)
+    user["password_customized"] = True
+    user["updated_at"] = _now()
     user.pop("reset_token", None)
+    user.pop("reset_token_exp", None)
+    _persist_db()
+    if user.get("email"):
+        _send_email(to=user["email"], subject="Your ShopLiveBharat password was reset",
+                    body="<p>Your password was successfully reset. You can now log in with your new password.</p>",
+                    kind="password_reset_done")
     return {"success": True, "message": "Password reset successfully. You can now log in."}
 
 # ── Shops ─────────────────────────────────────────────────────────────────────
@@ -3006,6 +3313,173 @@ def admin_bulk_delete_sellers(body: dict):
         deleted.append(shop_id)
     _persist_db()
     return {"success": True, "deleted": deleted, "skipped": skipped}
+
+@api.post("/admin/change-password", dependencies=[Depends(require_admin)])
+def admin_change_password(body: dict):
+    """Change an admin account password (admin auth is key-based, so this is
+    guarded by the admin key and additionally verifies the current password)."""
+    email = (body.get("email") or "admin@shoplivebharat.com").lower().strip()
+    current = body.get("current_password") or body.get("currentPassword") or ""
+    new_password = body.get("new_password") or body.get("newPassword") or ""
+    user = mem_first("users", email=email)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(404, "Admin account not found")
+    if not _check_pw(current, user.get("password_hash", "")):
+        raise HTTPException(400, "Your current password is incorrect.")
+    _validate_password_strength(new_password)
+    user["password_hash"] = _hash_pw(new_password)
+    user["password_customized"] = True
+    user["updated_at"] = _now()
+    _persist_db()
+    if user.get("email"):
+        _send_email(to=user["email"], subject="Your ShopLiveBharat admin password was changed",
+                    body="<p>Your admin account password was changed. If this wasn't you, contact support immediately.</p>",
+                    kind="password_changed")
+    return {"success": True, "message": "Admin password updated."}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ADMIN: CUSTOMER MANAGEMENT
+# ══════════════════════════════════════════════════════════════════════════════
+def _customer_bookings(u: dict) -> list:
+    uid = u.get("id"); email = (u.get("email") or "").lower()
+    return [b for b in mem.get("bookings", [])
+            if b.get("user_id") == uid or (email and (b.get("customer_email") or "").lower() == email)]
+
+def _customer_row(u: dict) -> dict:
+    uid = u.get("id")
+    orders = [o for o in mem.get("orders", []) if o.get("user_id") == uid]
+    spent = sum(o.get("total", 0) for o in orders if o.get("status") not in ("cancelled", "pending_payment"))
+    return {
+        "id": uid, "name": u.get("name", ""), "email": u.get("email", ""),
+        "phone": u.get("phone", ""), "city": u.get("city", ""),
+        "created_at": u.get("created_at"), "last_login_at": u.get("last_login_at"),
+        "is_suspended": bool(u.get("is_suspended")),
+        "order_count": len(orders), "booking_count": len(_customer_bookings(u)),
+        "total_spent": spent,
+    }
+
+@api.get("/admin/customers", dependencies=[Depends(require_admin)])
+def admin_list_customers(q: Optional[str] = None, status: Optional[str] = None, limit: int = Query(1000, le=5000)):
+    custs = [u for u in mem.get("users", []) if u.get("role") == "customer"]
+    if q:
+        ql = q.lower().strip()
+        custs = [u for u in custs if ql in f"{u.get('name','')} {u.get('email','')} {u.get('phone','')}".lower()]
+    if status == "suspended":
+        custs = [u for u in custs if u.get("is_suspended")]
+    elif status == "active":
+        custs = [u for u in custs if not u.get("is_suspended")]
+    rows = [_customer_row(u) for u in custs]
+    rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+    return {"customers": rows[:limit], "total": len(rows)}
+
+@api.get("/admin/customers/{user_id}", dependencies=[Depends(require_admin)])
+def admin_customer_detail(user_id: str):
+    u = mem_first("users", id=user_id)
+    if not u or u.get("role") != "customer":
+        raise HTTPException(404, "Customer not found")
+    orders = [_enrich_order(o) for o in mem.get("orders", []) if o.get("user_id") == user_id]
+    orders.sort(key=lambda o: o.get("created_at", ""), reverse=True)
+    bookings = _customer_bookings(u)
+    wl = mem_first("wishlists", user_id=user_id)
+    wishlist = []
+    for pid in (wl or {}).get("product_ids", []):
+        p = mem_first("products", id=pid)
+        if p:
+            wishlist.append({"id": p["id"], "name": p.get("name"), "price": p.get("price"), "image_url": p.get("image_url")})
+    # Saved addresses derived from the customer's order shipping addresses (deduped)
+    seen, addresses = set(), []
+    for o in orders:
+        a = o.get("shipping_address") or {}
+        if a:
+            key = _json.dumps(a, sort_keys=True, default=str)
+            if key not in seen:
+                seen.add(key); addresses.append(a)
+    return {
+        "customer": {k: v for k, v in u.items() if k not in ("password_hash", "reset_token", "reset_token_exp")},
+        "orders": orders,
+        "bookings": bookings,
+        "wishlist": wishlist,
+        "addresses": addresses,
+        "size_profiles": u.get("size_profiles", []),
+        "stats": {
+            "order_count": len(orders),
+            "booking_count": len(bookings),
+            "wishlist_count": len(wishlist),
+            "total_spent": sum(o.get("total", 0) for o in orders if o.get("status") not in ("cancelled", "pending_payment")),
+        },
+    }
+
+@api.post("/admin/customers/{user_id}/suspend", dependencies=[Depends(require_admin)])
+def admin_suspend_customer(user_id: str, body: dict = {}):
+    u = mem_first("users", id=user_id)
+    if not u or u.get("role") != "customer":
+        raise HTTPException(404, "Customer not found")
+    u["is_suspended"] = True; u["updated_at"] = _now(); _persist_db()
+    if u.get("email"):
+        _send_email(to=u["email"], subject="Your ShopLiveBharat account has been suspended",
+                    body="<p>Your ShopLiveBharat account has been suspended. If you think this is a mistake, "
+                         "please contact <a href='mailto:support@shoplivebharat.com'>support@shoplivebharat.com</a>.</p>",
+                    kind="customer_suspended")
+    return {"success": True, "is_suspended": True}
+
+@api.post("/admin/customers/{user_id}/reactivate", dependencies=[Depends(require_admin)])
+def admin_reactivate_customer(user_id: str):
+    u = mem_first("users", id=user_id)
+    if not u or u.get("role") != "customer":
+        raise HTTPException(404, "Customer not found")
+    u["is_suspended"] = False; u["updated_at"] = _now(); _persist_db()
+    if u.get("email"):
+        _send_email(to=u["email"], subject="Your ShopLiveBharat account has been reactivated",
+                    body="<p>Good news — your ShopLiveBharat account is active again. Welcome back!</p>",
+                    kind="customer_reactivated")
+    return {"success": True, "is_suspended": False}
+
+@api.patch("/admin/customers/{user_id}/password", dependencies=[Depends(require_admin)])
+def admin_reset_customer_password(user_id: str, body: dict):
+    new_pw = (body.get("password") or "").strip()
+    u = mem_first("users", id=user_id)
+    if not u or u.get("role") != "customer":
+        raise HTTPException(404, "Customer not found")
+    _validate_password_strength(new_pw)
+    u["password_hash"] = _hash_pw(new_pw); u["updated_at"] = _now(); _persist_db()
+    if u.get("email"):
+        _send_email(to=u["email"], subject="Your ShopLiveBharat password was reset by support",
+                    body="<p>An administrator reset your password. If you didn't request this, contact support immediately.</p>",
+                    kind="admin_password_reset")
+    return {"success": True, "message": f"Password reset for {u.get('email')}"}
+
+@api.delete("/admin/customers/{user_id}", dependencies=[Depends(require_admin)])
+def admin_delete_customer(user_id: str):
+    u = mem_first("users", id=user_id)
+    if not u or u.get("role") != "customer":
+        raise HTTPException(404, "Customer not found")
+    email = u.get("email")
+    mem["users"] = [x for x in mem.get("users", []) if x.get("id") != user_id]
+    mem["wishlists"] = [w for w in mem.get("wishlists", []) if w.get("user_id") != user_id]
+    mem["carts"] = [c for c in mem.get("carts", []) if c.get("user_id") != user_id]
+    _persist_db()
+    if email:
+        _send_email(to=email, subject="Your ShopLiveBharat account has been removed",
+                    body="<p>Your ShopLiveBharat account has been removed. If this was a mistake, "
+                         "contact <a href='mailto:support@shoplivebharat.com'>support@shoplivebharat.com</a>.</p>",
+                    kind="customer_deleted")
+    return {"success": True, "deleted": user_id}
+
+@api.get("/admin/customers-export", dependencies=[Depends(require_admin)])
+def admin_export_customers():
+    import io, csv
+    from starlette.responses import Response
+    rows = [_customer_row(u) for u in mem.get("users", []) if u.get("role") == "customer"]
+    rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["id", "name", "email", "phone", "city", "created_at", "last_login_at",
+                "is_suspended", "order_count", "booking_count", "total_spent"])
+    for r in rows:
+        w.writerow([r["id"], r["name"], r["email"], r["phone"], r["city"], r.get("created_at", ""),
+                    r.get("last_login_at", ""), r["is_suspended"], r["order_count"], r["booking_count"], r["total_spent"]])
+    return Response(content=buf.getvalue(), media_type="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=shoplivebharat-customers.csv"})
 
 # ── Mount app ─────────────────────────────────────────────────────────────────
 app.include_router(api)

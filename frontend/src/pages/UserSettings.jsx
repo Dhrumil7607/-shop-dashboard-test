@@ -64,13 +64,19 @@ export default function UserSettings() {
 
     const savePassword = async (e) => {
         e.preventDefault();
-        if (pwdForm.next.length < 6) { toast.error("New password must be at least 6 characters"); return; }
+        if (!pwdForm.current) { toast.error("Enter your current password"); return; }
         if (pwdForm.next !== pwdForm.confirm) { toast.error("Passwords do not match"); return; }
         setPwdSaving(true);
-        await new Promise(r => setTimeout(r, 500));
-        setPwdSaving(false);
-        setPwdForm({ current: "", next: "", confirm: "" });
-        toast.success("Password updated successfully");
+        try {
+            const { changePassword } = await import("@/lib/api");
+            await changePassword(pwdForm.current, pwdForm.next);
+            toast.success("Password updated successfully");
+            setPwdForm({ current: "", next: "", confirm: "" });
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "Could not change password. Use a stronger password (8+ chars, mixed case, number, symbol).");
+        } finally {
+            setPwdSaving(false);
+        }
     };
 
     const savePrivacy = async () => {
