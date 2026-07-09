@@ -53,7 +53,16 @@ export default function SellerLoginPage() {
         localStorage.removeItem("slb_user");
       }
     } catch (err) {
-      toast.error(err.message || "Login failed");
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail || "";
+      // Suspended / archived / removed seller → dedicated support page
+      if (status === 403 || /no longer active|suspended/i.test(detail)) {
+        localStorage.removeItem("slb_token");
+        localStorage.removeItem("slb_user");
+        navigate("/seller/suspended", { replace: true });
+        return;
+      }
+      toast.error(detail || err.message || "Login failed");
     } finally {
       setLoading(false);
     }

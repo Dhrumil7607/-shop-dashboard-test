@@ -79,6 +79,7 @@ const SellerBookings  = lazy(() => import("@/pages/seller/SellerBookings"));
 const SellerCoupons   = lazy(() => import("@/pages/seller/SellerCoupons"));
 const SellerSettings  = lazy(() => import("@/pages/seller/SellerSettings"));
 const SellerLoginPage = lazy(() => import("@/pages/seller/SellerLoginPage"));
+const SellerSuspended = lazy(() => import("@/pages/seller/SellerSuspended"));
 const AdminAccess     = lazy(() => import("@/pages/AdminAccess"));
 
 // Protected Route Component
@@ -159,6 +160,7 @@ function AppRoutes() {
 
                 {/* ── SELLER PORTAL — separate isolated login + pages ── */}
                 <Route path="/seller/login"     element={<SellerLoginPage />} />
+                <Route path="/seller/suspended" element={<SellerSuspended />} />
                 <Route path="/seller/dashboard" element={<ProtectedSellerRoute><SellerDashboard /></ProtectedSellerRoute>} />
                 <Route path="/seller/products"  element={<ProtectedSellerRoute><SellerProducts /></ProtectedSellerRoute>} />
                 <Route path="/seller/live"      element={<ProtectedSellerRoute><SellerLive /></ProtectedSellerRoute>} />

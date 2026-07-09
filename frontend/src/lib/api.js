@@ -90,6 +90,20 @@ api.interceptors.response.use(
                 console.warn("[API]", error.config?.url, error.response?.status || error.message);
             }
         }
+        // Suspended/removed seller with an active session → send to support page.
+        // The backend returns 403 "no longer active" on /seller/* and /auth/login.
+        if (error.response?.status === 403) {
+            const detail = error.response?.data?.detail || "";
+            const url = error.config?.url || "";
+            const onSellerArea = typeof window !== "undefined" && window.location.pathname.startsWith("/seller");
+            if ((/no longer active|suspended/i.test(detail) || url.includes("/seller/")) && onSellerArea) {
+                localStorage.removeItem("slb_token");
+                localStorage.removeItem("slb_user");
+                if (typeof window !== "undefined" && !window.location.pathname.includes("/seller/suspended")) {
+                    window.location.href = "/seller/suspended";
+                }
+            }
+        }
         // Auto-clear stale/fake tokens on 401 so user gets redirected to login
         if (error.response?.status === 401) {
             const token = localStorage.getItem("slb_token");

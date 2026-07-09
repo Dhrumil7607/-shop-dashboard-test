@@ -209,6 +209,41 @@ def _email_template(subject: str, body_html: str) -> str:
   </body>
 </html>"""
 
+def _notify_seller_status(shop: dict, action: str, reason: str = "") -> None:
+    """Email a store owner when their store is suspended/archived/deleted/restored."""
+    to = (shop or {}).get("owner_email", "")
+    if not to:
+        return
+    name = shop.get("name", "your store")
+    templates = {
+        "suspended": (
+            "Your ShopLiveBharat store has been suspended",
+            f"<p>Your store <strong>{name}</strong> has been <strong>suspended</strong> and is no longer "
+            f"visible to customers. Your seller portal access is paused.</p>"
+            + (f"<p><strong>Reason:</strong> {reason}</p>" if reason else "")
+            + "<p>Please contact ShopLiveBharat support to resolve this.</p>",
+        ),
+        "archived": (
+            "Your ShopLiveBharat store has been archived",
+            f"<p>Your store <strong>{name}</strong> has been <strong>archived</strong>. It is hidden from "
+            f"customers, your products are unpublished, and seller portal access is disabled.</p>"
+            "<p>Your data is retained. Contact support if you'd like it restored.</p>",
+        ),
+        "deleted": (
+            "Your ShopLiveBharat store has been removed",
+            f"<p>Your store <strong>{name}</strong> has been <strong>permanently removed</strong> from "
+            f"ShopLiveBharat, along with its products and seller access.</p>"
+            "<p>If you believe this was a mistake, please contact ShopLiveBharat support.</p>",
+        ),
+        "restored": (
+            "Your ShopLiveBharat store has been restored",
+            f"<p>Good news — your store <strong>{name}</strong> has been <strong>restored</strong>. "
+            f"Your seller portal access is active again and your store can return to normal visibility.</p>",
+        ),
+    }
+    subject, body = templates.get(action, ("ShopLiveBharat store update", f"<p>Your store {name} was updated.</p>"))
+    _send_email(to=to, subject=subject, body=body, kind=f"seller_{action}")
+
 def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict:
     """Send an email via Resend if configured, else record in the email log (test mode).
     Always logs to the in-memory email_log so the UI can show delivery status.
@@ -368,6 +403,14 @@ def require_admin(x_admin_key: Optional[str] = Header(default=None)):
 async def require_seller(payload: dict = Depends(get_current_user)):
     if payload.get("role") not in ("seller", "admin"):
         raise HTTPException(status_code=403, detail="Seller access required")
+    # Revoke portal access for suspended / archived sellers (admins are exempt)
+    if payload.get("role") == "seller":
+        user = mem_first("users", id=payload["sub"])
+        if user and (user.get("is_suspended") or user.get("is_archived")):
+            raise HTTPException(
+                status_code=403,
+                detail="Your seller account is no longer active. Please contact ShopLiveBharat support.",
+            )
     return payload
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -902,6 +945,8 @@ def login(body: LoginIn):
     user = mem_first("users", email=body.email.lower())
     if not user or not _check_pw(body.password, user["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
+    if user.get("role") == "seller" and (user.get("is_suspended") or user.get("is_archived")):
+        raise HTTPException(403, "Your seller account is no longer active. Please contact ShopLiveBharat support.")
     token = _make_token(user["id"], user["role"])
     return {"token": token, "user": UserOut(**{k:v for k,v in user.items() if k != "password_hash"})}
 
@@ -1273,11 +1318,19 @@ def update_order_status(order_id: str, changes: dict):
     # Email customer on meaningful status change
     if "status" in changes and changes["status"] != prev_status:
         buyer = mem_first("users", id=order.get("user_id"))
-        if buyer and buyer.get("email"):
-            _send_email(to=buyer["email"], subject=f"Order {order_id} is now {order['status']}",
-                        body=f"Your order {order_id} status changed to '{order['status']}'."
-                             + (f" Tracking: {order.get('tracking_number')}" if order.get("tracking_number") else ""),
-                        kind="order_status")
+        to_email = (buyer or {}).get("email") or (order.get("shipping_address") or {}).get("email")
+        if to_email:
+            track = order.get("tracking_number")
+            _send_email(
+                to=to_email, subject=f"Order {order_id} is now {order['status'].title()}",
+                body=(
+                    f"<p>Hi, an update on your order <strong>{order_id}</strong>:</p>"
+                    f"<p>Status: <strong style='text-transform:capitalize;'>{order['status']}</strong></p>"
+                    + (f"<p>Tracking number: <code>{track}</code></p>" if track else "")
+                    + "<p>Thank you for shopping with ShopLiveBharat!</p>"
+                ),
+                kind="order_status",
+            )
     return order
 
 # ── Bookings ──────────────────────────────────────────────────────────────────
@@ -2180,6 +2233,7 @@ def admin_live_eligibility(shop_id: str):
             "admin_live_disabled": shop.get("admin_live_disabled", False),
             "liveShoppingEnabled": shop.get("liveShoppingEnabled", False),
             "online": shop.get("online", False),
+            "show_in_booking_page": shop.get("show_in_booking_page", False),
         }
     }
 
@@ -2189,7 +2243,7 @@ def admin_live_override(shop_id: str, body: dict):
     shop = mem_first("shops", id=shop_id)
     if not shop:
         raise HTTPException(404, "Shop not found")
-    allowed = {"acceptsLiveBookings", "admin_live_disabled", "liveShoppingEnabled", "online"}
+    allowed = {"acceptsLiveBookings", "admin_live_disabled", "liveShoppingEnabled", "online", "show_in_booking_page"}
     safe = {k: v for k, v in body.items() if k in allowed and isinstance(v, bool)}
     if not safe:
         raise HTTPException(400, "No valid boolean fields provided. Allowed: " + ", ".join(allowed))
@@ -2821,9 +2875,7 @@ def admin_suspend_seller(shop_id: str, body: dict = {}):
     if seller:
         seller["is_suspended"] = True
         _persist_db()
-    _send_email(to=shop.get("owner_email",""), subject="Your ShopLiveBharat store has been suspended",
-                body=f"Your store '{shop.get('name','')}' has been suspended. Reason: {reason}. Contact support to resolve.",
-                kind="seller_suspended")
+    _notify_seller_status(shop, "suspended", reason)
     return {"success": True, "shop": doc}
 
 @api.post("/admin/sellers/{shop_id}/unsuspend", dependencies=[Depends(require_admin)])
@@ -2843,6 +2895,7 @@ def admin_unsuspend_seller(shop_id: str):
     if seller:
         seller["is_suspended"] = False
         _persist_db()
+    _notify_seller_status(shop, "restored")
     return {"success": True, "shop": doc}
 
 @api.post("/admin/sellers/{shop_id}/archive", dependencies=[Depends(require_admin)])
@@ -2870,6 +2923,7 @@ def admin_archive_seller(shop_id: str):
         seller["is_archived"] = True
         seller["is_suspended"] = True
     _persist_db()
+    _notify_seller_status(shop, "archived")
     return {"success": True, "shop": doc}
 
 @api.post("/admin/sellers/{shop_id}/restore", dependencies=[Depends(require_admin)])
@@ -2896,6 +2950,7 @@ def admin_restore_seller(shop_id: str):
         seller["is_archived"] = False
         seller["is_suspended"] = False
     _persist_db()
+    _notify_seller_status(shop, "restored")
     return {"success": True, "shop": doc}
 
 @api.delete("/admin/sellers/{shop_id}", dependencies=[Depends(require_admin)])
@@ -2907,6 +2962,8 @@ def admin_delete_seller(shop_id: str):
         raise HTTPException(404, "Shop not found")
     if shop.get("is_admin_store"):
         raise HTTPException(400, "Cannot delete the admin store")
+    # Notify the seller before we remove their data
+    _notify_seller_status(shop, "deleted")
     # Delete all products belonging to this shop
     mem["products"] = [p for p in mem.get("products", []) if p.get("shop_id") != shop_id]
     # Delete all slots
@@ -2939,6 +2996,7 @@ def admin_bulk_delete_sellers(body: dict):
         if shop.get("is_admin_store"):
             skipped.append(shop_id)
             continue
+        _notify_seller_status(shop, "deleted")
         mem["products"] = [p for p in mem.get("products", []) if p.get("shop_id") != shop_id]
         mem["slots"] = [s for s in mem.get("slots", []) if s.get("shop_id") != shop_id]
         mem["users"] = [u for u in mem.get("users", []) if u.get("store_id") != shop_id or u.get("role") != "seller"]

@@ -304,6 +304,13 @@ export default function SellerDetail() {
                         positive: true,
                       },
                       {
+                        key: "show_in_booking_page",
+                        label: "Show on Booking / Home Showcase",
+                        desc: "Feature this store in the homepage 'Book a Live Session' showcase. Turn off to hide it from booking promotion.",
+                        value: eligibility.overrides.show_in_booking_page,
+                        positive: true,
+                      },
+                      {
                         key: "admin_live_disabled",
                         label: "Admin Kill-Switch (disable live)",
                         desc: "Force-disables live shopping regardless of seller settings. Toggle OFF to remove the block.",
