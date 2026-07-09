@@ -449,7 +449,7 @@ export default function HomePage() {
                     <div className="grid md:grid-cols-2 gap-12 items-center">
                         <div>
                             <p className="text-xs uppercase tracking-[0.3em] text-champagne font-semibold mb-4">FOR INDIAN RETAILERS</p>
-                            <h2 className="font-serif text-4xl md:text-5xl mb-5">Grow Your Clothing Business Worldwide</h2>
+                            <h2 className="font-serif text-4xl md:text-5xl mb-5 text-ivory" style={{ color: "#FAF9F6" }}>Grow Your Clothing Business Worldwide</h2>
                             <p className="text-ivory/70 text-base leading-relaxed mb-8">
                                 Register your store on ShopLiveBharat and sell Indian traditional clothes to
                                 customers across the world.
