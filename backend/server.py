@@ -1501,8 +1501,11 @@ def update_seller_application(app_id: str, body: dict, payload: dict = Depends(g
 def admin_list_applications(status: Optional[str] = None):
     apps = mem["seller_applications"]
     if status and status != "all":
-        apps = [a for a in apps if a["status"] == status]
-    return sorted(apps, key=lambda a: a["submitted_at"], reverse=True)
+        apps = [a for a in apps if a.get("status") == status]
+    else:
+        # Hide orphaned applications whose store was deleted
+        apps = [a for a in apps if a.get("status") != "deleted"]
+    return sorted(apps, key=lambda a: a.get("submitted_at", ""), reverse=True)
 
 @api.post("/admin/seller-applications/{app_id}/approve", dependencies=[Depends(require_admin)])
 def approve_application(app_id: str):
@@ -2972,10 +2975,8 @@ def admin_delete_seller(shop_id: str):
     mem["users"] = [u for u in mem.get("users", []) if u.get("store_id") != shop_id or u.get("role") != "seller"]
     # Remove the shop itself
     mem["shops"] = [s for s in mem.get("shops", []) if s.get("id") != shop_id]
-    # Mark related seller applications as deleted
-    for app in mem.get("seller_applications", []):
-        if app.get("store_id") == shop_id:
-            app["status"] = "deleted"
+    # Remove related seller applications so no orphaned records linger in the UI
+    mem["seller_applications"] = [a for a in mem.get("seller_applications", []) if a.get("store_id") != shop_id]
     _persist_db()
     return {"success": True, "deleted_shop_id": shop_id}
 
@@ -3001,9 +3002,7 @@ def admin_bulk_delete_sellers(body: dict):
         mem["slots"] = [s for s in mem.get("slots", []) if s.get("shop_id") != shop_id]
         mem["users"] = [u for u in mem.get("users", []) if u.get("store_id") != shop_id or u.get("role") != "seller"]
         mem["shops"] = [s for s in mem.get("shops", []) if s.get("id") != shop_id]
-        for app in mem.get("seller_applications", []):
-            if app.get("store_id") == shop_id:
-                app["status"] = "deleted"
+        mem["seller_applications"] = [a for a in mem.get("seller_applications", []) if a.get("store_id") != shop_id]
         deleted.append(shop_id)
     _persist_db()
     return {"success": True, "deleted": deleted, "skipped": skipped}
