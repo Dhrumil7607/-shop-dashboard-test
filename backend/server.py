@@ -641,6 +641,16 @@ def razorpay_verify(body: dict):
 # This avoids the in-page checkout iframe entirely: we create a hosted payment
 # link, redirect the whole browser to Razorpay, and Razorpay redirects back to
 # our callback. Robust against any in-page iframe/extension/analytics issues.
+_ALLOWED_RETURN_ORIGINS = {
+    "https://shoplivebharat.com",
+    "https://www.shoplivebharat.com",
+    "https://build-blush-eta.vercel.app",
+}
+
+def _return_base(origin: str) -> str:
+    origin = (origin or "").rstrip("/")
+    return origin if origin in _ALLOWED_RETURN_ORIGINS else PUBLIC_BASE_URL
+
 class CheckoutLinkIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     items: List[OrderItemIn]
@@ -649,6 +659,7 @@ class CheckoutLinkIn(BaseModel):
     currency: str = "INR"
     description: str = "ShopLiveBharat Order"
     size_profile_id: str = ""
+    return_origin: str = ""
 
 @api.post("/razorpay/checkout-link")
 def razorpay_checkout_link(body: CheckoutLinkIn, payload: dict = Depends(get_current_user)):
@@ -688,12 +699,14 @@ def razorpay_checkout_link(body: CheckoutLinkIn, payload: dict = Depends(get_cur
     # Create the order in a pending state (stock is decremented only once paid).
     order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
     buyer = mem_first("users", id=payload["sub"]) or {}
+    return_base = _return_base(body.return_origin)
     order = {
         "id": order_id, "user_id": payload["sub"], "items": items_out,
         "total": round(amount_paise / 100), "status": "pending_payment",
         "payment_status": "pending", "shipping_address": body.shipping_address,
         "payment_method": "razorpay", "currency": body.currency,
         "razorpay_payment_id": "", "razorpay_order_id": "",
+        "return_base": return_base,
         "created_at": _now(), "updated_at": _now(),
     }
     mem_insert("orders", order)
@@ -712,7 +725,7 @@ def razorpay_checkout_link(body: CheckoutLinkIn, payload: dict = Depends(get_cur
         },
         "notify": {"sms": False, "email": False},
         "reminder_enable": False,
-        "callback_url": f"{PUBLIC_BASE_URL}/api/razorpay/pl-callback",
+        "callback_url": f"{return_base}/api/razorpay/pl-callback",
         "callback_method": "get",
     }).encode()
     auth = _b64.b64encode(f"{RAZORPAY_KEY_ID}:{RAZORPAY_KEY_SECRET}".encode()).decode()
@@ -775,10 +788,12 @@ def razorpay_pl_callback(
                         body=f"Thank you for your order {order['id']}. Total: ₹{order.get('total',0):,}.",
                         kind="order_placed")
         _persist_db()
-        return RedirectResponse(url=f"{PUBLIC_BASE_URL}/checkout?paid={order_id}", status_code=303)
+        base = order.get("return_base") or PUBLIC_BASE_URL
+        return RedirectResponse(url=f"{base}/checkout?paid={order_id}", status_code=303)
 
     # Failed / unverified → send back to checkout with an error flag
-    return RedirectResponse(url=f"{PUBLIC_BASE_URL}/checkout?payment_failed=1", status_code=303)
+    base = (order.get("return_base") if order else None) or PUBLIC_BASE_URL
+    return RedirectResponse(url=f"{base}/checkout?payment_failed=1", status_code=303)
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @api.post("/auth/register", status_code=201)

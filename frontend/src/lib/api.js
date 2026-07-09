@@ -17,11 +17,13 @@ function resolveApiBase() {
         const host = window.location.hostname;
         const isLocal = host === "localhost" || host === "127.0.0.1" || host === "";
         if (!isLocal) {
-            // Deployed: call the SAME-ORIGIN "/api", which Vercel proxies to the
-            // shared Railway backend (see vercel.json). This means every device hits
-            // exactly one backend with no cross-origin/CORS variability, so all
-            // devices always see the same data.
-            return "/api";
+            // Deployed: call the shared Railway backend DIRECTLY (absolute URL).
+            // We must NOT use same-origin "/api" here because custom domains can
+            // redirect (e.g. apex → www, HTTP 308). When the browser follows a
+            // cross-origin redirect it STRIPS the Authorization header, which makes
+            // every logged-in request fail with "Not authenticated". Hitting Railway
+            // directly (CORS is open) avoids any redirect and keeps auth intact.
+            return `${RAILWAY_BACKEND}/api`;
         }
     }
     // Local dev (or SSR): use the explicit env var or the local server.
@@ -320,8 +322,9 @@ export async function createRazorpayOrder(amountPaise, currency = "INR") {
     return data; // { id, amount, currency, key_id }
 }
 export async function createRazorpayCheckoutLink({ items, shipping_address, amount_paise, currency = "INR", description }) {
+    const return_origin = typeof window !== "undefined" ? window.location.origin : "";
     const { data } = await api.post("/razorpay/checkout-link", {
-        items, shipping_address, amount_paise, currency, description,
+        items, shipping_address, amount_paise, currency, description, return_origin,
     });
     return data; // { short_url, order_id, payment_link_id }
 }
