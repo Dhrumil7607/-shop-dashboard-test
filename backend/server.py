@@ -180,14 +180,46 @@ def _now() -> str:
 def _slugify(v: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", v.lower()).strip("-") or str(uuid.uuid4())[:8]
 
+def _email_template(subject: str, body_html: str) -> str:
+    """Wrap message content in a branded, email-client-safe HTML shell."""
+    site = PUBLIC_BASE_URL
+    return f"""\
+<!DOCTYPE html>
+<html>
+  <body style="margin:0;padding:0;background-color:#FAF9F6;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#FAF9F6;padding:24px 0;">
+      <tr><td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #E8E4DF;border-radius:16px;overflow:hidden;">
+          <tr><td style="background:#1a1a1a;padding:22px 32px;">
+            <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:0.5px;">ShopLive<span style="color:#C9A84C;">Bharat</span></span>
+            <div style="font-size:11px;color:#C9A84C;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">From India's Streets To Your Home</div>
+          </td></tr>
+          <tr><td style="padding:32px;color:#4A3F35;font-size:15px;line-height:1.6;">
+            <h1 style="font-size:20px;color:#1a1a1a;margin:0 0 16px;font-weight:600;">{subject}</h1>
+            {body_html}
+          </td></tr>
+          <tr><td style="padding:20px 32px;background:#FAF9F6;border-top:1px solid #E8E4DF;color:#9B8B7A;font-size:12px;line-height:1.6;">
+            <a href="{site}" style="color:#8B3A3A;text-decoration:none;font-weight:600;">Visit ShopLiveBharat</a><br>
+            You're receiving this email because you have an account or placed an order with ShopLiveBharat.<br>
+            &copy; ShopLiveBharat — Authentic Indian fashion, delivered worldwide.
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+
 def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict:
     """Send an email via Resend if configured, else record in the email log (test mode).
     Always logs to the in-memory email_log so the UI can show delivery status.
     Never raises — email must never block a core flow.
     """
+    if not to:
+        return {"status": "skipped", "reason": "no recipient"}
     resend_key = os.environ.get("RESEND_API_KEY", "").strip()
     status = "sent" if resend_key else "test_mode"
     provider_id = None
+    html = _email_template(subject, body)
     if resend_key:
         try:
             import resend as _resend
@@ -196,7 +228,7 @@ def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict
             name = os.environ.get("SENDER_NAME", "ShopLiveBharat")
             resp = _resend.Emails.send({
                 "from": f"{name} <{sender}>", "to": [to],
-                "subject": subject, "html": f"<div>{body}</div>",
+                "subject": subject, "html": html,
             })
             provider_id = resp.get("id") if isinstance(resp, dict) else getattr(resp, "id", None)
         except Exception as e:
@@ -789,9 +821,27 @@ def razorpay_pl_callback(
         buyer = mem_first("users", id=order.get("user_id"))
         to_email = (buyer or {}).get("email") or (order.get("shipping_address") or {}).get("email")
         if to_email:
-            _send_email(to=to_email, subject=f"Order confirmed — {order['id']}",
-                        body=f"Thank you for your order {order['id']}. Total: ₹{order.get('total',0):,}.",
-                        kind="order_placed")
+            rows = "".join(
+                f"<tr><td style='padding:6px 0;'>{it.get('product_name','Item')} × {it.get('quantity',1)}</td>"
+                f"<td style='padding:6px 0;text-align:right;'>₹{it.get('line_total', it.get('price',0)):,}</td></tr>"
+                for it in order.get("items", [])
+            )
+            _send_email(
+                to=to_email, subject=f"Order confirmed — {order['id']}",
+                body=(
+                    f"<p>Thank you for your order! Your payment was received and your order "
+                    f"<strong>{order['id']}</strong> is confirmed.</p>"
+                    "<table role='presentation' width='100%' style='border-top:1px solid #E8E4DF;"
+                    "border-bottom:1px solid #E8E4DF;margin:16px 0;font-size:14px;'>"
+                    f"{rows}"
+                    f"<tr><td style='padding:10px 0;font-weight:700;'>Total</td>"
+                    f"<td style='padding:10px 0;text-align:right;font-weight:700;'>₹{order.get('total',0):,}</td></tr>"
+                    "</table>"
+                    f"<p>Payment ID: <code>{razorpay_payment_id}</code></p>"
+                    "<p>We'll email you again when your items ship. Thank you for shopping with ShopLiveBharat!</p>"
+                ),
+                kind="order_placed",
+            )
         _persist_db()
         base = order.get("return_base") or PUBLIC_BASE_URL
         return RedirectResponse(url=f"{base}/checkout?paid={order_id}", status_code=303)
@@ -828,6 +878,22 @@ def register(body: RegisterIn):
         "phone": "", "city": "", "created_at": _now(),
     }
     mem_insert("users", user)
+    # Welcome email on profile creation
+    _send_email(
+        to=user["email"],
+        subject=f"Welcome to ShopLiveBharat, {user['name']}! 🎉",
+        body=(
+            f"<p>Hi {user['name']},</p>"
+            "<p>Your ShopLiveBharat account is ready. You can now shop authentic Indian "
+            "fashion from trusted local stores and have it delivered worldwide.</p>"
+            "<p style='margin:24px 0;'>"
+            f"<a href='{PUBLIC_BASE_URL}/marketplace' style='background:#C9A84C;color:#1a1a1a;"
+            "text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;display:inline-block;'>"
+            "Start Shopping</a></p>"
+            "<p>Happy shopping!<br>— The ShopLiveBharat Team</p>"
+        ),
+        kind="welcome",
+    )
     token = _make_token(user["id"], user["role"])
     return {"token": token, "user": UserOut(**user)}
 
@@ -2541,7 +2607,21 @@ def admin_email_log(limit: int = Query(100, le=1000)):
     resend_configured = bool(os.environ.get("RESEND_API_KEY", "").strip())
     return {"configured": resend_configured,
             "mode": "live" if resend_configured else "test",
+            "sender": os.environ.get("SENDER_EMAIL", "onboarding@resend.dev"),
             "emails": log[:limit]}
+
+@api.post("/admin/email-test", dependencies=[Depends(require_admin)])
+def admin_email_test(body: dict):
+    """Send a test email to verify Resend is connected. Body: { "to": "you@example.com" }"""
+    to = (body.get("to") or "").strip()
+    if not to:
+        raise HTTPException(400, "Provide a 'to' email address")
+    result = _send_email(
+        to=to, subject="ShopLiveBharat — test email ✅",
+        body="<p>This is a test email from ShopLiveBharat. If you can read this, Resend is connected and working. 🎉</p>",
+        kind="test",
+    )
+    return {"result": result, "configured": bool(os.environ.get("RESEND_API_KEY", "").strip())}
 
 # ── Coupons ───────────────────────────────────────────────────────────────────
 def _coupon_public(c: dict) -> dict:
