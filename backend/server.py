@@ -662,8 +662,10 @@ class CheckoutLinkIn(BaseModel):
     return_origin: str = ""
 
 @api.post("/razorpay/checkout-link")
-def razorpay_checkout_link(body: CheckoutLinkIn, payload: dict = Depends(get_current_user)):
-    """Create a pending order + a Razorpay hosted payment link, return its URL."""
+async def razorpay_checkout_link(body: CheckoutLinkIn, payload: Optional[dict] = Depends(optional_user)):
+    """Create a pending order + a Razorpay hosted payment link, return its URL.
+    Login is optional — guests can check out (customer info comes from the
+    shipping address), so checkout is never blocked by an auth issue."""
     import base64 as _b64, json as _json2, urllib.request, urllib.error
     if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
         raise HTTPException(503, "Razorpay is not configured on the server.")
@@ -698,10 +700,12 @@ def razorpay_checkout_link(body: CheckoutLinkIn, payload: dict = Depends(get_cur
 
     # Create the order in a pending state (stock is decremented only once paid).
     order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
-    buyer = mem_first("users", id=payload["sub"]) or {}
+    addr0 = body.shipping_address or {}
+    user_id = payload["sub"] if payload else (f"guest:{addr0.get('email','')}" or "guest")
+    buyer = (mem_first("users", id=user_id) if payload else None) or {}
     return_base = _return_base(body.return_origin)
     order = {
-        "id": order_id, "user_id": payload["sub"], "items": items_out,
+        "id": order_id, "user_id": user_id, "items": items_out,
         "total": round(amount_paise / 100), "status": "pending_payment",
         "payment_status": "pending", "shipping_address": body.shipping_address,
         "payment_method": "razorpay", "currency": body.currency,
@@ -783,8 +787,9 @@ def razorpay_pl_callback(
         if cart:
             cart["items"] = []
         buyer = mem_first("users", id=order.get("user_id"))
-        if buyer and buyer.get("email"):
-            _send_email(to=buyer["email"], subject=f"Order confirmed — {order['id']}",
+        to_email = (buyer or {}).get("email") or (order.get("shipping_address") or {}).get("email")
+        if to_email:
+            _send_email(to=to_email, subject=f"Order confirmed — {order['id']}",
                         body=f"Thank you for your order {order['id']}. Total: ₹{order.get('total',0):,}.",
                         kind="order_placed")
         _persist_db()
@@ -794,6 +799,21 @@ def razorpay_pl_callback(
     # Failed / unverified → send back to checkout with an error flag
     base = (order.get("return_base") if order else None) or PUBLIC_BASE_URL
     return RedirectResponse(url=f"{base}/checkout?payment_failed=1", status_code=303)
+
+@api.get("/orders/{order_id}/summary")
+def order_summary(order_id: str):
+    """Public, minimal order info for the post-payment confirmation screen
+    (works for guest checkouts that have no auth token)."""
+    o = mem_first("orders", id=order_id)
+    if not o:
+        raise HTTPException(404, "Order not found")
+    return {
+        "id": o["id"], "total": o.get("total", 0),
+        "status": o.get("status"), "payment_status": o.get("payment_status"),
+        "items": o.get("items", []),
+        "email": (o.get("shipping_address") or {}).get("email", ""),
+        "razorpay_payment_id": o.get("razorpay_payment_id", ""),
+    }
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @api.post("/auth/register", status_code=201)

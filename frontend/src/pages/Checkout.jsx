@@ -261,12 +261,12 @@ export default function Checkout() {
         (async () => {
             try {
                 const { api } = await import("@/lib/api");
-                const res = await api.get("/orders");
-                const ord = (res.data?.orders || []).find(o => o.id === paidId);
+                // Public summary endpoint — works for guest checkouts too.
+                const { data: ord } = await api.get(`/orders/${paidId}/summary`);
                 if (ord) {
                     setOrderData({
                         orderId: paidId,
-                        email:   ord.shipping_address?.email || "",
+                        email:   ord.email || "",
                         items:   ord.items || [],
                         subtotal: ord.total || 0, shipping: 0, tax: 0,
                         total:   ord.total || 0,
