@@ -1,0 +1,22 @@
+{
+  "name": "ShopLive Bharat",
+  "short_name": "ShopLive",
+  "description": "India's premium live shopping marketplace — authentic Indian fashion from trusted local stores, delivered worldwide.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#8B3A3A",
+  "background_color": "#FAF9F6",
+  "icons": [
+    {
+      "src": "/shop-assets/logo/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/shop-assets/logo/favicon.ico",
+      "sizes": "64x64 32x32 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

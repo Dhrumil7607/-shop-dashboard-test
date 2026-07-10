@@ -58,8 +58,9 @@
     "zod": "^3.24.4"
   },
   "scripts": {
+    "generate-sitemap": "node scripts/generate-sitemap.js",
     "start": "craco start",
-    "build": "DISABLE_ESLINT_PLUGIN=true CI=false craco build",
+    "build": "node scripts/generate-sitemap.js && DISABLE_ESLINT_PLUGIN=true CI=false craco build",
     "test": "craco test"
   },
   "browserslist": {
