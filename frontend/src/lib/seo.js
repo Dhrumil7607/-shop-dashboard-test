@@ -5,7 +5,7 @@
 
 const SITE_CONFIG = {
     name: "ShopLive Bharat",
-    baseUrl: "https://shoplivebharat.com",
+    baseUrl: "https://www.shoplivebharat.com",
     description: "Premium live shopping platform featuring luxury Indian fashion, jewelry, and home decor",
     keywords: "live shopping, luxury fashion, Indian designers, jewelry, wedding wear",
     twitterHandle: "@shoplivebharat",
