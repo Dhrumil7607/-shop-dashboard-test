@@ -532,7 +532,14 @@ async def lifespan(app):
 app = FastAPI(title="ShopLiveBharat API", version="2.1.0", lifespan=lifespan)
 
 # ── Rate Limiting ─────────────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+def _get_real_ip(request: Request) -> str:
+    """Extract the real client IP from X-Forwarded-For (Vercel proxy adds it)."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=_get_real_ip, default_limits=["120/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
