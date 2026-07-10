@@ -1,16 +1,30 @@
-import { useEffect, useRef } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { CheckCircle, Calendar, Clock, MapPin, User, Phone, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { setMetaTags } from "@/lib/seo";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
+import { api } from "@/lib/api";
 
 export default function BookingConfirmation() {
     const navigate = useNavigate();
     const location = useLocation();
+    const [params] = useSearchParams();
+    const [fetchedBooking, setFetchedBooking] = useState(null);
 
     // Stable confirmation number — generated once per mount, not on every render
     const confirmationRef = useRef(`BOOK-${Date.now().toString().slice(-8)}`);
+
+    // Handle return from Razorpay hosted payment (redirected back with ?paid=BK-XXXX)
+    const paidId = params.get("paid");
+    useEffect(() => {
+        if (paidId) {
+            api.get(`/bookings/${paidId}/summary`).then(res => {
+                setFetchedBooking(res.data);
+            }).catch(() => {});
+            window.history.replaceState({}, "", "/booking-confirmation");
+        }
+    }, [paidId]);
 
     useEffect(() => {
         // Set SEO meta tags
@@ -22,15 +36,15 @@ export default function BookingConfirmation() {
             type: "website",
         });
 
-        // If no booking data, redirect to live-shopping
-        if (!location.state?.booking && !location.state?.bookingData) {
-            setTimeout(() => navigate("/live-shopping"), 3000);
+        // If no booking data and no paid param, redirect to live-shopping
+        if (!location.state?.booking && !location.state?.bookingData && !paidId && !fetchedBooking) {
+            setTimeout(() => navigate("/live-shopping"), 5000);
         }
-    }, [navigate, location]);
+    }, [navigate, location, paidId, fetchedBooking]);
 
     // Support both the new `booking` key (from LiveShopping.jsx) and the legacy
     // `bookingData` key so that any existing deep-links continue to work.
-    const booking = location.state?.booking || location.state?.bookingData || null;
+    const booking = location.state?.booking || location.state?.bookingData || fetchedBooking || null;
 
     // Map the canonical Booking shape (from bookingService) to the display fields
     // the confirmation card expects, falling back gracefully for older shapes.

@@ -13,8 +13,8 @@
  * Requirements: 8.1, 8.7, 8.8, 8.9
  */
 
-import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useCallback, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import BookingProgressBar from "@/components/Booking/BookingProgressBar";
@@ -25,8 +25,8 @@ import TimezoneSelector from "@/components/Booking/steps/TimezoneSelector";
 import ReviewAndPay from "@/components/Booking/steps/ReviewAndPay";
 import { useAuth } from "@/contexts/AuthContext";
 import * as bookingService from "@/services/bookingService";
-import { createLiveBooking as createBackendLiveBooking } from "@/lib/api";
-import { openRazorpayBooking } from "@/lib/razorpay";
+import { createLiveBooking as createBackendLiveBooking, api } from "@/lib/api";
+import { toast } from "sonner";
 
 // ── Timezone offset map (minutes from UTC) — mirrors TimezoneSelector ──────
 const TZ_OFFSETS = {
@@ -147,6 +147,16 @@ export default function LiveShopping() {
   const [direction, setDirection] = useState(1); // +1 = forward, -1 = backward
   const [isPaying, setIsPaying] = useState(false);
   const [validationError, setValidationError] = useState("");
+  const [searchParams] = useSearchParams();
+
+  // Handle return from failed payment redirect
+  useEffect(() => {
+    if (searchParams.get("payment_failed")) {
+      setValidationError("Payment was not completed. Please try again.");
+      toast.error("Payment was not completed. Please try again.");
+      window.history.replaceState({}, "", "/live-shopping");
+    }
+  }, [searchParams]);
 
   const [bookingState, setBookingState] = useState({
     storeId: null,
@@ -221,64 +231,29 @@ export default function LiveShopping() {
     } = bookingState;
 
     try {
-      // ── Open Razorpay for the ₹699 session fee ──
-      const rzp = await openRazorpayBooking({ user, storeName });
-
-      // Payment succeeded — reserve slot if the customer picked a real one
-      if (slotId) {
-        try {
-          await createBackendLiveBooking({
-            slot_id: slotId,
-            store_id: storeId,
-            store_name: storeName,
-            customer_name: user?.name || "Customer",
-            customer_email: user?.email || "",
-            customer_phone: user?.phone || "",
-            selected_products: (selectedProducts || []).map((p) => ({ id: p.id, name: p.name })),
-            date: appointmentDate,
-            time: appointmentTime,
-            timezone,
-            session_fee: 699,
-            razorpay_payment_id: rzp.razorpay_payment_id,
-          });
-        } catch (err) {
-          setIsPaying(false);
-          setValidationError(
-            err?.response?.status === 409
-              ? "Sorry, that slot was just booked. Please choose another time."
-              : "Payment received but slot reservation failed. Please contact support."
-          );
-          setDirection(-1);
-          setCurrentStep(3);
-          return;
-        }
-      }
-
-      const appointmentIST = buildAppointmentIST(appointmentDate, appointmentTime);
-      const appointmentUserTz = buildAppointmentUserTz(appointmentDate, appointmentTime, timezone);
-
-      const booking = {
-        bookingId: generateBookingId(),
-        userId: user?.id || "guest",
-        storeId,
-        storeName,
-        selectedProducts,
-        appointmentIST,
-        appointmentUserTz,
+      // Create a pending booking + Razorpay hosted payment link on the backend,
+      // then redirect the browser to Razorpay's page (no in-page iframe).
+      const { data } = await api.post("/razorpay/booking-link", {
+        slot_id: slotId || null,
+        store_id: storeId,
+        store_name: storeName,
+        selected_products: (selectedProducts || []).map((p) => ({ id: p.id, name: p.name })),
+        customer_name: user?.name || "Customer",
+        customer_email: user?.email || "",
+        customer_phone: user?.phone || "",
+        date: appointmentDate,
+        time: appointmentTime,
         timezone,
-        googleMeetLink: null,
-        status: "confirmed",
-        razorpay_payment_id: rzp.razorpay_payment_id,
-        createdAt: new Date().toISOString(),
-        sessionFee: 699,
-      };
+        amount_paise: 69900,
+        return_origin: window.location.origin,
+      });
 
-      bookingService.save(user?.id || "guest", booking);
-      navigate("/booking-confirmation", { state: { booking } });
+      if (!data?.short_url) throw new Error("Could not start payment.");
+      toast.loading("Redirecting to secure payment…", { id: "pay-status" });
+      window.location.href = data.short_url; // full-page redirect to Razorpay
     } catch (err) {
       setIsPaying(false);
-      if (err?.dismissed) setValidationError("Payment was cancelled. You can try again.");
-      else setValidationError(err?.message || "Payment failed. Please try again.");
+      setValidationError(err?.response?.data?.detail || err?.message || "Could not start payment. Please try again.");
     }
   }
 
