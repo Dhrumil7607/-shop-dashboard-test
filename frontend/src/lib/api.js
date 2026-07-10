@@ -17,13 +17,15 @@ function resolveApiBase() {
         const host = window.location.hostname;
         const isLocal = host === "localhost" || host === "127.0.0.1" || host === "";
         if (!isLocal) {
-            // Deployed: call the shared Railway backend DIRECTLY (absolute URL).
-            // We must NOT use same-origin "/api" here because custom domains can
-            // redirect (e.g. apex → www, HTTP 308). When the browser follows a
-            // cross-origin redirect it STRIPS the Authorization header, which makes
-            // every logged-in request fail with "Not authenticated". Hitting Railway
-            // directly (CORS is open) avoids any redirect and keeps auth intact.
-            return `${RAILWAY_BACKEND}/api`;
+            // Deployed: call the SAME-ORIGIN "/api", which Vercel proxies to the
+            // Railway backend (see vercel.json). This is the most reliable path:
+            //  • no cross-origin CORS/preflight,
+            //  • no direct hit to *.up.railway.app (some networks/ad-blockers block it,
+            //    which showed up as "network error" — e.g. on Google sign-in),
+            //  • the proxy forwards the Authorization header, so auth is preserved.
+            // The app always runs on the canonical www host (apex 308-redirects the
+            // page), so the same-origin request never follows an auth-stripping redirect.
+            return "/api";
         }
     }
     // Local dev (or SSR): use the explicit env var or the local server.
