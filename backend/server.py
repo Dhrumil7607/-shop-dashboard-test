@@ -2544,14 +2544,72 @@ def update_booking(booking_id: str, changes: dict, payload: dict = Depends(get_c
     patch = {k: v for k, v in changes.items() if k in allowed}
     if "googleMeetLink" in patch:
         patch["google_meet_link"] = patch.pop("googleMeetLink")
+
+    prev_meet_link = booking.get("google_meet_link") or ""
+    prev_status = booking.get("status", "")
+
     booking.update(patch)
     booking["updated_at"] = _now()
-    # Send confirmation email when status changes to confirmed
-    if patch.get("status") == "confirmed":
+
+    cust_email = booking.get("customer_email") or ""
+    store_name = booking.get("store_name") or "the store"
+    bk_date = booking.get("date") or ""
+    bk_time = booking.get("time") or ""
+    bk_tz = booking.get("timezone") or "IST"
+
+    # ── Email: Google Meet link added or updated ───────────────────────────────
+    new_meet_link = patch.get("google_meet_link", "")
+    if new_meet_link and new_meet_link != prev_meet_link and cust_email:
+        _send_email(
+            to=cust_email,
+            subject=f"Your live shopping session link is ready — {booking_id}",
+            body=(
+                f"<p>Hi {booking.get('customer_name') or 'there'},</p>"
+                f"<p>Great news! Your live shopping session with <strong>{store_name}</strong> "
+                f"on <strong>{bk_date} at {bk_time} ({bk_tz})</strong> is confirmed.</p>"
+                f"<p style='margin:24px 0;'>"
+                f"<a href='{new_meet_link}' style='background:#C9A84C;color:#1a1a1a;"
+                "text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:700;"
+                "font-size:14px;display:inline-block;'>Join Google Meet →</a></p>"
+                f"<p style='font-size:13px;color:#9B8B7A;'>Or paste this link: {new_meet_link}</p>"
+                "<p>See you there!</p>"
+            ),
+            kind="booking_meet_link",
+        )
+
+    # ── Email: Booking confirmed ───────────────────────────────────────────────
+    if patch.get("status") == "confirmed" and prev_status != "confirmed":
         booking["confirmation_email_status"] = "sent"
         booking["confirmation_email_sent_at"] = _now()
-        # In test mode, log to console. In production, integrate real email service.
-        logger.info(f"[EMAIL] Booking confirmed → customer {booking.get('customer_email')} for {booking.get('store_name')} on {booking.get('date')}")
+        if cust_email and not new_meet_link:
+            _send_email(
+                to=cust_email,
+                subject=f"Live shopping session confirmed — {booking_id}",
+                body=(
+                    f"<p>Your live shopping session with <strong>{store_name}</strong> "
+                    f"on <strong>{bk_date} at {bk_time} ({bk_tz})</strong> has been confirmed.</p>"
+                    "<p>You'll receive the Google Meet link shortly before your session.</p>"
+                ),
+                kind="booking_confirmed",
+            )
+
+    # ── Email: Booking postponed ───────────────────────────────────────────────
+    if patch.get("status") == "postponed" and prev_status != "postponed" and cust_email:
+        new_date = patch.get("date") or booking.get("date") or "TBD"
+        new_time = patch.get("time") or booking.get("time") or ""
+        _send_email(
+            to=cust_email,
+            subject=f"Your live shopping session has been rescheduled — {booking_id}",
+            body=(
+                f"<p>Hi {booking.get('customer_name') or 'there'},</p>"
+                f"<p>Your live shopping session with <strong>{store_name}</strong> has been <strong>postponed</strong>.</p>"
+                f"<p><strong>New date:</strong> {new_date} {new_time} ({bk_tz})</p>"
+                "<p>We'll send you a new Google Meet link closer to the session. "
+                "If you have questions, contact support.</p>"
+            ),
+            kind="booking_postponed",
+        )
+
     # Release slot on cancel
     if patch.get("status") in ("cancelled", "refunded") and booking.get("slot_id"):
         slot = mem_first("slots", id=booking["slot_id"])
