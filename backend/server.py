@@ -247,6 +247,94 @@ def _notify_seller_status(shop: dict, action: str, reason: str = "") -> None:
     subject, body = templates.get(action, ("ShopLiveBharat store update", f"<p>Your store {name} was updated.</p>"))
     _send_email(to=to, subject=subject, body=body, kind=f"seller_{action}")
 
+def _send_welcome_email(to: str, name: str) -> dict:
+    """Send a premium, beautifully designed welcome email to new customers."""
+    first = (name or "there").split()[0]
+    site = PUBLIC_BASE_URL
+    body = f"""\
+<div style="text-align:center;margin-bottom:28px;">
+  <img src="https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=600&q=80&auto=format"
+       alt="Indian Fashion" style="width:100%;max-width:520px;height:200px;object-fit:cover;border-radius:12px;" />
+</div>
+
+<p style="font-size:22px;font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;color:#1a1a1a;margin:0 0 4px;">
+  Welcome, <span style="color:#8B3A3A;font-style:italic;">{first}</span>.
+</p>
+<p style="font-size:13px;color:#C9A84C;letter-spacing:2px;text-transform:uppercase;margin:0 0 24px;font-weight:600;">
+  Your journey into authentic Indian fashion starts now
+</p>
+
+<p style="font-size:15px;line-height:1.7;color:#4A3F35;">
+  Thank you for joining <strong>ShopLiveBharat</strong> — India's premium live-shopping marketplace.
+  We connect you directly with trusted local stores across India, bringing sarees, lehengas, kurtas,
+  sherwanis, and wedding collections to your doorstep, anywhere in the world.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0;">
+  <tr>
+    <td style="padding:16px 20px;background:#FAF9F6;border-radius:12px;border:1px solid #E8E4DF;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding:8px 0;font-size:13px;color:#9B8B7A;border-bottom:1px solid #E8E4DF;" width="30">✦</td>
+          <td style="padding:8px 0;font-size:14px;color:#4A3F35;border-bottom:1px solid #E8E4DF;">
+            <strong>Shop from India's finest local stores</strong> — authentic, handcrafted pieces
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;font-size:13px;color:#9B8B7A;border-bottom:1px solid #E8E4DF;">✦</td>
+          <td style="padding:8px 0;font-size:14px;color:#4A3F35;border-bottom:1px solid #E8E4DF;">
+            <strong>Live video shopping</strong> — see products in real time, ask questions, get styling advice
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;font-size:13px;color:#9B8B7A;border-bottom:1px solid #E8E4DF;">✦</td>
+          <td style="padding:8px 0;font-size:14px;color:#4A3F35;border-bottom:1px solid #E8E4DF;">
+            <strong>Worldwide delivery</strong> — USA, UK, Canada, Australia, UAE & 50+ countries
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;font-size:13px;color:#9B8B7A;">✦</td>
+          <td style="padding:8px 0;font-size:14px;color:#4A3F35;">
+            <strong>Secure payments</strong> — Razorpay, UPI, cards & international wallets
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<div style="text-align:center;margin:32px 0;">
+  <a href="{site}/marketplace"
+     style="background:#C9A84C;color:#1a1a1a;text-decoration:none;padding:14px 36px;border-radius:10px;font-weight:700;font-size:14px;display:inline-block;letter-spacing:0.5px;">
+    Explore Collections →
+  </a>
+</div>
+
+<div style="text-align:center;margin:24px 0 8px;">
+  <a href="{site}/live-shopping" style="color:#8B3A3A;text-decoration:none;font-size:13px;font-weight:600;">
+    Book a Live Shopping Session
+  </a>
+  <span style="color:#E8E4DF;margin:0 12px;">|</span>
+  <a href="{site}/shops" style="color:#8B3A3A;text-decoration:none;font-size:13px;font-weight:600;">
+    Browse Stores
+  </a>
+  <span style="color:#E8E4DF;margin:0 12px;">|</span>
+  <a href="{site}/account" style="color:#8B3A3A;text-decoration:none;font-size:13px;font-weight:600;">
+    My Account
+  </a>
+</div>
+
+<p style="font-size:14px;line-height:1.6;color:#9B8B7A;margin-top:28px;font-style:italic;text-align:center;">
+  "From India's streets to your home."
+</p>
+
+<p style="font-size:14px;color:#4A3F35;margin-top:20px;">
+  Welcome aboard,<br>
+  <strong style="color:#1a1a1a;">The ShopLiveBharat Team</strong>
+</p>
+"""
+    return _send_email(to=to, subject=f"Welcome to ShopLiveBharat, {first} ✨", body=body, kind="welcome")
+
 def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict:
     """Send an email via Resend if configured, else record in the email log (test mode).
     Always logs to the in-memory email_log so the UI can show delivery status.
@@ -1164,21 +1252,7 @@ def register(body: RegisterIn):
     }
     mem_insert("users", user)
     # Welcome email on profile creation
-    _send_email(
-        to=user["email"],
-        subject=f"Welcome to ShopLiveBharat, {user['name']}! 🎉",
-        body=(
-            f"<p>Hi {user['name']},</p>"
-            "<p>Your ShopLiveBharat account is ready. You can now shop authentic Indian "
-            "fashion from trusted local stores and have it delivered worldwide.</p>"
-            "<p style='margin:24px 0;'>"
-            f"<a href='{PUBLIC_BASE_URL}/marketplace' style='background:#C9A84C;color:#1a1a1a;"
-            "text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;display:inline-block;'>"
-            "Start Shopping</a></p>"
-            "<p>Happy shopping!<br>— The ShopLiveBharat Team</p>"
-        ),
-        kind="welcome",
-    )
+    _send_welcome_email(user["email"], user["name"])
     token = _make_token(user["id"], user["role"])
     return {"token": token, "user": UserOut(**user)}
 
@@ -1235,12 +1309,7 @@ def google_login(body: dict):
             "created_at": _now(), "last_login_at": _now(),
         }
         mem_insert("users", user)
-        _send_email(
-            to=email, subject=f"Welcome to ShopLiveBharat, {name}! 🎉",
-            body=(f"<p>Hi {name},</p><p>Your ShopLiveBharat account is ready — you signed in with Google. "
-                  "Start exploring authentic Indian fashion delivered worldwide.</p>"),
-            kind="welcome",
-        )
+        _send_welcome_email(email, name)
     else:
         # Respect suspension/archival just like password login
         if user.get("role") == "seller" and (user.get("is_suspended") or user.get("is_archived")):
