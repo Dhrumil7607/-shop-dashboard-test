@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
-import { Save, AlertCircle } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Save, AlertCircle, Plus, X, GripVertical } from "lucide-react";
 import AdminLayout from "@/layouts/AdminLayout";
 import ChangePasswordCard from "@/components/ChangePasswordCard";
-import { adminChangePassword } from "@/lib/api";
+import { adminChangePassword, api } from "@/lib/api";
 import { toast } from "sonner";
 
 const DEFAULT_SETTINGS = {
@@ -326,7 +326,84 @@ export default function AdminSettings() {
                 <div className="mt-8">
                     <ChangePasswordCard submitFn={(cur, next) => adminChangePassword(cur, next)} />
                 </div>
+
+                {/* ── HOMEPAGE TICKER ──────────────────────────────────────── */}
+                <TickerSettings />
             </div>
         </AdminLayout>
+    );
+}
+
+function TickerSettings() {
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const adminKey = localStorage.getItem("slb_admin_key") || "shoplivebharat-admin";
+
+    const load = useCallback(() => {
+        api.get("/ticker").then(res => {
+            setItems(res.data?.items || []);
+        }).catch(() => {}).finally(() => setLoading(false));
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const save = async () => {
+        const filtered = items.filter(i => i.trim());
+        if (filtered.length === 0) { toast.error("Add at least one ticker item"); return; }
+        setSaving(true);
+        try {
+            await api.put("/admin/ticker", { items: filtered }, { headers: { "X-Admin-Key": adminKey } });
+            toast.success("Ticker updated — visible on the homepage now");
+            setItems(filtered);
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || "Could not save ticker");
+        } finally { setSaving(false); }
+    };
+
+    const add = () => setItems(prev => [...prev, ""]);
+    const remove = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
+    const update = (idx, val) => setItems(prev => prev.map((item, i) => i === idx ? val : item));
+
+    if (loading) return null;
+
+    return (
+        <div className="mt-8 rounded-2xl border p-6" style={{ borderColor: "#E8E4DF", background: "white" }}>
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h3 className="font-semibold text-lg" style={{ color: "#1a1a1a" }}>Homepage Ticker</h3>
+                    <p className="text-xs" style={{ color: "#9B8B7A" }}>The scrolling marquee banner below the hero. Edit the messages customers see.</p>
+                </div>
+                <button onClick={add} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                    style={{ borderColor: "#E8E4DF", color: "#6B5E52" }}>
+                    <Plus size={13} /> Add Item
+                </button>
+            </div>
+            <div className="space-y-2">
+                {items.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                        <GripVertical size={14} style={{ color: "#C4B9AE", flexShrink: 0 }} />
+                        <input
+                            value={item}
+                            onChange={e => update(idx, e.target.value)}
+                            placeholder="e.g. FREE WORLDWIDE SHIPPING OVER ₹15,000"
+                            className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none uppercase"
+                            style={{ borderColor: "#E8E4DF", letterSpacing: "0.05em" }}
+                        />
+                        <button onClick={() => remove(idx)} className="p-1.5 rounded-lg hover:bg-red-50" style={{ color: "#C0392B" }}>
+                            <X size={14} />
+                        </button>
+                    </div>
+                ))}
+                {items.length === 0 && (
+                    <p className="text-sm py-3" style={{ color: "#9B8B7A" }}>No ticker items. Add one to display the marquee banner.</p>
+                )}
+            </div>
+            <button onClick={save} disabled={saving}
+                className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white"
+                style={{ background: "#1a1a1a", opacity: saving ? 0.6 : 1 }}>
+                <Save size={14} /> {saving ? "Saving…" : "Save Ticker"}
+            </button>
+        </div>
     );
 }

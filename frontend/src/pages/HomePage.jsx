@@ -34,13 +34,6 @@ const HOW_IT_WORKS = [
 
 /* New arrivals loaded from backend in component */
 
-const TICKER_ITEMS = [
-    "FREE WORLDWIDE SHIPPING OVER ₹15,000",
-    "100% AUTHENTIC FROM LOCAL INDIAN STORES",
-    "SECURE PAYMENTS — RAZORPAY, PAYPAL, STRIPE",
-    "RETURNS & REFUNDS — EASY & TRANSPARENT",
-];
-
 /* ─── Hero carousel slides (bridal & ethnic fashion) ─────────── */
 const HERO_SLIDES = [
     "https://images.unsplash.com/photo-1600685890506-593fdf55949b?fm=jpg&q=80&w=1920&auto=format&fit=crop",
@@ -244,13 +237,27 @@ const WHY_US = [
     { title:"Easy Returns", desc:"Transparent refunds and customer support that listens." },
 ];
 
+const DEFAULT_TICKER = [
+    "FREE WORLDWIDE SHIPPING OVER ₹15,000",
+    "100% AUTHENTIC FROM LOCAL INDIAN STORES",
+    "SECURE PAYMENTS — RAZORPAY, PAYPAL, STRIPE",
+    "RETURNS & REFUNDS — EASY & TRANSPARENT",
+];
+
 /* ─── Ticker ─────────────────────────────────────────────────── */
 function Ticker() {
-    const items = [...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS, ...TICKER_ITEMS];
+    const [items, setItems] = useState(DEFAULT_TICKER);
+    useEffect(() => {
+        fetch("/api/ticker").then(r => r.json()).then(d => {
+            if (Array.isArray(d?.items) && d.items.length > 0) setItems(d.items);
+        }).catch(() => {});
+    }, []);
+    // Duplicate enough times to fill the scroll seamlessly
+    const repeated = [...items, ...items, ...items, ...items];
     return (
         <div className="overflow-hidden py-3" style={{ backgroundColor: "#1a1a1a" }}>
             <div className="marquee-wrap">
-                {items.map((t, i) => (
+                {repeated.map((t, i) => (
                     <span key={i} className="inline-flex items-center gap-6 px-8 text-xs font-semibold tracking-widest uppercase"
                         style={{ color: "rgba(255,255,255,0.8)", whiteSpace: "nowrap" }}>
                         {t}

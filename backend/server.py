@@ -868,6 +868,33 @@ def root():
         "db": "memory" if USE_MEMORY_DB else ("mongodb" if _mongo_db is not None else "memory-fallback"),
     }
 
+# ── Homepage Ticker (admin-editable marquee text) ─────────────────────────────
+@api.get("/ticker")
+def get_ticker():
+    """Public: return the ticker items for the homepage marquee banner."""
+    items = mem.get("_ticker", None)
+    if not items:
+        return {"items": [
+            "FREE WORLDWIDE SHIPPING OVER ₹15,000",
+            "100% AUTHENTIC FROM LOCAL INDIAN STORES",
+            "SECURE PAYMENTS — RAZORPAY, PAYPAL, STRIPE",
+            "RETURNS & REFUNDS — EASY & TRANSPARENT",
+        ]}
+    return {"items": items}
+
+@api.put("/admin/ticker", dependencies=[Depends(require_admin)])
+def update_ticker(body: dict):
+    """Admin: update the homepage ticker text. Body: { "items": ["text1", "text2", ...] }"""
+    items = body.get("items", [])
+    if not isinstance(items, list) or len(items) == 0:
+        raise HTTPException(400, "Provide a non-empty 'items' array of strings")
+    items = [str(i).strip() for i in items if str(i).strip()]
+    if not items:
+        raise HTTPException(400, "At least one non-empty ticker item is required")
+    mem["_ticker"] = items
+    _persist_db()
+    return {"success": True, "items": items}
+
 # ── Razorpay: server-side order creation + verification ───────────────────────
 @api.get("/razorpay/config")
 def razorpay_config():
