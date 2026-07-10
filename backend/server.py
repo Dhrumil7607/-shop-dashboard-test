@@ -14,10 +14,13 @@ Routes:
   Admin:    Full CRUD on all entities
 """
 
-from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 import os, re, logging, uuid
 from pathlib import Path
@@ -527,9 +530,23 @@ async def lifespan(app):
         pass
 
 app = FastAPI(title="ShopLiveBharat API", version="2.1.0", lifespan=lifespan)
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── CORS (restricted to actual domains) ───────────────────────────────────────
+_ALLOWED_ORIGINS = [
+    "https://www.shoplivebharat.com",
+    "https://shoplivebharat.com",
+    "https://build-blush-eta.vercel.app",
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -828,6 +845,12 @@ logger.info(f"[STARTUP] JWT secret is default: {JWT_SECRET == 'slb-secret-2026'}
 logger.info(f"[STARTUP] Hash salt is default: {HASH_SALT == 'slb-pw-salt-fixed-2026'}")
 if USE_MEMORY_DB:
     logger.warning("[STARTUP] USE_MEMORY_DB=1 — data resets on every restart. Set MONGO_URL for persistence.")
+else:
+    # Fail-fast: refuse to run production with default/weak secrets
+    if JWT_SECRET == "slb-secret-2026":
+        logger.critical("[SECURITY] ⚠ JWT_SECRET is the default value! Set a strong random JWT_SECRET on Railway.")
+    if ADMIN_API_KEY == "shoplivebharat-admin":
+        logger.warning("[SECURITY] ⚠ ADMIN_API_KEY is the default value. Rotate it for production security.")
 
 # ── Health ────────────────────────────────────────────────────────────────────
 @api.get("/")
@@ -845,7 +868,8 @@ def razorpay_config():
     return {"key_id": RAZORPAY_KEY_ID, "configured": bool(RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET)}
 
 @api.post("/razorpay/order")
-def razorpay_create_order(body: dict):
+@limiter.limit("10/minute")
+def razorpay_create_order(request: Request, body: dict):
     """Create a Razorpay order server-side (required for reliable checkout)."""
     import base64 as _b64, json as _json2, urllib.request, urllib.error
     if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
@@ -913,7 +937,8 @@ class CheckoutLinkIn(BaseModel):
     return_origin: str = ""
 
 @api.post("/razorpay/checkout-link")
-async def razorpay_checkout_link(body: CheckoutLinkIn, payload: Optional[dict] = Depends(optional_user)):
+@limiter.limit("10/minute")
+async def razorpay_checkout_link(request: Request, body: CheckoutLinkIn, payload: Optional[dict] = Depends(optional_user)):
     """Create a pending order + a Razorpay hosted payment link, return its URL.
     Login is optional — guests can check out (customer info comes from the
     shipping address), so checkout is never blocked by an auth issue."""
@@ -1101,7 +1126,8 @@ class BookingLinkIn(BaseModel):
     return_origin: str = ""
 
 @api.post("/razorpay/booking-link")
-async def razorpay_booking_link(body: BookingLinkIn, payload: Optional[dict] = Depends(optional_user)):
+@limiter.limit("10/minute")
+async def razorpay_booking_link(request: Request, body: BookingLinkIn, payload: Optional[dict] = Depends(optional_user)):
     """Create a pending booking + a Razorpay hosted payment link for the session fee."""
     import base64 as _b64, json as _json2, urllib.request, urllib.error
     if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
@@ -1238,7 +1264,8 @@ def booking_summary(booking_id: str):
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @api.post("/auth/register", status_code=201)
-def register(body: RegisterIn):
+@limiter.limit("3/minute")
+def register(request: Request, body: RegisterIn):
     email = body.email.lower()
     if mem_first("users", email=email):
         raise HTTPException(409, "This email is already in use. Please log in or use Forgot Password.")
@@ -1257,14 +1284,39 @@ def register(body: RegisterIn):
     return {"token": token, "user": UserOut(**user)}
 
 @api.post("/auth/login", response_model=TokenOut)
-def login(body: LoginIn):
+@limiter.limit("5/minute")
+def login(request: Request, body: LoginIn):
     user = mem_first("users", email=body.email.lower())
     if not user or not _check_pw(body.password, user["password_hash"]):
+        # Server-side failed attempt tracking + lockout
+        if user:
+            user["failed_login_count"] = (user.get("failed_login_count") or 0) + 1
+            user["last_failed_login"] = _now()
+            if user["failed_login_count"] >= 10:
+                user["is_locked"] = True
+                user["locked_until"] = (datetime.now(timezone.utc) + timedelta(minutes=15)).isoformat()
         raise HTTPException(401, "Invalid email or password")
+    # Check lockout
+    if user.get("is_locked"):
+        locked_until = user.get("locked_until")
+        if locked_until:
+            try:
+                if datetime.fromisoformat(locked_until) > datetime.now(timezone.utc):
+                    raise HTTPException(429, "Account temporarily locked due to too many failed attempts. Try again in 15 minutes.")
+            except (ValueError, TypeError):
+                pass
+        # Lockout expired — clear it
+        user["is_locked"] = False
+        user.pop("locked_until", None)
+        user["failed_login_count"] = 0
     if user.get("role") == "seller" and (user.get("is_suspended") or user.get("is_archived")):
         raise HTTPException(403, "Your seller account is no longer active. Please contact ShopLiveBharat support.")
     if user.get("role") == "customer" and user.get("is_suspended"):
         raise HTTPException(403, "Your account has been suspended. Please contact ShopLiveBharat support.")
+    # Successful login — reset failed attempts
+    user["failed_login_count"] = 0
+    user.pop("is_locked", None)
+    user.pop("locked_until", None)
     # Transparently upgrade legacy password hashes to bcrypt on successful login
     _maybe_upgrade_hash(user, body.password)
     # Record last login for admin visibility
@@ -1274,7 +1326,8 @@ def login(body: LoginIn):
     return {"token": token, "user": UserOut(**{k:v for k,v in user.items() if k != "password_hash"})}
 
 @api.post("/auth/google")
-def google_login(body: dict):
+@limiter.limit("10/minute")
+def google_login(request: Request, body: dict):
     """Sign in / sign up with a Google ID token (Google Identity Services).
     Verifies the token with Google, then finds-or-creates a customer account
     and returns our own signed JWT — no Google client secret is involved."""
@@ -1341,7 +1394,8 @@ def update_profile(changes: dict, payload: dict = Depends(get_current_user)):
     return UserOut(**{k:v for k,v in user.items() if k != "password_hash"})
 
 @api.post("/auth/change-password")
-def change_password(body: dict, payload: dict = Depends(get_current_user)):
+@limiter.limit("5/minute")
+def change_password(request: Request, body: dict, payload: dict = Depends(get_current_user)):
     """Authenticated password change — requires the current password.
     Works for admin, seller and customer accounts."""
     current = body.get("current_password") or body.get("currentPassword") or ""
@@ -1367,7 +1421,8 @@ def change_password(body: dict, payload: dict = Depends(get_current_user)):
     return {"success": True, "message": "Password updated successfully."}
 
 @api.post("/auth/forgot-password")
-def forgot_password(body: dict):
+@limiter.limit("3/minute")
+def forgot_password(request: Request, body: dict):
     email = (body.get("email") or "").lower().strip()
     if not email:
         raise HTTPException(400, "Email is required")
@@ -1399,7 +1454,8 @@ def forgot_password(body: dict):
     return generic
 
 @api.post("/auth/reset-password")
-def reset_password(body: dict):
+@limiter.limit("5/minute")
+def reset_password(request: Request, body: dict):
     token = body.get("token", "")
     new_password = body.get("password", "") or body.get("new_password", "")
     if not token:
