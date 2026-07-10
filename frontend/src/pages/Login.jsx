@@ -5,13 +5,27 @@ import { Eye, EyeOff, Mail, ArrowRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 
 const IMAGE_URL =
     "https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=900&q=85";
 
 export default function Login() {
     const navigate = useNavigate();
-    const { loginUser, isLoggedIn } = useAuth();
+    const { loginUser, loginWithGoogle, isLoggedIn } = useAuth();
+
+    const handleGoogle = async (credential) => {
+        setLoading(true);
+        try {
+            await loginWithGoogle(credential);
+            toast.success("Welcome! 🎉");
+            navigate("/account");
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || err.message || "Google sign-in failed");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const [email, setEmail]               = useState("");
     const [password, setPassword]         = useState("");
@@ -290,6 +304,19 @@ export default function Login() {
                                         <>Sign In <ArrowRight size={16} strokeWidth={2.5} /></>
                                     )}
                                 </motion.button>
+
+                                {/* OR divider */}
+                                <div className="relative my-1" style={{ height: 1, background: "#E8E4DF" }}>
+                                    <span className="absolute left-1/2 -translate-x-1/2 -top-3 px-3 text-xs"
+                                        style={{ background: "rgba(255,255,255,0.88)", color: "#8B8680" }}>
+                                        or
+                                    </span>
+                                </div>
+
+                                {/* Google sign-in */}
+                                <div className="flex justify-center">
+                                    <GoogleSignInButton onCredential={handleGoogle} text="continue_with" />
+                                </div>
 
                                 {/* Divider */}
                                 <div className="relative my-1" style={{ height: 1, background: "#E8E4DF" }}>

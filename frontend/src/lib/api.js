@@ -132,6 +132,11 @@ export async function register(name, email, password, role = "customer") {
     return data;
 }
 
+export async function googleLogin(credential) {
+    const { data } = await api.post("/auth/google", { credential });
+    return data; // { token, user }
+}
+
 export async function getCurrentUser() {
     const { data } = await api.get("/auth/me");
     return data;

@@ -169,6 +169,9 @@ PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://build-blush-eta.ver
 JWT_ALGO      = "HS256"
 JWT_EXPIRE_HOURS = 72
 
+# ── Google OAuth ──────────────────────────────────────────────────────────────
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "972995084399-tpmb1vpe26imufiia9t966rgr9aqs090.apps.googleusercontent.com")
+
 # ── Razorpay ──────────────────────────────────────────────────────────────────
 RAZORPAY_KEY_ID     = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
@@ -1195,6 +1198,63 @@ def login(body: LoginIn):
     _persist_db()
     token = _make_token(user["id"], user["role"])
     return {"token": token, "user": UserOut(**{k:v for k,v in user.items() if k != "password_hash"})}
+
+@api.post("/auth/google")
+def google_login(body: dict):
+    """Sign in / sign up with a Google ID token (Google Identity Services).
+    Verifies the token with Google, then finds-or-creates a customer account
+    and returns our own signed JWT — no Google client secret is involved."""
+    import urllib.request, urllib.parse, json as _j2
+    id_token = body.get("credential") or body.get("id_token") or ""
+    if not id_token:
+        raise HTTPException(400, "Missing Google credential")
+    # Verify the ID token directly with Google (validates signature + expiry)
+    try:
+        url = "https://oauth2.googleapis.com/tokeninfo?" + urllib.parse.urlencode({"id_token": id_token})
+        with urllib.request.urlopen(url, timeout=15) as r:
+            claims = _j2.loads(r.read().decode())
+    except Exception:
+        raise HTTPException(401, "Could not verify Google sign-in. Please try again.")
+    # The token must have been issued for OUR app
+    if GOOGLE_CLIENT_ID and claims.get("aud") != GOOGLE_CLIENT_ID:
+        raise HTTPException(401, "This Google sign-in was not issued for ShopLiveBharat.")
+    if str(claims.get("email_verified")).lower() != "true":
+        raise HTTPException(401, "Your Google email is not verified.")
+    email = (claims.get("email") or "").lower().strip()
+    if not email:
+        raise HTTPException(401, "Your Google account has no email address.")
+    name = claims.get("name") or email.split("@")[0]
+
+    user = mem_first("users", email=email)
+    if not user:
+        user = {
+            "id": str(uuid.uuid4()), "name": name, "email": email,
+            "password_hash": "",  # Google-only account — no local password
+            "role": "customer", "phone": "", "city": "",
+            "auth_provider": "google", "avatar": claims.get("picture", ""),
+            "created_at": _now(), "last_login_at": _now(),
+        }
+        mem_insert("users", user)
+        _send_email(
+            to=email, subject=f"Welcome to ShopLiveBharat, {name}! 🎉",
+            body=(f"<p>Hi {name},</p><p>Your ShopLiveBharat account is ready — you signed in with Google. "
+                  "Start exploring authentic Indian fashion delivered worldwide.</p>"),
+            kind="welcome",
+        )
+    else:
+        # Respect suspension/archival just like password login
+        if user.get("role") == "seller" and (user.get("is_suspended") or user.get("is_archived")):
+            raise HTTPException(403, "Your seller account is no longer active. Please contact ShopLiveBharat support.")
+        if user.get("is_suspended") and user.get("role") != "admin":
+            raise HTTPException(403, "Your account has been suspended. Please contact ShopLiveBharat support.")
+        user["last_login_at"] = _now()
+        if not user.get("auth_provider"):
+            user["auth_provider"] = "google"
+        if not user.get("avatar") and claims.get("picture"):
+            user["avatar"] = claims.get("picture")
+        _persist_db()
+    token = _make_token(user["id"], user["role"])
+    return {"token": token, "user": UserOut(**{k: v for k, v in user.items() if k != "password_hash"})}
 
 @api.get("/auth/me", response_model=UserOut)
 def me(payload: dict = Depends(get_current_user)):

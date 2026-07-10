@@ -86,6 +86,22 @@ export function AuthProvider({ children }) {
         }
     }, []);
 
+    const loginWithGoogle = useCallback(async (credential) => {
+        const { googleLogin } = await import("@/lib/api");
+        const result = await googleLogin(credential);
+        if (result?.token && result?.user) {
+            localStorage.setItem("slb_token", result.token);
+            localStorage.setItem("slb_user", JSON.stringify(result.user));
+            setToken(result.token);
+            setUser(result.user);
+            setIsLoggedIn(true);
+            if (result.user.role === "seller") setIsSeller(true);
+            if (result.user.role === "admin") { setIsAdmin(true); localStorage.setItem("slb_admin_key", "shoplivebharat-admin"); setAdminKey("shoplivebharat-admin"); }
+            return result;
+        }
+        throw new Error("Google sign-in failed");
+    }, []);
+
     const updateUserProfile = useCallback(async (profileData) => {
         try {
             const updatedUser = { ...user, ...profileData };
@@ -135,11 +151,13 @@ export function AuthProvider({ children }) {
         isAdmin, adminKey, loginAdmin, logoutAdmin,
         isLoggedIn, isSeller, user, token, loading,
         loginUser, registerUser, updateUserProfile, logoutUser,
+        loginWithGoogle,
         logout,
     }), [
         isAdmin, adminKey, loginAdmin, logoutAdmin,
         isLoggedIn, isSeller, user, token, loading,
         loginUser, registerUser, updateUserProfile, logoutUser,
+        loginWithGoogle,
         logout,
     ]);
 
