@@ -3694,20 +3694,30 @@ def _ai_usage_today(seller_id: str) -> dict:
             "product_img_used": product_img, "product_img_limit": _AI_PRODUCT_IMG_DAILY_LIMIT, "product_img_remaining": max(0, _AI_PRODUCT_IMG_DAILY_LIMIT - product_img)}
 
 def _call_gemini_image(prompt: str, image_bytes: bytes, mime_type: str) -> Optional[str]:
-    """Call Gemini image generation model. Returns base64 image or None."""
-    import google.generativeai as genai
+    """Call Gemini image generation model using the new google-genai SDK.
+    Uses gemini-2.0-flash-exp with image output capability.
+    Returns base64 image or None."""
     import base64 as _b64_ai
-    genai.configure(api_key=GEMINI_API_KEY)
-    # Use the dedicated image generation model (can produce actual images)
-    model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17",
-        generation_config={"response_modalities": ["TEXT", "IMAGE"]})
-    img_part = {"mime_type": mime_type, "data": image_bytes}
     try:
-        response = model.generate_content([prompt, img_part])
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        # Upload image as inline part
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=[prompt, image_part],
+            config=types.GenerateContentConfig(
+                response_modalities=["TEXT", "IMAGE"],
+            )
+        )
+        # Extract generated image from response
         if response.candidates:
             for part in response.candidates[0].content.parts:
-                if hasattr(part, "inline_data") and part.inline_data and part.inline_data.data:
+                if part.inline_data and part.inline_data.data:
                     return _b64_ai.b64encode(part.inline_data.data).decode()
+                if hasattr(part, "image") and part.image:
+                    return _b64_ai.b64encode(part.image.image_bytes).decode()
     except Exception as e:
         logger.warning(f"[AI] Gemini image gen failed: {e}")
     return None
@@ -3737,16 +3747,19 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
         result_image = _call_gemini_image(prompt, content, image.content_type)
         # If image gen isn't available, get a text response instead
         if not result_image:
-            import google.generativeai as genai
-            genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
-            img_part = {"mime_type": image.content_type, "data": content}
-            response = model.generate_content([
-                f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model. "
-                f"Include details about styling, draping, color harmony, and suggested accessories. Be specific and vivid.",
-                img_part
-            ])
-            caption = response.text if response.candidates else "AI analysis complete."
+            from google import genai as _genai_sdk
+            from google.genai import types as _genai_types
+            _client = _genai_sdk.Client(api_key=GEMINI_API_KEY)
+            image_part = _genai_types.Part.from_bytes(data=content, mime_type=image.content_type)
+            resp = _client.models.generate_content(
+                model="gemini-2.0-flash-exp",
+                contents=[
+                    f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model. "
+                    f"Include details about styling, draping, color harmony, and suggested accessories. Be specific and vivid.",
+                    image_part
+                ]
+            )
+            caption = resp.text if resp.text else "AI analysis complete."
             result_image = _b64_ai.b64encode(content).decode()  # Return original with analysis
         else:
             caption = f"AI-generated try-on: {category.title()} on a {model_type.replace('_', ' ')} model"
@@ -3788,19 +3801,22 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
                 images.append(img)
                 captions.append(f"{shot_types[i].title()} shot ({style.replace('_', ' ')})")
             else:
-                # Fallback: get text description
-                import google.generativeai as genai
-                genai.configure(api_key=GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
-                img_part = {"mime_type": image.content_type, "data": content}
+                # Fallback: get text description using text model
                 try:
-                    resp = model.generate_content([
-                        f"You are a professional product photographer. Describe in detail how you would photograph "
-                        f"this {category} for a {shot_types[i]} shot with {style.replace('_', ' ')} styling. "
-                        f"Include lighting setup, angles, props, and mood.",
-                        img_part
-                    ])
-                    captions.append(resp.text[:200] if resp.candidates else f"{shot_types[i].title()} shot")
+                    from google import genai as _genai_sdk
+                    from google.genai import types as _genai_types
+                    _client = _genai_sdk.Client(api_key=GEMINI_API_KEY)
+                    image_part = _genai_types.Part.from_bytes(data=content, mime_type=image.content_type)
+                    resp = _client.models.generate_content(
+                        model="gemini-2.0-flash-exp",
+                        contents=[
+                            f"You are a professional product photographer. Describe in detail how you would photograph "
+                            f"this {category} for a {shot_types[i]} shot with {style.replace('_', ' ')} styling. "
+                            f"Include lighting setup, angles, props, and mood.",
+                            image_part
+                        ]
+                    )
+                    captions.append(resp.text[:200] if resp.text else f"{shot_types[i].title()} shot")
                 except Exception:
                     captions.append(f"{shot_types[i].title()} shot")
                 images.append(_b64_ai.b64encode(content).decode())
