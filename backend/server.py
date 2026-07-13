@@ -3414,10 +3414,18 @@ def _cloudinary_configure() -> bool:
         cloud = os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip()
         key = os.environ.get("CLOUDINARY_API_KEY", "").strip()
         secret = os.environ.get("CLOUDINARY_API_SECRET", "").strip()
-        if url:
-            cloudinary.config(cloudinary_url=url, secure=True)
-            _CLOUDINARY_READY["ok"] = True
-        elif cloud and key and secret:
+        # If only the single URL is provided, parse it into its parts. The SDK's
+        # cloudinary_url= kwarg is not reliably parsed, so we do it explicitly.
+        if url and not (cloud and key and secret):
+            try:
+                from urllib.parse import urlparse
+                p = urlparse(url)  # cloudinary://<key>:<secret>@<cloud_name>
+                key = key or (p.username or "")
+                secret = secret or (p.password or "")
+                cloud = cloud or (p.hostname or "")
+            except Exception as pe:
+                logger.warning(f"[CLOUDINARY] URL parse failed: {pe}")
+        if cloud and key and secret:
             cloudinary.config(cloud_name=cloud, api_key=key, api_secret=secret, secure=True)
             _CLOUDINARY_READY["ok"] = True
         else:
