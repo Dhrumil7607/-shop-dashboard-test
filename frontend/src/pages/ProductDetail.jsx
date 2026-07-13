@@ -8,6 +8,7 @@ import ProductCard from "@/components/ProductCard";
 import SizeGuideModal, { getSizesForCategory, needsSizeSelection } from "@/components/SizeGuideModal";
 import MensSizeGuideModal from "@/components/MensSizeGuideModal";
 import WomensSizeFinder from "@/components/WomensSizeFinder";
+import CustomMeasurements from "@/components/CustomMeasurements";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useWishlist } from "@/contexts/WishlistContext";
@@ -36,6 +37,7 @@ export default function ProductDetail() {
     const [qty,      setQty]      = useState(1);
     const [selColor, setSelColor] = useState("");
     const [selSize,  setSelSize]  = useState("");
+    const [customMeasure, setCustomMeasure] = useState(null); // { label, measurements }
     const [showSizeGuide, setShowSizeGuide] = useState(false);
 
     // Wishlist state from context (replaces local fav state)
@@ -76,19 +78,28 @@ export default function ProductDetail() {
         })();
     }, [productId, navigate]);
 
+    const buildCartProduct = useCallback(() => {
+        let p = { ...product };
+        if (selSize) p.size = selSize;
+        if (customMeasure) {
+            p.size = customMeasure.label;              // human-readable, flows to order/email
+            p.custom_measurements = customMeasure.measurements; // structured detail
+        }
+        return p;
+    }, [product, selSize, customMeasure]);
+
     const handleAddToCart = useCallback(() => {
         if (!product) return;
-        const productWithSize = selSize ? { ...product, size: selSize } : product;
+        const productWithSize = buildCartProduct();
         for (let i = 0; i < qty; i++) addToCart(productWithSize);
         toast.success("Added to cart!");
-    }, [product, qty, addToCart, selSize]);
+    }, [product, qty, addToCart, buildCartProduct]);
 
     const handleBuyNow = useCallback(() => {
         if (!product) return;
-        const productWithSize = selSize ? { ...product, size: selSize } : product;
-        addToCart(productWithSize);
+        addToCart(buildCartProduct());
         navigate("/checkout");
-    }, [product, addToCart, navigate, selSize]);
+    }, [product, addToCart, navigate, buildCartProduct]);
 
     if (loading) return (
         <MarketplaceLayout>
@@ -220,6 +231,17 @@ export default function ProductDetail() {
                                     Ready to Ship: <strong>Yes</strong> — dispatches in 5-6 days
                                 </div>
                             )}
+
+                            {/* ── Custom stitching measurements (women's stitched wear only) ── */}
+                            <CustomMeasurements
+                                category={product.category}
+                                active={!!customMeasure}
+                                onApply={({ label, measurements }) => {
+                                    setCustomMeasure({ label, measurements });
+                                    setSelSize(label);
+                                }}
+                                onClear={() => { setCustomMeasure(null); setSelSize(""); }}
+                            />
 
                             {/* ── Size Selection — uses product size_options if set, else category defaults ── */}
                             {needsSizeSelection(product.category) && (

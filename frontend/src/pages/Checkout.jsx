@@ -161,6 +161,7 @@ export default function Checkout() {
                 quantity:   item.quantity,
                 size:       item.size  || "",
                 color:      item.color || "",
+                ...(item.custom_measurements ? { custom_measurements: item.custom_measurements } : {}),
             })),
             shipping_address: {
                 full_name: form.full_name,
@@ -213,6 +214,7 @@ export default function Checkout() {
                 quantity:   item.quantity || 1,
                 size:       item.size  || "",
                 color:      item.color || "",
+                ...(item.custom_measurements ? { custom_measurements: item.custom_measurements } : {}),
             }));
             const shipping_address = {
                 name:      form.full_name,

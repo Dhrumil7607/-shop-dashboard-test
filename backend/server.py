@@ -711,7 +711,9 @@ class CartOut(BaseModel):
     items: List[CartItemOut] = []; total: int = 0
 
 class OrderItemIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     product_id: str; quantity: int = 1; size: str = ""; color: str = ""
+    custom_measurements: dict = {}
 
 class OrderIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1154,6 +1156,7 @@ async def razorpay_checkout_link(request: Request, body: CheckoutLinkIn, payload
             "product_id": item.product_id, "product_name": prod["name"],
             "image_url": prod["image_url"], "price": prod["price"],
             "quantity": item.quantity, "size": item.size, "color": item.color,
+            "custom_measurements": item.custom_measurements or {},
             "line_total": line_total,
         })
 
@@ -1993,6 +1996,7 @@ def create_order(body: OrderIn, payload: dict = Depends(get_current_user)):
             "product_id": item.product_id, "product_name": prod["name"],
             "image_url": prod["image_url"], "price": prod["price"],
             "quantity": item.quantity, "size": item.size, "color": item.color,
+            "custom_measurements": item.custom_measurements or {},
             "line_total": line_total,
         })
     order = {
