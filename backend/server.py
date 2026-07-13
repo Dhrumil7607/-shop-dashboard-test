@@ -3694,25 +3694,22 @@ def _ai_usage_today(seller_id: str) -> dict:
             "product_img_used": product_img, "product_img_limit": _AI_PRODUCT_IMG_DAILY_LIMIT, "product_img_remaining": max(0, _AI_PRODUCT_IMG_DAILY_LIMIT - product_img)}
 
 def _call_gemini_image(prompt: str, image_bytes: bytes, mime_type: str) -> Optional[str]:
-    """Call Gemini with image generation capabilities. Returns base64 image or None."""
+    """Call Gemini image generation model. Returns base64 image or None."""
     import google.generativeai as genai
     import base64 as _b64_ai
     genai.configure(api_key=GEMINI_API_KEY)
-    # Use the image generation model
-    model = genai.GenerativeModel("gemini-2.0-flash-exp",
-        generation_config=genai.GenerationConfig(response_mime_type="text/plain"))
+    # Use the dedicated image generation model (can produce actual images)
+    model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17",
+        generation_config={"response_modalities": ["TEXT", "IMAGE"]})
     img_part = {"mime_type": mime_type, "data": image_bytes}
     try:
-        response = model.generate_content(
-            [prompt + "\n\nIMPORTANT: Generate an actual image, not text describing an image.", img_part],
-            generation_config={"candidate_count": 1}
-        )
+        response = model.generate_content([prompt, img_part])
         if response.candidates:
             for part in response.candidates[0].content.parts:
                 if hasattr(part, "inline_data") and part.inline_data and part.inline_data.data:
                     return _b64_ai.b64encode(part.inline_data.data).decode()
     except Exception as e:
-        logger.warning(f"[AI] Gemini call failed: {e}")
+        logger.warning(f"[AI] Gemini image gen failed: {e}")
     return None
 
 @api.get("/seller/ai/usage")
@@ -3742,7 +3739,7 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
         if not result_image:
             import google.generativeai as genai
             genai.configure(api_key=GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-2.0-flash-exp")
+            model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
             img_part = {"mime_type": image.content_type, "data": content}
             response = model.generate_content([
                 f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model. "
@@ -3794,7 +3791,7 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
                 # Fallback: get text description
                 import google.generativeai as genai
                 genai.configure(api_key=GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-2.0-flash-exp")
+                model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
                 img_part = {"mime_type": image.content_type, "data": content}
                 try:
                     resp = model.generate_content([
