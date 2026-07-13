@@ -3885,15 +3885,16 @@ def _ai_usage_today(seller_id: str) -> dict:
     return {"tryon_used": tryon, "tryon_limit": _AI_TRYON_DAILY_LIMIT, "tryon_remaining": max(0, _AI_TRYON_DAILY_LIMIT - tryon),
             "product_img_used": product_img, "product_img_limit": _AI_PRODUCT_IMG_DAILY_LIMIT, "product_img_remaining": max(0, _AI_PRODUCT_IMG_DAILY_LIMIT - product_img)}
 
-# Candidate image-capable models (in priority order). The account's key has
-# access to these per genai.list_models(); we try each until one succeeds and
-# cache the winner so subsequent calls are fast.
+# Candidate image-EDITING models (accept an input image → preserve the product).
+# Used for Virtual Try-On. Tried in order; the winner is cached.
 _GEMINI_IMAGE_MODELS = [
     "gemini-2.5-flash-image",
     "gemini-3.1-flash-image",
     "gemini-3.1-flash-image-preview",
     "gemini-3-pro-image",
 ]
+# Imagen 4 Fast — text-to-image, used for the Product Image generator.
+_IMAGEN_MODEL = os.environ.get("IMAGEN_MODEL", "imagen-4.0-fast-generate-001")
 # Text models for the analysis fallback (in priority order).
 _GEMINI_TEXT_MODELS = [
     "gemini-flash-latest",
@@ -3952,6 +3953,35 @@ def _call_gemini_image(prompt: str, image_bytes: bytes, mime_type: str) -> Optio
             logger.warning(f"[AI] Gemini image gen failed on all models. Last error: {last_err}")
     except Exception as e:
         logger.warning(f"[AI] Gemini image gen failed: {e}")
+    return None
+
+def _call_imagen(prompt: str) -> Optional[str]:
+    """Generate a fresh image from a text prompt using Imagen 4 Fast.
+    Returns base64-encoded image bytes or None. (Text-to-image: does not take
+    an input photo, so it produces a new studio-quality render of the prompt.)"""
+    import base64 as _b64_ai
+    try:
+        from google import genai
+        from google.genai import types
+    except Exception as e:
+        logger.warning(f"[AI] google-genai SDK import failed: {e}")
+        return None
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        resp = client.models.generate_images(
+            model=_IMAGEN_MODEL,
+            prompt=prompt,
+            config=types.GenerateImagesConfig(number_of_images=1),
+        )
+        imgs = getattr(resp, "generated_images", None) or []
+        if imgs:
+            data = getattr(imgs[0].image, "image_bytes", None)
+            if data:
+                if isinstance(data, (bytes, bytearray)):
+                    return _b64_ai.b64encode(bytes(data)).decode()
+                return data if isinstance(data, str) else _b64_ai.b64encode(bytes(data)).decode()
+    except Exception as e:
+        logger.warning(f"[AI] Imagen generation failed: {e}")
     return None
 
 def _call_gemini_text(prompt_parts) -> Optional[str]:
@@ -4051,7 +4081,11 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
         captions = []
         real_count = 0
         for i, prompt in enumerate(prompts):
-            img = _call_gemini_image(prompt, content, image.content_type)
+            # Primary: Imagen 4 Fast (text-to-image studio render).
+            img = _call_imagen(prompt)
+            # Fallback: Gemini image-editing model using the uploaded photo.
+            if not img:
+                img = _call_gemini_image(prompt, content, image.content_type)
             if img:
                 images.append(img)
                 real_count += 1
