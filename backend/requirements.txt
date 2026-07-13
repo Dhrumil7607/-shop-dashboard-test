@@ -9,6 +9,6 @@ certifi>=2024.0.0
 resend>=2.0.0
 bcrypt>=4.1.0
 slowapi>=0.1.9
+cloudinary==1.45.0
 google-genai>=1.0.0
 Pillow>=10.0.0
-cloudinary>=1.40.0
