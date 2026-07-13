@@ -3874,7 +3874,17 @@ def _get_tryon_prompt(category: str, model_type: str) -> str:
 def _get_product_prompt(shot_type: str, style: str, category: str) -> str:
     style_prompts = _PRODUCT_PROMPTS.get(shot_type, _PRODUCT_PROMPTS["hero"])
     template = style_prompts.get(style, style_prompts.get("studio_white"))
-    return template.format(category=category)
+    scene = template.format(category=category)
+    # Preservation preamble — the model must keep the EXACT uploaded product
+    # (same colours, patterns, fabric, design) and only restyle the scene/lighting.
+    return (
+        "Using the product in the uploaded image, create a new photograph. "
+        "Preserve the EXACT same product — identical colours, prints, patterns, "
+        "embroidery, fabric, texture and design details. Do NOT invent a different "
+        "product or change its appearance. Only change the scene, background, "
+        "lighting and composition as follows: " + scene +
+        " No text, no watermark, no logo. Photorealistic, high resolution."
+    )
 
 def _ai_usage_today(seller_id: str) -> dict:
     """Count today's AI generations for a seller."""
@@ -4081,11 +4091,10 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
         captions = []
         real_count = 0
         for i, prompt in enumerate(prompts):
-            # Primary: Imagen 4 Fast (text-to-image studio render).
-            img = _call_imagen(prompt)
-            # Fallback: Gemini image-editing model using the uploaded photo.
-            if not img:
-                img = _call_gemini_image(prompt, content, image.content_type)
+            # Primary: Gemini image-editing model — it takes the UPLOADED product
+            # as input and preserves it, so all 3 shots show the seller's real
+            # product (Imagen is text-to-image and would invent unrelated items).
+            img = _call_gemini_image(prompt, content, image.content_type)
             if img:
                 images.append(img)
                 real_count += 1
