@@ -825,6 +825,46 @@ def _ensure_seed_account_passwords():
         logger.info("[DB] Repaired seed account password hashes (admin/customer)")
     return changed
 
+def _ensure_main_store():
+    """Self-heal: guarantee the ShopLiveBharat admin/head store always exists.
+    Also ensure there's a seller user account for it (for seller portal access)."""
+    shops = mem.get("shops", [])
+    main = next((s for s in shops if s.get("id") == "shop-shoplivebharat"), None)
+    if not main:
+        main = {
+            "id": "shop-shoplivebharat", "slug": "shoplivebharat-exclusive",
+            "name": "ShopLive Bharat", "owner_name": "ShopLive Bharat",
+            "owner_email": "admin@shoplivebharat.com", "city": "Mumbai",
+            "country": "India", "specialty": "Exclusive curated Indian fashion",
+            "description": "Handpicked exclusive collections curated by ShopLive Bharat.",
+            "image_url": "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=800&q=80",
+            "banner_image": "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=1200&q=80",
+            "instagram_url": "", "is_active": True, "is_admin_store": True,
+            "online": True, "status": "active", "liveShoppingEnabled": True,
+            "acceptsLiveBookings": True, "show_in_booking_page": True,
+            "display_order": 1, "source": "exclusive",
+            "rating": 5.0, "followers": 0, "productCount": 0, "verified": True,
+            "return_policy": "Easy 7-day returns on all exclusive products.",
+            "shipping_policy": "Free worldwide shipping on all ShopLive Bharat exclusive orders.",
+            "created_at": _now(), "updated_at": _now(),
+        }
+        mem.setdefault("shops", []).append(main)
+        logger.info("[DB] Restored main store (shop-shoplivebharat)")
+    # Ensure a seller user exists for the main store (for seller portal login)
+    seller = next((u for u in mem.get("users", []) if u.get("store_id") == "shop-shoplivebharat" and u.get("role") == "seller"), None)
+    if not seller:
+        seller = {
+            "id": "seller-main-store", "name": "ShopLive Bharat",
+            "email": "store@shoplivebharat.com",
+            "password_hash": _hash_pw("ShopLive@2026!"),
+            "role": "seller", "phone": "", "city": "Mumbai",
+            "store_name": "ShopLive Bharat", "store_id": "shop-shoplivebharat",
+            "created_at": _now(),
+        }
+        mem.setdefault("users", []).append(seller)
+        logger.info("[DB] Created seller account for main store (store@shoplivebharat.com)")
+    return True
+
 def _ensure_default_categories():
     """Self-heal: if the categories collection is empty (e.g. on a live DB seeded
     before categories existed), populate the 8 default homepage categories so the
@@ -840,6 +880,7 @@ def _ensure_default_categories():
 # Run dedup first, then seed on startup
 _dedup_collections()
 _seed()
+_ensure_main_store()
 _ensure_default_categories()
 _ensure_seed_account_passwords()
 _persist_db()
