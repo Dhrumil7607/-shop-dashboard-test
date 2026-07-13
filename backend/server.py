@@ -3640,6 +3640,50 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 _AI_TRYON_DAILY_LIMIT = 10
 _AI_PRODUCT_IMG_DAILY_LIMIT = 15
 
+# ── Crafted prompts that produce distinct, high-quality results ──────────────
+_TRYON_PROMPTS = {
+    "saree": "Create a photo-realistic full-body image of a {model} model gracefully draping this exact saree. Show the pallu draped over the left shoulder, the pleats perfectly arranged at the front. Studio lighting with a soft cream background. The model should be standing in a natural pose with traditional Indian jewelry (gold necklace, jhumka earrings, bangles). Preserve EVERY color, border pattern, and motif of the original saree fabric EXACTLY.",
+    "lehenga": "Create a photo-realistic full-body image of a {model} model wearing this exact lehenga set. Show the full skirt, choli blouse, and dupatta styled elegantly. The model should be in a graceful twirl or three-quarter pose in a palatial/wedding venue setting with warm golden lighting. Preserve ALL embroidery, zari work, colors, and design details of the original lehenga EXACTLY.",
+    "kurta": "Create a photo-realistic full-body image of a {model} model wearing this exact kurta. Style it with matching bottoms (churidar for women, pajama for men). The model should be in a relaxed standing pose against a clean white/cream studio backdrop. Natural soft lighting. Preserve the exact fabric texture, print pattern, neckline design, and colors of the original kurta.",
+    "sherwani": "Create a photo-realistic full-body image of a {model} model wearing this exact sherwani for a wedding. Style with churidar bottoms, mojari shoes, and a turban/safa. The model should be in a confident standing pose against a regal/palatial backdrop with warm dramatic lighting. Preserve ALL embroidery details, buttons, collar style, and fabric color EXACTLY.",
+    "jewellery": "Create a photo-realistic close-up portrait of a {model} model wearing this exact piece of jewelry. If it's a necklace, show neck/collarbone area. If earrings, show the face from a slight angle. If a bracelet/bangle, show the wrist elegantly. Soft studio lighting with a blurred dark background. The jewelry must match the EXACT design, stones, metalwork, and proportions of the original image.",
+    "western": "Create a photo-realistic full-body image of a {model} model wearing this exact western outfit. The model should be in a confident fashion-editorial pose against an urban/minimalist backdrop. Professional studio lighting. Preserve the exact cut, color, pattern, and styling details of the original garment.",
+    "accessory": "Create a photo-realistic styled shot of a {model} model using/wearing this exact accessory. Show it in context — if a bag show it held or on the shoulder, if sunglasses show on the face, if a scarf show it draped. Clean background, editorial lighting. Preserve the exact color, material, hardware, and design details.",
+    "chaniya choli": "Create a photo-realistic full-body image of a {model} model wearing this exact chaniya choli for Navratri/Garba. Show the flared skirt in motion (mid-twirl), the blouse/choli fitted perfectly, and the dupatta flowing. Festive colorful background with mirror work/lantern bokeh. Preserve ALL mirror work, embroidery, colors, and patterns EXACTLY.",
+}
+
+_PRODUCT_PROMPTS = {
+    "hero": {
+        "studio_white": "Professional e-commerce hero product photograph of this {category} on a pure white seamless backdrop. Front-facing, perfectly centered, with soft diffused studio lighting from above and sides. No model, just the product laid flat or on an invisible mannequin. Sharp focus, high-resolution, clean shadows. The product fills 80% of the frame.",
+        "lifestyle_warm": "Professional e-commerce hero shot of this {category} in a warm lifestyle setting. Draped on a vintage wooden surface or marble counter with golden-hour warm natural light streaming from the left. Soft depth-of-field background with dried flowers or brass decor. Product is the clear hero, sharp and prominent.",
+        "dark_luxury": "Professional e-commerce hero shot of this {category} against a rich dark velvet/black marble backdrop. Dramatic single spotlight from above creating elegant shadows. Gold accent light from the side. The product glows against the dark background. Luxury jewelry-brand aesthetic.",
+        "outdoor_natural": "Professional e-commerce hero shot of this {category} in a natural outdoor setting. Draped on a stone surface or hung on a rustic wooden stand in a garden/terrace. Soft natural daylight, slight bokeh greenery in background. Fresh, airy, organic aesthetic.",
+    },
+    "detail": {
+        "studio_white": "Extreme close-up macro photograph of this {category} showing fabric texture, weave pattern, or craftsmanship details. White background, ring-light illumination revealing every thread and stitch. Focus stacking for maximum sharpness. Show the quality of material — if silk show the sheen, if embroidered show the thread work.",
+        "lifestyle_warm": "Close-up detail shot of this {category} with warm-toned side lighting revealing texture. Show embroidery stitches, fabric weave, button details, or hardware close-up. Shallow depth of field with warm bokeh. The craftsmanship should be the star.",
+        "dark_luxury": "Close-up detail shot of this {category} with dramatic lighting on dark background. A single beam of light catches the metallic threads, sequins, or zari work. The darkness around makes the details pop. Luxury watch-ad level close-up photography.",
+        "outdoor_natural": "Close-up detail shot of this {category} in natural daylight. Lay the fabric detail section on a stone or leaf, showing texture against nature. Macro lens with shallow DOF. The natural light brings out true colors.",
+    },
+    "lifestyle": {
+        "studio_white": "Lifestyle context shot: this {category} folded neatly in a premium gift box with tissue paper, as if being unboxed. Clean white surface, overhead shot angle. A hand reaching to pick it up. Premium unboxing experience aesthetic.",
+        "lifestyle_warm": "Lifestyle context shot: this {category} draped over the arm of a person walking through a sunlit Indian marketplace/haveli corridor. Motion blur on the background, product sharp. The story of the product in its cultural context.",
+        "dark_luxury": "Lifestyle context shot: this {category} displayed on a dark wooden mannequin bust or hanger in a luxury boutique setting. Moody ambient lighting, other premium items slightly visible in background. Exclusive boutique feel.",
+        "outdoor_natural": "Lifestyle context shot: this {category} hanging on a clothesline or draped over a balcony railing with a beautiful Indian cityscape/landscape behind. Morning light, gentle breeze making fabric flutter slightly. Aspirational lifestyle image.",
+    },
+}
+
+def _get_tryon_prompt(category: str, model_type: str) -> str:
+    model_desc = model_type.replace("_", " ")
+    cat = category.lower().strip()
+    template = _TRYON_PROMPTS.get(cat, _TRYON_PROMPTS.get("western"))
+    return template.format(model=model_desc)
+
+def _get_product_prompt(shot_type: str, style: str, category: str) -> str:
+    style_prompts = _PRODUCT_PROMPTS.get(shot_type, _PRODUCT_PROMPTS["hero"])
+    template = style_prompts.get(style, style_prompts.get("studio_white"))
+    return template.format(category=category)
+
 def _ai_usage_today(seller_id: str) -> dict:
     """Count today's AI generations for a seller."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -3648,6 +3692,28 @@ def _ai_usage_today(seller_id: str) -> dict:
     product_img = sum(1 for g in gens if g.get("seller_id") == seller_id and g.get("type") == "product_images" and (g.get("created_at") or "").startswith(today))
     return {"tryon_used": tryon, "tryon_limit": _AI_TRYON_DAILY_LIMIT, "tryon_remaining": max(0, _AI_TRYON_DAILY_LIMIT - tryon),
             "product_img_used": product_img, "product_img_limit": _AI_PRODUCT_IMG_DAILY_LIMIT, "product_img_remaining": max(0, _AI_PRODUCT_IMG_DAILY_LIMIT - product_img)}
+
+def _call_gemini_image(prompt: str, image_bytes: bytes, mime_type: str) -> Optional[str]:
+    """Call Gemini with image generation capabilities. Returns base64 image or None."""
+    import google.generativeai as genai
+    import base64 as _b64_ai
+    genai.configure(api_key=GEMINI_API_KEY)
+    # Use the image generation model
+    model = genai.GenerativeModel("gemini-2.0-flash-exp",
+        generation_config=genai.GenerationConfig(response_mime_type="text/plain"))
+    img_part = {"mime_type": mime_type, "data": image_bytes}
+    try:
+        response = model.generate_content(
+            [prompt + "\n\nIMPORTANT: Generate an actual image, not text describing an image.", img_part],
+            generation_config={"candidate_count": 1}
+        )
+        if response.candidates:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, "inline_data") and part.inline_data and part.inline_data.data:
+                    return _b64_ai.b64encode(part.inline_data.data).decode()
+    except Exception as e:
+        logger.warning(f"[AI] Gemini call failed: {e}")
+    return None
 
 @api.get("/seller/ai/usage")
 async def ai_usage(payload: dict = Depends(require_seller)):
@@ -3662,55 +3728,46 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
     usage = _ai_usage_today(payload["sub"])
     if usage["tryon_remaining"] <= 0:
         raise HTTPException(429, f"Daily limit reached ({_AI_TRYON_DAILY_LIMIT} try-ons/day). Try again tomorrow.")
-    # Validate file
     if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
         raise HTTPException(400, "Only JPEG, PNG, or WebP images are accepted.")
     content = await image.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Image must be under 10MB.")
-    # Call Gemini
+    # Build the highly-specific prompt
+    prompt = _get_tryon_prompt(category, model_type)
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash-exp")
         import base64 as _b64_ai
-        img_part = {"mime_type": image.content_type, "data": content}
-        prompt = (f"Generate a photo-realistic image of a {model_type.replace('_', ' ')} model wearing this "
-                  f"{category} product. The model should be standing in a clean studio setting. "
-                  f"Preserve ALL original colors, patterns, embroidery, and design details of the product exactly. "
-                  f"The image should look like a professional fashion lookbook photo. "
-                  f"Also provide a short 1-sentence caption describing the look.")
-        response = model.generate_content([prompt, img_part])
-        # Extract text and any generated image
-        result_text = ""
-        result_image = None
-        if response.candidates:
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, "text") and part.text:
-                    result_text += part.text
-                if hasattr(part, "inline_data") and part.inline_data:
-                    result_image = _b64_ai.b64encode(part.inline_data.data).decode()
+        result_image = _call_gemini_image(prompt, content, image.content_type)
+        # If image gen isn't available, get a text response instead
         if not result_image:
-            # Gemini text-only response (image generation not supported for this model)
-            # Return the text response as caption with the original image
-            result_image = _b64_ai.b64encode(content).decode()
-            if not result_text:
-                result_text = "AI processed your image. Try a different category for better results."
+            import google.generativeai as genai
+            genai.configure(api_key=GEMINI_API_KEY)
+            model = genai.GenerativeModel("gemini-2.0-flash-exp")
+            img_part = {"mime_type": image.content_type, "data": content}
+            response = model.generate_content([
+                f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model. "
+                f"Include details about styling, draping, color harmony, and suggested accessories. Be specific and vivid.",
+                img_part
+            ])
+            caption = response.text if response.candidates else "AI analysis complete."
+            result_image = _b64_ai.b64encode(content).decode()  # Return original with analysis
+        else:
+            caption = f"AI-generated try-on: {category.title()} on a {model_type.replace('_', ' ')} model"
     except Exception as e:
         logger.warning(f"[AI] Gemini tryon error: {e}")
         raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or category.")
     # Record generation
     gen = {"id": str(uuid.uuid4()), "seller_id": payload["sub"], "type": "tryon",
-           "model_type": model_type, "category": category, "caption": result_text[:500],
+           "model_type": model_type, "category": category, "caption": caption[:500],
            "created_at": _now()}
     mem.setdefault("ai_generations", []).append(gen)
     _persist_db()
-    return {"image": result_image, "caption": result_text, "usage": _ai_usage_today(payload["sub"])}
+    return {"image": result_image, "caption": caption, "usage": _ai_usage_today(payload["sub"])}
 
 @api.post("/seller/ai/product-images")
 @limiter.limit("10/minute")
 async def ai_product_images(request: Request, image: UploadFile = File(...), style: str = Form("studio_white"), category: str = Form("saree"), payload: dict = Depends(require_seller)):
-    """Generate 3 professional product images using Gemini."""
+    """Generate 3 professional product images using Gemini with distinct prompts."""
     if not GEMINI_API_KEY:
         raise HTTPException(503, "AI Studio is not configured. Contact admin.")
     usage = _ai_usage_today(payload["sub"])
@@ -3721,37 +3778,35 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
     content = await image.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Image must be under 10MB.")
-    style_desc = {"studio_white": "clean white studio background with soft lighting",
-                  "lifestyle_warm": "warm lifestyle setting with natural golden-hour light",
-                  "dark_luxury": "dark luxury backdrop with dramatic spotlight",
-                  "outdoor_natural": "outdoor natural setting with greenery and soft daylight"}.get(style, "clean studio background")
-    prompts = [
-        f"Create a professional e-commerce hero shot of this {category} product on a {style_desc}. Front-facing, well-lit, high resolution. Preserve all product details.",
-        f"Create a close-up detail shot of this {category} product showing the texture, fabric, embroidery, or craftsmanship details. {style_desc} background. Macro photography style.",
-        f"Create a lifestyle/context shot of this {category} product in a real-world usage context. Show it being worn or displayed naturally. {style_desc}.",
-    ]
+    # 3 completely different prompts
+    shot_types = ["hero", "detail", "lifestyle"]
+    prompts = [_get_product_prompt(st, style, category) for st in shot_types]
     try:
-        import google.generativeai as genai
         import base64 as _b64_ai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash-exp")
-        img_part = {"mime_type": image.content_type, "data": content}
         images = []
-        for p in prompts:
-            try:
-                response = model.generate_content([p, img_part])
-                img_data = None
-                if response.candidates:
-                    for part in response.candidates[0].content.parts:
-                        if hasattr(part, "inline_data") and part.inline_data:
-                            img_data = _b64_ai.b64encode(part.inline_data.data).decode()
-                            break
-                images.append(img_data or _b64_ai.b64encode(content).decode())
-            except Exception:
+        captions = []
+        for i, prompt in enumerate(prompts):
+            img = _call_gemini_image(prompt, content, image.content_type)
+            if img:
+                images.append(img)
+                captions.append(f"{shot_types[i].title()} shot ({style.replace('_', ' ')})")
+            else:
+                # Fallback: get text description
+                import google.generativeai as genai
+                genai.configure(api_key=GEMINI_API_KEY)
+                model = genai.GenerativeModel("gemini-2.0-flash-exp")
+                img_part = {"mime_type": image.content_type, "data": content}
+                try:
+                    resp = model.generate_content([
+                        f"You are a professional product photographer. Describe in detail how you would photograph "
+                        f"this {category} for a {shot_types[i]} shot with {style.replace('_', ' ')} styling. "
+                        f"Include lighting setup, angles, props, and mood.",
+                        img_part
+                    ])
+                    captions.append(resp.text[:200] if resp.candidates else f"{shot_types[i].title()} shot")
+                except Exception:
+                    captions.append(f"{shot_types[i].title()} shot")
                 images.append(_b64_ai.b64encode(content).decode())
-        if not any(img != _b64_ai.b64encode(content).decode() for img in images):
-            # All failed — return helpful error
-            pass
     except Exception as e:
         logger.warning(f"[AI] Gemini product-images error: {e}")
         raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or category.")
@@ -3759,7 +3814,7 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
            "style": style, "category": category, "image_count": len(images), "created_at": _now()}
     mem.setdefault("ai_generations", []).append(gen)
     _persist_db()
-    return {"images": images, "style": style, "usage": _ai_usage_today(payload["sub"])}
+    return {"images": images, "captions": captions, "style": style, "usage": _ai_usage_today(payload["sub"])}
 
 @api.get("/seller/ai/gallery")
 async def ai_gallery(page: int = Query(1, ge=1), payload: dict = Depends(require_seller)):
