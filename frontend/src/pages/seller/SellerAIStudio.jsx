@@ -202,6 +202,11 @@ export default function SellerAIStudio() {
               {tryonLoading && <div className="h-64 rounded-xl animate-pulse" style={{ background: "#F0EBE3" }} />}
               {tryonResult && (
                 <div className="space-y-3">
+                  {tryonResult.generated === false && (
+                    <div className="rounded-lg p-3 text-xs" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
+                      AI image generation is not enabled on this account yet, so we're showing your original photo with an AI styling analysis below. To produce brand-new model/product photos, enable billing on the Gemini API project (Imagen &amp; image models require a paid plan).
+                    </div>
+                  )}
                   <ResultImage base64={tryonResult.image} label="Virtual Try-On" />
                   {tryonResult.caption && <p className="text-sm italic" style={{ color: "#6B5E52" }}>{tryonResult.caption}</p>}
                 </div>
@@ -242,10 +247,17 @@ export default function SellerAIStudio() {
                 </div>
               )}
               {prodResult && (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {(prodResult.images || []).map((img, i) => (
-                    <ResultImage key={i} base64={img} label={["Hero Shot", "Detail Shot", "Lifestyle Shot"][i]} />
-                  ))}
+                <div className="space-y-3">
+                  {prodResult.generated === false && (
+                    <div className="rounded-lg p-3 text-xs" style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A" }}>
+                      AI image generation is not enabled on this account yet, so we're showing your original photo with AI photography guidance. To generate brand-new studio shots, enable billing on the Gemini API project (image models require a paid plan).
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(prodResult.images || []).map((img, i) => (
+                      <ResultImage key={i} base64={img} label={["Hero Shot", "Detail Shot", "Lifestyle Shot"][i]} />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

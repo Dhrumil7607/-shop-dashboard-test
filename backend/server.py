@@ -3693,33 +3693,98 @@ def _ai_usage_today(seller_id: str) -> dict:
     return {"tryon_used": tryon, "tryon_limit": _AI_TRYON_DAILY_LIMIT, "tryon_remaining": max(0, _AI_TRYON_DAILY_LIMIT - tryon),
             "product_img_used": product_img, "product_img_limit": _AI_PRODUCT_IMG_DAILY_LIMIT, "product_img_remaining": max(0, _AI_PRODUCT_IMG_DAILY_LIMIT - product_img)}
 
+# Candidate image-capable models (in priority order). The account's key has
+# access to these per genai.list_models(); we try each until one succeeds and
+# cache the winner so subsequent calls are fast.
+_GEMINI_IMAGE_MODELS = [
+    "gemini-2.5-flash-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.1-flash-image-preview",
+    "gemini-3-pro-image",
+]
+# Text models for the analysis fallback (in priority order).
+_GEMINI_TEXT_MODELS = [
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+]
+_GEMINI_IMAGE_MODEL_CACHE = {"name": None}
+_GEMINI_TEXT_MODEL_CACHE = {"name": None}
+
 def _call_gemini_image(prompt: str, image_bytes: bytes, mime_type: str) -> Optional[str]:
-    """Call Gemini image generation model using the new google-genai SDK.
-    Uses gemini-2.0-flash-exp with image output capability.
-    Returns base64 image or None."""
+    """Call a Gemini image-generation model using the google-genai SDK.
+    Tries several known image-capable models until one returns an image, and
+    caches the working model name. Returns base64-encoded PNG/JPEG bytes or None."""
     import base64 as _b64_ai
     try:
         from google import genai
         from google.genai import types
+    except Exception as e:
+        logger.warning(f"[AI] google-genai SDK import failed: {e}")
+        return None
+    try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        # Upload image as inline part
         image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
-        response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
-            contents=[prompt, image_part],
-            config=types.GenerateContentConfig(
-                response_modalities=["TEXT", "IMAGE"],
-            )
-        )
-        # Extract generated image from response
-        if response.candidates:
-            for part in response.candidates[0].content.parts:
-                if part.inline_data and part.inline_data.data:
-                    return _b64_ai.b64encode(part.inline_data.data).decode()
-                if hasattr(part, "image") and part.image:
-                    return _b64_ai.b64encode(part.image.image_bytes).decode()
+        cfg = types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"])
+        # Try the cached model first, then the rest.
+        cached = _GEMINI_IMAGE_MODEL_CACHE.get("name")
+        order = ([cached] if cached else []) + [m for m in _GEMINI_IMAGE_MODELS if m != cached]
+        last_err = None
+        for model_name in order:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[prompt, image_part],
+                    config=cfg,
+                )
+                if response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        inline = getattr(part, "inline_data", None)
+                        if inline and getattr(inline, "data", None):
+                            _GEMINI_IMAGE_MODEL_CACHE["name"] = model_name
+                            data = inline.data
+                            # SDK may already return bytes; ensure base64 str
+                            if isinstance(data, (bytes, bytearray)):
+                                return _b64_ai.b64encode(bytes(data)).decode()
+                            return data if isinstance(data, str) else _b64_ai.b64encode(bytes(data)).decode()
+                # No image in a successful response — try next model.
+            except Exception as inner:
+                last_err = inner
+                msg = str(inner)
+                # 404 / not-supported → try the next candidate model.
+                if "404" in msg or "not found" in msg.lower() or "not supported" in msg.lower():
+                    continue
+                # Other errors (quota, safety) — stop trying more models.
+                break
+        if last_err:
+            logger.warning(f"[AI] Gemini image gen failed on all models. Last error: {last_err}")
     except Exception as e:
         logger.warning(f"[AI] Gemini image gen failed: {e}")
+    return None
+
+def _call_gemini_text(prompt_parts) -> Optional[str]:
+    """Call a Gemini text model for the analysis fallback, trying candidates."""
+    try:
+        from google import genai
+    except Exception:
+        return None
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        cached = _GEMINI_TEXT_MODEL_CACHE.get("name")
+        order = ([cached] if cached else []) + [m for m in _GEMINI_TEXT_MODELS if m != cached]
+        for model_name in order:
+            try:
+                resp = client.models.generate_content(model=model_name, contents=prompt_parts)
+                if resp and resp.text:
+                    _GEMINI_TEXT_MODEL_CACHE["name"] = model_name
+                    return resp.text
+            except Exception as inner:
+                msg = str(inner)
+                if "404" in msg or "not found" in msg.lower() or "not supported" in msg.lower():
+                    continue
+                break
+    except Exception as e:
+        logger.warning(f"[AI] Gemini text gen failed: {e}")
     return None
 
 @api.get("/seller/ai/usage")
@@ -3747,22 +3812,19 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
         result_image = _call_gemini_image(prompt, content, image.content_type)
         # If image gen isn't available, get a text response instead
         if not result_image:
-            from google import genai as _genai_sdk
             from google.genai import types as _genai_types
-            _client = _genai_sdk.Client(api_key=GEMINI_API_KEY)
             image_part = _genai_types.Part.from_bytes(data=content, mime_type=image.content_type)
-            resp = _client.models.generate_content(
-                model="gemini-2.0-flash-exp",
-                contents=[
-                    f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model. "
-                    f"Include details about styling, draping, color harmony, and suggested accessories. Be specific and vivid.",
-                    image_part
-                ]
-            )
-            caption = resp.text if resp.text else "AI analysis complete."
+            txt = _call_gemini_text([
+                f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model. "
+                f"Include details about styling, draping, color harmony, and suggested accessories. Be specific and vivid.",
+                image_part
+            ])
+            caption = txt if txt else "AI analysis complete."
             result_image = _b64_ai.b64encode(content).decode()  # Return original with analysis
+            generated = False
         else:
             caption = f"AI-generated try-on: {category.title()} on a {model_type.replace('_', ' ')} model"
+            generated = True
     except Exception as e:
         logger.warning(f"[AI] Gemini tryon error: {e}")
         raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or category.")
@@ -3772,7 +3834,7 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
            "created_at": _now()}
     mem.setdefault("ai_generations", []).append(gen)
     _persist_db()
-    return {"image": result_image, "caption": caption, "usage": _ai_usage_today(payload["sub"])}
+    return {"image": result_image, "caption": caption, "generated": generated, "usage": _ai_usage_today(payload["sub"])}
 
 @api.post("/seller/ai/product-images")
 @limiter.limit("10/minute")
@@ -3795,39 +3857,37 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
         import base64 as _b64_ai
         images = []
         captions = []
+        real_count = 0
         for i, prompt in enumerate(prompts):
             img = _call_gemini_image(prompt, content, image.content_type)
             if img:
                 images.append(img)
+                real_count += 1
                 captions.append(f"{shot_types[i].title()} shot ({style.replace('_', ' ')})")
             else:
                 # Fallback: get text description using text model
                 try:
-                    from google import genai as _genai_sdk
                     from google.genai import types as _genai_types
-                    _client = _genai_sdk.Client(api_key=GEMINI_API_KEY)
                     image_part = _genai_types.Part.from_bytes(data=content, mime_type=image.content_type)
-                    resp = _client.models.generate_content(
-                        model="gemini-2.0-flash-exp",
-                        contents=[
-                            f"You are a professional product photographer. Describe in detail how you would photograph "
-                            f"this {category} for a {shot_types[i]} shot with {style.replace('_', ' ')} styling. "
-                            f"Include lighting setup, angles, props, and mood.",
-                            image_part
-                        ]
-                    )
-                    captions.append(resp.text[:200] if resp.text else f"{shot_types[i].title()} shot")
+                    txt = _call_gemini_text([
+                        f"You are a professional product photographer. Describe in detail how you would photograph "
+                        f"this {category} for a {shot_types[i]} shot with {style.replace('_', ' ')} styling. "
+                        f"Include lighting setup, angles, props, and mood.",
+                        image_part
+                    ])
+                    captions.append(txt[:200] if txt else f"{shot_types[i].title()} shot")
                 except Exception:
                     captions.append(f"{shot_types[i].title()} shot")
                 images.append(_b64_ai.b64encode(content).decode())
     except Exception as e:
         logger.warning(f"[AI] Gemini product-images error: {e}")
         raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or category.")
+    generated = real_count > 0
     gen = {"id": str(uuid.uuid4()), "seller_id": payload["sub"], "type": "product_images",
            "style": style, "category": category, "image_count": len(images), "created_at": _now()}
     mem.setdefault("ai_generations", []).append(gen)
     _persist_db()
-    return {"images": images, "captions": captions, "style": style, "usage": _ai_usage_today(payload["sub"])}
+    return {"images": images, "captions": captions, "style": style, "generated": generated, "usage": _ai_usage_today(payload["sub"])}
 
 @api.get("/seller/ai/gallery")
 async def ai_gallery(page: int = Query(1, ge=1), payload: dict = Depends(require_seller)):
