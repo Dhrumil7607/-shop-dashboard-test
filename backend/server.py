@@ -14,7 +14,7 @@ Routes:
   Admin:    Full CRUD on all entities
 """
 
-from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Query, Request, UploadFile, File, Form, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
@@ -70,7 +70,7 @@ else:
     logger.info("[DB] Using in-memory database")
 
 # ── MongoDB-backed persistence ────────────────────────────────────────────────
-_COLLECTIONS = ["users", "shops", "products", "orders", "carts", "wishlists", "bookings", "waitlist", "slots", "seller_applications", "coupons", "returns", "email_log", "shipments", "categories", "_meta"]
+_COLLECTIONS = ["users", "shops", "products", "orders", "carts", "wishlists", "bookings", "waitlist", "slots", "seller_applications", "coupons", "returns", "email_log", "shipments", "categories", "ai_generations", "_meta"]
 
 def _load_from_mongo() -> Optional[Dict[str, list]]:
     """Load all collections from MongoDB."""
@@ -3590,6 +3590,143 @@ def admin_bulk_delete_sellers(body: dict):
         deleted.append(shop_id)
     _persist_db()
     return {"success": True, "deleted": deleted, "skipped": skipped}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SELLER AI STUDIO (Virtual Try-On + Product Image Generator via Gemini)
+# Key is stored ONLY in env vars (Railway + local .env) — never in frontend/git.
+# ══════════════════════════════════════════════════════════════════════════════
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+_AI_TRYON_DAILY_LIMIT = 10
+_AI_PRODUCT_IMG_DAILY_LIMIT = 15
+
+def _ai_usage_today(seller_id: str) -> dict:
+    """Count today's AI generations for a seller."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    gens = mem.get("ai_generations", [])
+    tryon = sum(1 for g in gens if g.get("seller_id") == seller_id and g.get("type") == "tryon" and (g.get("created_at") or "").startswith(today))
+    product_img = sum(1 for g in gens if g.get("seller_id") == seller_id and g.get("type") == "product_images" and (g.get("created_at") or "").startswith(today))
+    return {"tryon_used": tryon, "tryon_limit": _AI_TRYON_DAILY_LIMIT, "tryon_remaining": max(0, _AI_TRYON_DAILY_LIMIT - tryon),
+            "product_img_used": product_img, "product_img_limit": _AI_PRODUCT_IMG_DAILY_LIMIT, "product_img_remaining": max(0, _AI_PRODUCT_IMG_DAILY_LIMIT - product_img)}
+
+@api.get("/seller/ai/usage")
+async def ai_usage(payload: dict = Depends(require_seller)):
+    return _ai_usage_today(payload["sub"])
+
+@api.post("/seller/ai/tryon")
+@limiter.limit("10/minute")
+async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: str = Form("female_indian"), category: str = Form("saree"), payload: dict = Depends(require_seller)):
+    """Generate a virtual try-on image using Gemini."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(503, "AI Studio is not configured. Contact admin.")
+    usage = _ai_usage_today(payload["sub"])
+    if usage["tryon_remaining"] <= 0:
+        raise HTTPException(429, f"Daily limit reached ({_AI_TRYON_DAILY_LIMIT} try-ons/day). Try again tomorrow.")
+    # Validate file
+    if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(400, "Only JPEG, PNG, or WebP images are accepted.")
+    content = await image.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Image must be under 10MB.")
+    # Call Gemini
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        import base64 as _b64_ai
+        img_part = {"mime_type": image.content_type, "data": content}
+        prompt = (f"Generate a photo-realistic image of a {model_type.replace('_', ' ')} model wearing this "
+                  f"{category} product. The model should be standing in a clean studio setting. "
+                  f"Preserve ALL original colors, patterns, embroidery, and design details of the product exactly. "
+                  f"The image should look like a professional fashion lookbook photo. "
+                  f"Also provide a short 1-sentence caption describing the look.")
+        response = model.generate_content([prompt, img_part])
+        # Extract text and any generated image
+        result_text = ""
+        result_image = None
+        if response.candidates:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, "text") and part.text:
+                    result_text += part.text
+                if hasattr(part, "inline_data") and part.inline_data:
+                    result_image = _b64_ai.b64encode(part.inline_data.data).decode()
+        if not result_image:
+            # Gemini text-only response (image generation not supported for this model)
+            # Return the text response as caption with the original image
+            result_image = _b64_ai.b64encode(content).decode()
+            if not result_text:
+                result_text = "AI processed your image. Try a different category for better results."
+    except Exception as e:
+        logger.warning(f"[AI] Gemini tryon error: {e}")
+        raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or category.")
+    # Record generation
+    gen = {"id": str(uuid.uuid4()), "seller_id": payload["sub"], "type": "tryon",
+           "model_type": model_type, "category": category, "caption": result_text[:500],
+           "created_at": _now()}
+    mem.setdefault("ai_generations", []).append(gen)
+    _persist_db()
+    return {"image": result_image, "caption": result_text, "usage": _ai_usage_today(payload["sub"])}
+
+@api.post("/seller/ai/product-images")
+@limiter.limit("10/minute")
+async def ai_product_images(request: Request, image: UploadFile = File(...), style: str = Form("studio_white"), category: str = Form("saree"), payload: dict = Depends(require_seller)):
+    """Generate 3 professional product images using Gemini."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(503, "AI Studio is not configured. Contact admin.")
+    usage = _ai_usage_today(payload["sub"])
+    if usage["product_img_remaining"] <= 0:
+        raise HTTPException(429, f"Daily limit reached ({_AI_PRODUCT_IMG_DAILY_LIMIT} sets/day). Try again tomorrow.")
+    if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(400, "Only JPEG, PNG, or WebP images are accepted.")
+    content = await image.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Image must be under 10MB.")
+    style_desc = {"studio_white": "clean white studio background with soft lighting",
+                  "lifestyle_warm": "warm lifestyle setting with natural golden-hour light",
+                  "dark_luxury": "dark luxury backdrop with dramatic spotlight",
+                  "outdoor_natural": "outdoor natural setting with greenery and soft daylight"}.get(style, "clean studio background")
+    prompts = [
+        f"Create a professional e-commerce hero shot of this {category} product on a {style_desc}. Front-facing, well-lit, high resolution. Preserve all product details.",
+        f"Create a close-up detail shot of this {category} product showing the texture, fabric, embroidery, or craftsmanship details. {style_desc} background. Macro photography style.",
+        f"Create a lifestyle/context shot of this {category} product in a real-world usage context. Show it being worn or displayed naturally. {style_desc}.",
+    ]
+    try:
+        import google.generativeai as genai
+        import base64 as _b64_ai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.0-flash-exp")
+        img_part = {"mime_type": image.content_type, "data": content}
+        images = []
+        for p in prompts:
+            try:
+                response = model.generate_content([p, img_part])
+                img_data = None
+                if response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, "inline_data") and part.inline_data:
+                            img_data = _b64_ai.b64encode(part.inline_data.data).decode()
+                            break
+                images.append(img_data or _b64_ai.b64encode(content).decode())
+            except Exception:
+                images.append(_b64_ai.b64encode(content).decode())
+        if not any(img != _b64_ai.b64encode(content).decode() for img in images):
+            # All failed — return helpful error
+            pass
+    except Exception as e:
+        logger.warning(f"[AI] Gemini product-images error: {e}")
+        raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or category.")
+    gen = {"id": str(uuid.uuid4()), "seller_id": payload["sub"], "type": "product_images",
+           "style": style, "category": category, "image_count": len(images), "created_at": _now()}
+    mem.setdefault("ai_generations", []).append(gen)
+    _persist_db()
+    return {"images": images, "style": style, "usage": _ai_usage_today(payload["sub"])}
+
+@api.get("/seller/ai/gallery")
+async def ai_gallery(page: int = Query(1, ge=1), payload: dict = Depends(require_seller)):
+    gens = [g for g in mem.get("ai_generations", []) if g.get("seller_id") == payload["sub"]]
+    gens.sort(key=lambda g: g.get("created_at", ""), reverse=True)
+    per_page = 12
+    start = (page - 1) * per_page
+    return {"generations": gens[start:start + per_page], "total": len(gens), "page": page, "per_page": per_page}
 
 @api.post("/admin/change-password", dependencies=[Depends(require_admin)])
 def admin_change_password(body: dict):

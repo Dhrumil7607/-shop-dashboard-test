@@ -7,7 +7,7 @@
 import { useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import { LogOut, Package, Radio, ClipboardList, CalendarDays, Tag, Eye, LayoutDashboard, Settings } from "lucide-react";
+import { LogOut, Package, Radio, ClipboardList, CalendarDays, Tag, Eye, LayoutDashboard, Settings, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -18,6 +18,7 @@ const NAV_TABS = [
   { label: "Bookings",  to: "/seller/bookings",   icon: CalendarDays },
   { label: "Live",      to: "/seller/live",       icon: Radio },
   { label: "Coupons",   to: "/seller/coupons",    icon: Tag },
+  { label: "AI Studio", to: "/seller/ai-studio",  icon: Sparkles },
   { label: "Settings",  to: "/seller/settings",   icon: Settings },
 ];
 

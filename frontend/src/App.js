@@ -80,6 +80,7 @@ const SellerOrderDetail = lazy(() => import("@/pages/seller/SellerOrderDetail"))
 const SellerBookings  = lazy(() => import("@/pages/seller/SellerBookings"));
 const SellerCoupons   = lazy(() => import("@/pages/seller/SellerCoupons"));
 const SellerSettings  = lazy(() => import("@/pages/seller/SellerSettings"));
+const SellerAIStudio  = lazy(() => import("@/pages/seller/SellerAIStudio"));
 const SellerLoginPage = lazy(() => import("@/pages/seller/SellerLoginPage"));
 const SellerSuspended = lazy(() => import("@/pages/seller/SellerSuspended"));
 const AdminAccess     = lazy(() => import("@/pages/AdminAccess"));
@@ -172,6 +173,7 @@ function AppRoutes() {
                 <Route path="/seller/bookings"  element={<ProtectedSellerRoute><SellerBookings /></ProtectedSellerRoute>} />
                 <Route path="/seller/coupons"   element={<ProtectedSellerRoute><SellerCoupons /></ProtectedSellerRoute>} />
                 <Route path="/seller/settings"  element={<ProtectedSellerRoute><SellerSettings /></ProtectedSellerRoute>} />
+                <Route path="/seller/ai-studio" element={<ProtectedSellerRoute><SellerAIStudio /></ProtectedSellerRoute>} />
 
                 {/* ── ADMIN — hidden entry point, not linked anywhere ── */}
                 <Route path="/slb-admin"        element={<AdminAccess />} />

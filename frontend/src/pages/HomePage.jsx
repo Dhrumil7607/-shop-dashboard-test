@@ -248,9 +248,11 @@ const DEFAULT_TICKER = [
 function Ticker() {
     const [items, setItems] = useState(DEFAULT_TICKER);
     useEffect(() => {
-        fetch("/api/ticker").then(r => r.json()).then(d => {
-            if (Array.isArray(d?.items) && d.items.length > 0) setItems(d.items);
-        }).catch(() => {});
+        import("@/lib/api").then(({ api }) => {
+            api.get("/ticker").then(res => {
+                if (Array.isArray(res.data?.items) && res.data.items.length > 0) setItems(res.data.items);
+            }).catch(() => {});
+        });
     }, []);
     // Duplicate enough times to fill the scroll seamlessly
     const repeated = [...items, ...items, ...items, ...items];
