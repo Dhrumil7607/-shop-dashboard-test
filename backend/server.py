@@ -3396,9 +3396,68 @@ def update_shipment_status(ship_id: str, changes: dict, payload: dict = Depends(
         _persist_db()
     return ship
 
-# ── Image upload (stores base64 as data-url or accepts an external URL) ─────
-# In production replace the base64 store with an S3/Cloudinary upload.
-# Max ~4 MB per image (browser should pre-resize before sending).
+# ── Cloudinary integration (optional, activates when credentials are set) ─────
+# Configure via EITHER a single CLOUDINARY_URL (cloudinary://key:secret@cloud)
+# OR the three separate vars CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
+# CLOUDINARY_API_SECRET. When configured, uploaded + AI-generated images are
+# stored on Cloudinary (keeping MongoDB lean) instead of as base64 data URLs.
+_CLOUDINARY_READY = {"checked": False, "ok": False}
+
+def _cloudinary_configure() -> bool:
+    """Configure the Cloudinary SDK once. Returns True if usable."""
+    if _CLOUDINARY_READY["checked"]:
+        return _CLOUDINARY_READY["ok"]
+    _CLOUDINARY_READY["checked"] = True
+    try:
+        import cloudinary  # type: ignore
+        url = os.environ.get("CLOUDINARY_URL", "").strip()
+        cloud = os.environ.get("CLOUDINARY_CLOUD_NAME", "").strip()
+        key = os.environ.get("CLOUDINARY_API_KEY", "").strip()
+        secret = os.environ.get("CLOUDINARY_API_SECRET", "").strip()
+        if url:
+            cloudinary.config(cloudinary_url=url, secure=True)
+            _CLOUDINARY_READY["ok"] = True
+        elif cloud and key and secret:
+            cloudinary.config(cloud_name=cloud, api_key=key, api_secret=secret, secure=True)
+            _CLOUDINARY_READY["ok"] = True
+        else:
+            _CLOUDINARY_READY["ok"] = False
+    except Exception as e:
+        logger.warning(f"[CLOUDINARY] configure failed: {e}")
+        _CLOUDINARY_READY["ok"] = False
+    return _CLOUDINARY_READY["ok"]
+
+def _cloudinary_configured() -> bool:
+    return _cloudinary_configure()
+
+def _cloudinary_upload(source: str, folder: str = "shoplivebharat/products") -> Optional[str]:
+    """Upload a data URL or hosted URL to Cloudinary and return the secure URL.
+    Returns None if Cloudinary is not configured or the upload fails."""
+    if not _cloudinary_configure():
+        return None
+    try:
+        import cloudinary.uploader  # type: ignore
+        res = cloudinary.uploader.upload(
+            source, folder=folder, resource_type="image",
+            quality="auto:good", fetch_format="auto",
+        )
+        return res.get("secure_url")
+    except Exception as e:
+        logger.warning(f"[CLOUDINARY] upload failed: {e}")
+        return None
+
+def _store_image(data_url: str, by: str, folder: str = "shoplivebharat/products") -> dict:
+    """Store an uploaded image. Prefers Cloudinary; falls back to the in-memory
+    data-URL store so the app keeps working without Cloudinary configured."""
+    hosted = _cloudinary_upload(data_url, folder=folder)
+    if hosted:
+        return {"url": hosted, "source": "cloudinary"}
+    image_id = "img-" + uuid.uuid4().hex[:12]
+    mem.setdefault("image_store", {})[image_id] = {"url": data_url, "uploaded_at": _now(), "by": by}
+    return {"url": data_url, "image_id": image_id, "source": "data_url"}
+
+# ── Image upload (Cloudinary when configured, else base64 data-url fallback) ──
+# Max ~10 MB per image (browser should pre-resize before sending).
 @api.post("/upload-image", status_code=201)
 def upload_image(body: dict, payload: dict = Depends(get_current_user)):
     """Accept { data_url, filename } or { url } and return a usable image URL."""
@@ -3408,10 +3467,7 @@ def upload_image(body: dict, payload: dict = Depends(get_current_user)):
     data_url = body.get("data_url", "")
     if not data_url.startswith("data:image/"):
         raise HTTPException(400, "Provide a valid data_url (data:image/...) or a hosted url")
-    # Store the data-url directly in memory (fine for dev; swap for S3 in prod)
-    image_id = "img-" + uuid.uuid4().hex[:12]
-    mem.setdefault("image_store", {})[image_id] = {"url": data_url, "uploaded_at": _now(), "by": payload["sub"]}
-    return {"url": data_url, "image_id": image_id, "source": "data_url"}
+    return _store_image(data_url, by=payload["sub"], folder="shoplivebharat/products")
 
 @api.post("/admin/upload-image", status_code=201, dependencies=[Depends(require_admin)])
 def admin_upload_image(body: dict):
@@ -3421,9 +3477,18 @@ def admin_upload_image(body: dict):
     data_url = body.get("data_url", "")
     if not data_url.startswith("data:image/"):
         raise HTTPException(400, "Provide a valid data_url or a hosted url")
-    image_id = "img-" + uuid.uuid4().hex[:12]
-    mem.setdefault("image_store", {})[image_id] = {"url": data_url, "uploaded_at": _now(), "by": "admin"}
-    return {"url": data_url, "image_id": image_id, "source": "data_url"}
+    return _store_image(data_url, by="admin", folder="shoplivebharat/products")
+
+@api.get("/admin/cloudinary-status", dependencies=[Depends(require_admin)])
+def admin_cloudinary_status():
+    """Report whether Cloudinary is configured (no secrets returned)."""
+    ok = _cloudinary_configured()
+    cloud = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+    if not cloud:
+        url = os.environ.get("CLOUDINARY_URL", "")
+        if "@" in url:
+            cloud = url.rsplit("@", 1)[-1]
+    return {"configured": ok, "cloud_name": cloud, "mode": "cloudinary" if ok else "data_url"}
 
 # ── Admin: store display order + booking-page visibility ─────────────────────
 @api.patch("/admin/shops/{shop_id}/order", dependencies=[Depends(require_admin)])
@@ -4260,18 +4325,13 @@ def _generate_ai_model(body: AIModelIn, seller_id: str, regenerate: bool = False
             "settings": settings, "usage": _ai_model_usage(seller_id)}
 
 def _maybe_offload_image(data_url: str) -> str:
-    """If CLOUDINARY_URL is configured, upload the data URL and return the hosted
-    URL (folder shoplivebharat/ai-models/). Otherwise return the data URL as-is."""
-    cfg = os.environ.get("CLOUDINARY_URL", "").strip()
-    if not cfg:
-        return data_url
+    """Upload AI-generated images to Cloudinary (folder shoplivebharat/ai-models)
+    when configured; otherwise keep the data URL. Uses the central helper defined
+    below so configuration logic lives in one place."""
     try:
-        import cloudinary, cloudinary.uploader  # type: ignore
-        cloudinary.config(cloudinary_url=cfg)
-        res = cloudinary.uploader.upload(data_url, folder="shoplivebharat/ai-models")
-        return res.get("secure_url") or data_url
-    except Exception as e:
-        logger.warning(f"[AI] Cloudinary offload failed, keeping data URL: {e}")
+        hosted = _cloudinary_upload(data_url, folder="shoplivebharat/ai-models")
+        return hosted or data_url
+    except Exception:
         return data_url
 
 @api.get("/ai/model-usage")
