@@ -11,6 +11,7 @@ import SizeProfileSelector from "@/components/SizeProfile/SizeProfileSelector";
 import GlassCard from "@/components/Checkout/GlassCard";
 import CouponField from "@/components/Checkout/CouponField";
 import TrustBadgeRow from "@/components/Checkout/TrustBadgeRow";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 
 /* ─── Styled input ─────────────────────────────────────────── */
 const inp = "w-full px-3 py-2.5 border-b border-gray-200 bg-transparent text-sm outline-none focus:border-[#C9A84C] transition placeholder-gray-400";
@@ -364,7 +365,19 @@ export default function Checkout() {
                                     {/* Address */}
                                     <div className="mb-5">
                                         <label className={lbl} style={{ color: "#9B8B7A" }}>Address <span style={{ color: "#8B3A3A" }}>*</span></label>
-                                        <input className={inp} value={form.address} onChange={e => set("address", e.target.value)} placeholder="123 Main Street, Apartment 4B" required />
+                                        <AddressAutocomplete
+                                            className={inp}
+                                            value={form.address}
+                                            onChange={v => set("address", v)}
+                                            onSelect={a => {
+                                                if (a.address) set("address", a.address);
+                                                if (a.city) set("city", a.city);
+                                                if (a.state) set("state", a.state);
+                                                if (a.pincode) set("zip", a.pincode);
+                                            }}
+                                            placeholder="Start typing your address…"
+                                            inputProps={{ required: true }}
+                                        />
                                     </div>
 
                                     {/* Row 3 */}

@@ -958,6 +958,80 @@ def update_ticker(body: dict):
     _persist_db()
     return {"success": True, "items": items}
 
+# ── Google Places: address autocomplete (key stays server-side) ───────────────
+GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
+
+def _places_request(url: str, method: str = "GET", body: Optional[dict] = None, field_mask: Optional[str] = None) -> dict:
+    """Call the Google Places API (New) and return parsed JSON. Never raises.
+    The API key travels in the X-Goog-Api-Key header (kept server-side)."""
+    import urllib.request as _u, json as _j
+    headers = {"Content-Type": "application/json", "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY}
+    if field_mask:
+        headers["X-Goog-FieldMask"] = field_mask
+    data = _j.dumps(body).encode("utf-8") if body is not None else None
+    try:
+        req = _u.Request(url, data=data, headers=headers, method=method)
+        with _u.urlopen(req, timeout=8) as resp:
+            return _j.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        logger.warning(f"[PLACES] request failed: {e}")
+        return {}
+
+@api.get("/places/autocomplete")
+def places_autocomplete(input: str = Query("", min_length=0), payload: dict = Depends(get_current_user)):
+    """Address autocomplete restricted to India (Places API New). Returns up to
+    5 predictions with only description + place_id. Key never exposed to client."""
+    q = (input or "").strip()
+    if not GOOGLE_MAPS_API_KEY or len(q) < 3:
+        return {"predictions": []}
+    data = _places_request(
+        "https://places.googleapis.com/v1/places:autocomplete",
+        method="POST",
+        body={"input": q, "includedRegionCodes": ["in"], "languageCode": "en"},
+    )
+    preds = []
+    for s in (data.get("suggestions") or [])[:5]:
+        pp = s.get("placePrediction") or {}
+        text = (pp.get("text") or {}).get("text", "")
+        pid = pp.get("placeId", "")
+        if text and pid:
+            preds.append({"description": text, "place_id": pid})
+    return {"predictions": preds}
+
+@api.get("/places/details")
+def places_details(place_id: str = Query("", min_length=1), payload: dict = Depends(get_current_user)):
+    """Resolve a place_id to a structured address (line1, city, state, pincode)."""
+    pid = (place_id or "").strip()
+    if not GOOGLE_MAPS_API_KEY or not pid:
+        return {"address": "", "city": "", "state": "", "pincode": ""}
+    data = _places_request(
+        f"https://places.googleapis.com/v1/places/{pid}",
+        method="GET",
+        field_mask="addressComponents,formattedAddress",
+    )
+    comps = data.get("addressComponents") or []
+    def _find(*types):
+        for c in comps:
+            if any(t in (c.get("types") or []) for t in types):
+                return c.get("longText") or c.get("shortText") or ""
+        return ""
+    street_number = _find("street_number")
+    route = _find("route")
+    sublocality = _find("sublocality", "sublocality_level_1", "sublocality_level_2", "neighborhood")
+    line1_parts = [x for x in [street_number, route] if x]
+    line1 = " ".join(line1_parts).strip()
+    if not line1:
+        line1 = _find("premise") or sublocality or ""
+    elif sublocality and sublocality not in line1:
+        line1 = f"{line1}, {sublocality}"
+    return {
+        "address": line1,
+        "city": _find("locality", "postal_town", "administrative_area_level_3") or sublocality,
+        "state": _find("administrative_area_level_1"),
+        "pincode": _find("postal_code"),
+        "formatted_address": data.get("formattedAddress", ""),
+    }
+
 # ── Razorpay: server-side order creation + verification ───────────────────────
 @api.get("/razorpay/config")
 def razorpay_config():
