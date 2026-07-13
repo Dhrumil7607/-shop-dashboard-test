@@ -8,6 +8,7 @@ import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { WishlistProvider } from "@/contexts/WishlistContext";
 import MaintenanceMode from "@/components/MaintenanceMode";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import ConsentBanner from "@/components/ConsentBanner";
 import PageLoader from "@/components/PageLoader";
 
 /**
@@ -313,6 +314,7 @@ function App() {
                                 <WishlistProvider>
                                 <MaintenanceMode />
                                 <AppRoutes />
+                                <ConsentBanner />
                                 </WishlistProvider>
                             </CurrencyProvider>
                         </CartProvider>

@@ -17,7 +17,7 @@ Routes:
 from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Query, Request, UploadFile, File, Form, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -580,6 +580,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Request body size limit (prevents payload-based DoS) ──────────────────────
+# Image uploads are base64 data URLs, so allow a generous 12MB ceiling.
+_MAX_BODY_BYTES = int(os.environ.get("MAX_BODY_BYTES", str(12 * 1024 * 1024)))
+
+@app.middleware("http")
+async def _limit_body_size(request: Request, call_next):
+    cl = request.headers.get("content-length")
+    if cl:
+        try:
+            if int(cl) > _MAX_BODY_BYTES:
+                return JSONResponse(status_code=413, content={"detail": "Request body too large."})
+        except ValueError:
+            return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length."})
+    return await call_next(request)
+
 api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
 
@@ -1198,6 +1214,34 @@ async def razorpay_checkout_link(request: Request, body: CheckoutLinkIn, payload
     _persist_db()
     return {"short_url": data.get("short_url"), "order_id": order_id, "payment_link_id": data.get("id")}
 
+def _record_payment_alert(order_id: str, paid_paise: int, expected_paise: int, status: str) -> None:
+    """Record a payment anomaly for fraud analysis. Stores NO PII — only the
+    order id, amounts, and status."""
+    try:
+        mem.setdefault("payment_alerts", []).append({
+            "id": str(uuid.uuid4()), "order_id": order_id,
+            "paid_paise": paid_paise, "expected_paise": expected_paise,
+            "status": status, "created_at": _now(),
+        })
+        _persist_db()
+    except Exception:
+        pass
+
+def _razorpay_fetch_payment(payment_id: str) -> dict:
+    """Fetch a payment from Razorpay to confirm the real captured amount.
+    Returns {} on any failure (caller decides how strict to be)."""
+    if not (payment_id and RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET):
+        return {}
+    try:
+        auth = _b64.b64encode(f"{RAZORPAY_KEY_ID}:{RAZORPAY_KEY_SECRET}".encode()).decode()
+        req = urllib.request.Request(f"https://api.razorpay.com/v1/payments/{payment_id}", method="GET")
+        req.add_header("Authorization", f"Basic {auth}")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return _json2.loads(resp.read().decode())
+    except Exception as e:
+        logger.warning(f"[Razorpay] fetch payment failed: {e}")
+        return {}
+
 @api.get("/razorpay/pl-callback")
 def razorpay_pl_callback(
     razorpay_payment_id: str = Query(default=""),
@@ -1214,7 +1258,28 @@ def razorpay_pl_callback(
     ok = bool(razorpay_signature) and hmac.compare_digest(expected, razorpay_signature)
 
     order = mem_first("orders", id=order_id) if order_id else None
-    if ok and razorpay_payment_link_status == "paid" and order and order.get("payment_status") != "paid":
+
+    # Server-side amount confirmation: fetch the real payment from Razorpay and
+    # confirm the captured amount matches the order total. Never trust the
+    # client/redirect amount. If it doesn't match, treat as a failed/fraudulent
+    # attempt and do NOT fulfil the order.
+    amount_ok = True
+    if ok and razorpay_payment_link_status == "paid" and order and razorpay_payment_id:
+        pay = _razorpay_fetch_payment(razorpay_payment_id)
+        if pay:
+            paid_paise = int(pay.get("amount") or 0)
+            expected_paise = int(round(float(order.get("total", 0)) * 100))
+            paid_status = pay.get("status", "")
+            # Allow a ₹1 rounding tolerance; require captured/authorized status.
+            if abs(paid_paise - expected_paise) > 100 or paid_status not in ("captured", "authorized"):
+                amount_ok = False
+                logger.warning(
+                    f"[FRAUD] Payment amount mismatch order={order_id} "
+                    f"paid={paid_paise} expected={expected_paise} status={paid_status}"
+                )
+                _record_payment_alert(order_id, paid_paise, expected_paise, paid_status)
+
+    if ok and amount_ok and razorpay_payment_link_status == "paid" and order and order.get("payment_status") != "paid":
         order["status"] = "confirmed"
         order["payment_status"] = "paid"
         order["razorpay_payment_id"] = razorpay_payment_id
@@ -3377,6 +3442,37 @@ def admin_list_shops_ordered():
     """Return all shops sorted by display_order for the admin ordering UI."""
     shops = sorted(mem["shops"], key=lambda s: (s.get("display_order", 9999), s.get("name", "")))
     return shops
+
+# ── CSP violation reports (browsers POST here on policy violations) ───────────
+@api.post("/csp-report")
+async def csp_report(request: Request):
+    """Receive CSP violation reports. Kept lightweight and capped so it can't be
+    abused as a log-flooding vector."""
+    try:
+        raw = await request.body()
+        if len(raw) <= 8192:
+            data = _json2.loads(raw.decode("utf-8") or "{}")
+            report = data.get("csp-report") or data
+            blocked = report.get("blocked-uri") or report.get("blockedURL") or ""
+            directive = report.get("violated-directive") or report.get("effectiveDirective") or ""
+            logger.warning(f"[CSP] violation directive={directive!r} blocked={blocked!r}")
+            alerts = mem.setdefault("csp_reports", [])
+            alerts.append({"directive": directive, "blocked": blocked, "created_at": _now()})
+            del alerts[:-200]  # keep only the most recent 200
+    except Exception:
+        pass
+    return JSONResponse(status_code=204, content=None)
+
+@api.get("/admin/csp-reports", dependencies=[Depends(require_admin)])
+def admin_csp_reports(limit: int = Query(100, le=200)):
+    reports = list(reversed(mem.get("csp_reports", [])))
+    return {"reports": reports[:limit], "total": len(mem.get("csp_reports", []))}
+
+# ── Payment fraud alerts (amount mismatches, without PII) ─────────────────────
+@api.get("/admin/payment-alerts", dependencies=[Depends(require_admin)])
+def admin_payment_alerts(limit: int = Query(100, le=1000)):
+    alerts = sorted(mem.get("payment_alerts", []), key=lambda a: a.get("created_at", ""), reverse=True)
+    return {"alerts": alerts[:limit], "total": len(alerts)}
 
 # ── Email log (test-mode visibility for admin) ────────────────────────────────
 @api.get("/admin/email-log", dependencies=[Depends(require_admin)])
