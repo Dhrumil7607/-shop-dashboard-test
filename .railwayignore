@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+frontend
+.venv
+**/.venv
+**/__pycache__
+.git
+build
+**/build
+*.log
