@@ -338,6 +338,28 @@ def _send_welcome_email(to: str, name: str) -> dict:
 """
     return _send_email(to=to, subject=f"Welcome to ShopLiveBharat, {first} ✨", body=body, kind="welcome")
 
+def _sender_for_kind(kind: str) -> tuple:
+    """Pick the right From address + display name based on the email kind.
+    Addresses are overridable via env vars; all must be on a verified domain.
+      • orders / returns  → orders@shoplivebharat.com
+      • seller / staff    → sellers@shoplivebharat.com
+      • booking           → bookings@shoplivebharat.com
+      • everything else   → support@shoplivebharat.com
+    """
+    k = (kind or "").lower()
+    default_sender = os.environ.get("SENDER_EMAIL", "support@shoplivebharat.com")
+    default_name = os.environ.get("SENDER_NAME", "ShopLiveBharat")
+    if k.startswith("order") or k.startswith("return"):
+        return (os.environ.get("ORDERS_EMAIL", "orders@shoplivebharat.com"),
+                os.environ.get("ORDERS_NAME", "ShopLiveBharat Orders"))
+    if k.startswith("seller") or k.startswith("staff"):
+        return (os.environ.get("SELLERS_EMAIL", "sellers@shoplivebharat.com"),
+                os.environ.get("SELLERS_NAME", "ShopLiveBharat Sellers"))
+    if k.startswith("booking"):
+        return (os.environ.get("BOOKINGS_EMAIL", "bookings@shoplivebharat.com"),
+                os.environ.get("BOOKINGS_NAME", "ShopLiveBharat Bookings"))
+    return (default_sender, default_name)
+
 def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict:
     """Send an email via Resend if configured, else record in the email log (test mode).
     Always logs to the in-memory email_log so the UI can show delivery status.
@@ -349,14 +371,14 @@ def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict
     status = "sent" if resend_key else "test_mode"
     provider_id = None
     html = _email_template(subject, body)
+    sender, name = _sender_for_kind(kind)
     if resend_key:
         try:
             import resend as _resend
             _resend.api_key = resend_key
-            sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-            name = os.environ.get("SENDER_NAME", "ShopLiveBharat")
             resp = _resend.Emails.send({
                 "from": f"{name} <{sender}>", "to": [to],
+                "reply_to": os.environ.get("SUPPORT_EMAIL", "support@shoplivebharat.com"),
                 "subject": subject, "html": html,
             })
             provider_id = resp.get("id") if isinstance(resp, dict) else getattr(resp, "id", None)
@@ -364,7 +386,7 @@ def _send_email(to: str, subject: str, body: str, kind: str = "generic") -> dict
             status = "failed"
             logger.warning(f"[EMAIL] send failed to {to}: {e}")
     entry = {
-        "id": str(uuid.uuid4()), "to": to, "subject": subject, "kind": kind,
+        "id": str(uuid.uuid4()), "to": to, "from": sender, "subject": subject, "kind": kind,
         "status": status, "provider_id": provider_id, "created_at": _now(),
     }
     try:
