@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ImageUpload from "@/components/ImageUpload";
+import AIModelGenerator from "@/components/ProductStudio/AIModelGenerator";
 import {
   ALL_CATEGORIES, getSizeType, getDefaultSizeOptions,
   MENS_STANDARD_SIZES, MENS_NUMERIC_SIZES, WOMENS_STANDARD_SIZES, KIDS_SIZES,
@@ -660,6 +661,15 @@ export default function ProductStudio({
                   onUpload={url => set("hover_image_url", url)}
                 />
               </div>
+
+              {/* AI Model Generator — seller only, needs a primary image */}
+              {mode === "seller" && (
+                <AIModelGenerator
+                  primaryImage={form.image_url}
+                  productId={editProduct?.id || ""}
+                  onSetCover={url => set("image_url", url)}
+                />
+              )}
             </Section>
 
             {/* Section 3: Pricing */}

@@ -4123,6 +4123,203 @@ async def ai_gallery(page: int = Query(1, ge=1), payload: dict = Depends(require
     start = (page - 1) * per_page
     return {"generations": gens[start:start + per_page], "total": len(gens), "page": page, "per_page": per_page}
 
+# ══════════════════════════════════════════════════════════════════════════════
+# AI MODEL GENERATOR — "Generate AI Model wearing this clothing"
+# Uses gemini-2.5-flash-image (image-editing) because it PRESERVES the uploaded
+# garment. Imagen 4 is text-to-image and cannot preserve the exact product, so
+# it is intentionally not used here. Generated images are attached to the product.
+# ══════════════════════════════════════════════════════════════════════════════
+_AI_MODEL_FREE_MONTHLY_LIMIT = int(os.environ.get("AI_MODEL_FREE_LIMIT", "5"))
+
+# The exact, locked preservation prompt. Model attributes are appended per request.
+_AI_MODEL_BASE_PROMPT = (
+    "You are a professional fashion photography AI. Generate a photorealistic fashion "
+    "model wearing the uploaded clothing.\n"
+    "Rules:\n"
+    "• Preserve the exact colour.\n• Preserve embroidery.\n• Preserve texture.\n"
+    "• Preserve neckline.\n• Preserve sleeve design.\n• Preserve borders.\n"
+    "• Preserve stitching.\n• Preserve patterns.\n• Preserve print.\n• Preserve fabric.\n"
+    "• Preserve fitting.\n"
+    "DO NOT modify the clothing. Only replace the invisible mannequin/product background "
+    "with a realistic human model.\n"
+    "Use soft luxury studio lighting. Generate premium e-commerce catalogue quality. "
+    "Ultra realistic skin. Natural hands. Natural face. Natural pose. Professional photography. "
+    "No jewellery unless visible in original image. No accessories. No watermark. No text. "
+    "No logo. 4K quality."
+)
+_AI_GENDER = {"female": "adult woman", "male": "adult man", "kids_girl": "young girl child", "kids_boy": "young boy child"}
+_AI_AGE = {"teen": "teenage", "young_adult": "young adult", "adult": "adult", "mature": "mature"}
+_AI_BODY = {"slim": "slim", "regular": "regular", "athletic": "athletic", "plus_size": "plus-size"}
+_AI_SKIN = {"fair": "fair", "wheatish": "wheatish", "brown": "brown", "dark": "dark"}
+_AI_POSE = {"standing": "standing straight", "front": "facing the camera front-on", "side": "a three-quarter side profile", "walking": "walking naturally"}
+_AI_BG = {
+    "white_studio": "a clean white seamless studio background",
+    "luxury_studio": "a luxury studio with soft warm accent lighting",
+    "lifestyle_indoor": "a tasteful lifestyle indoor setting",
+    "outdoor": "a natural outdoor setting with soft daylight",
+}
+
+def _build_ai_model_prompt(s: dict) -> str:
+    gender = _AI_GENDER.get((s.get("gender") or "female").lower(), "adult woman")
+    age = _AI_AGE.get((s.get("age") or "adult").lower(), "adult")
+    body = _AI_BODY.get((s.get("body_type") or "regular").lower(), "regular")
+    skin = _AI_SKIN.get((s.get("skin_tone") or "wheatish").lower(), "wheatish")
+    pose = _AI_POSE.get((s.get("pose") or "standing").lower(), "standing straight")
+    bg = _AI_BG.get((s.get("background") or "white_studio").lower(), "a clean white seamless studio background")
+    return (
+        f"{_AI_MODEL_BASE_PROMPT}\n"
+        f"Model: an {age} {gender} of Indian ethnicity, {body} build, {skin} skin tone, in {pose}. "
+        f"Background: {bg}."
+    )
+
+def _seller_is_premium(seller_id: str) -> bool:
+    user = mem_first("users", id=seller_id) or {}
+    shop = mem_first("shops", id=user.get("store_id")) if user.get("store_id") else None
+    plan = (user.get("plan") or (shop or {}).get("plan") or "free").lower()
+    return plan in ("premium", "pro", "unlimited") or bool(user.get("is_premium"))
+
+def _ai_model_usage(seller_id: str) -> dict:
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    gens = mem.get("ai_model_generations", [])
+    used = sum(1 for g in gens if g.get("seller_id") == seller_id
+               and g.get("status") == "completed" and (g.get("created_at") or "").startswith(month))
+    premium = _seller_is_premium(seller_id)
+    limit = None if premium else _AI_MODEL_FREE_MONTHLY_LIMIT
+    remaining = None if premium else max(0, _AI_MODEL_FREE_MONTHLY_LIMIT - used)
+    return {"used": used, "limit": limit, "remaining": remaining, "premium": premium}
+
+def _decode_data_url(data_url: str):
+    """Return (raw_bytes, mime) from a data:image/...;base64,... URL, else (None, None)."""
+    import base64 as _b64
+    try:
+        if not data_url.startswith("data:image/"):
+            return None, None
+        header, b64 = data_url.split(",", 1)
+        mime = header.split(";")[0].replace("data:", "")
+        return _b64.b64decode(b64), mime
+    except Exception:
+        return None, None
+
+class AIModelIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    image_data_url: str = ""
+    product_id: Optional[str] = None
+    gender: str = "female"
+    age: str = "adult"
+    body_type: str = "regular"
+    skin_tone: str = "wheatish"
+    pose: str = "standing"
+    background: str = "white_studio"
+
+def _generate_ai_model(body: AIModelIn, seller_id: str, regenerate: bool = False) -> dict:
+    if not GEMINI_API_KEY:
+        raise HTTPException(503, "AI Studio is not configured. Contact admin.")
+    usage = _ai_model_usage(seller_id)
+    if usage["limit"] is not None and usage["remaining"] <= 0:
+        raise HTTPException(429, f"Monthly AI limit reached ({usage['limit']} generations). Upgrade to Premium for unlimited.")
+
+    raw, mime = _decode_data_url(body.image_data_url)
+    if not raw:
+        raise HTTPException(400, "Provide a valid product image (data URL).")
+    if mime not in ("image/jpeg", "image/jpg", "image/png", "image/webp"):
+        raise HTTPException(400, "Only JPG, JPEG, PNG or WEBP images are accepted.")
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Image must be under 10MB.")
+
+    settings = {"gender": body.gender, "age": body.age, "body_type": body.body_type,
+                "skin_tone": body.skin_tone, "pose": body.pose, "background": body.background}
+    prompt = _build_ai_model_prompt(settings)
+    gen_id = "aim-" + uuid.uuid4().hex[:12]
+    # normalise jpg → jpeg for the SDK
+    call_mime = "image/jpeg" if mime in ("image/jpg", "image/jpeg") else mime
+    b64_img = _call_gemini_image(prompt, raw, call_mime)
+    status = "completed" if b64_img else "failed"
+    if not b64_img:
+        raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or settings.")
+    generated_url = f"data:image/png;base64,{b64_img}"
+    # Optional Cloudinary offload if configured (keeps DB lean in production)
+    generated_url = _maybe_offload_image(generated_url)
+
+    record = {
+        "id": gen_id, "seller_id": seller_id, "product_id": body.product_id,
+        "generated_image": generated_url, "settings": settings,
+        "status": status, "is_primary": False, "created_at": _now(),
+    }
+    mem.setdefault("ai_model_generations", []).append(record)
+    _persist_db()
+    return {"id": gen_id, "image": generated_url, "status": status,
+            "settings": settings, "usage": _ai_model_usage(seller_id)}
+
+def _maybe_offload_image(data_url: str) -> str:
+    """If CLOUDINARY_URL is configured, upload the data URL and return the hosted
+    URL (folder shoplivebharat/ai-models/). Otherwise return the data URL as-is."""
+    cfg = os.environ.get("CLOUDINARY_URL", "").strip()
+    if not cfg:
+        return data_url
+    try:
+        import cloudinary, cloudinary.uploader  # type: ignore
+        cloudinary.config(cloudinary_url=cfg)
+        res = cloudinary.uploader.upload(data_url, folder="shoplivebharat/ai-models")
+        return res.get("secure_url") or data_url
+    except Exception as e:
+        logger.warning(f"[AI] Cloudinary offload failed, keeping data URL: {e}")
+        return data_url
+
+@api.get("/ai/model-usage")
+def ai_model_usage(payload: dict = Depends(require_seller)):
+    return _ai_model_usage(payload["sub"])
+
+@api.get("/ai/model-images")
+def ai_model_images(product_id: Optional[str] = None, payload: dict = Depends(require_seller)):
+    gens = [g for g in mem.get("ai_model_generations", []) if g.get("seller_id") == payload["sub"]]
+    if product_id:
+        gens = [g for g in gens if g.get("product_id") == product_id]
+    gens.sort(key=lambda g: g.get("created_at", ""), reverse=True)
+    return {"images": gens}
+
+@api.get("/ai/status/{gen_id}")
+def ai_model_status(gen_id: str, payload: dict = Depends(require_seller)):
+    g = next((x for x in mem.get("ai_model_generations", [])
+              if x.get("id") == gen_id and x.get("seller_id") == payload["sub"]), None)
+    if not g:
+        raise HTTPException(404, "Generation not found")
+    return {"id": g["id"], "status": g.get("status"), "image": g.get("generated_image"),
+            "is_primary": g.get("is_primary", False), "settings": g.get("settings", {})}
+
+@api.post("/ai/generate-model")
+@limiter.limit("10/minute")
+def ai_generate_model(request: Request, body: AIModelIn, payload: dict = Depends(require_seller)):
+    return _generate_ai_model(body, payload["sub"], regenerate=False)
+
+@api.post("/ai/regenerate-model")
+@limiter.limit("10/minute")
+def ai_regenerate_model(request: Request, body: AIModelIn, payload: dict = Depends(require_seller)):
+    return _generate_ai_model(body, payload["sub"], regenerate=True)
+
+@api.delete("/ai/model-image/{gen_id}")
+def ai_delete_model_image(gen_id: str, payload: dict = Depends(require_seller)):
+    gens = mem.get("ai_model_generations", [])
+    before = len(gens)
+    mem["ai_model_generations"] = [g for g in gens
+                                   if not (g.get("id") == gen_id and g.get("seller_id") == payload["sub"])]
+    if len(mem["ai_model_generations"]) == before:
+        raise HTTPException(404, "Generation not found")
+    _persist_db()
+    return {"success": True, "deleted": gen_id}
+
+@api.post("/ai/model-image/{gen_id}/primary")
+def ai_set_primary_model_image(gen_id: str, payload: dict = Depends(require_seller)):
+    """Mark a generated image as the primary AI image for its product."""
+    target = next((g for g in mem.get("ai_model_generations", [])
+                   if g.get("id") == gen_id and g.get("seller_id") == payload["sub"]), None)
+    if not target:
+        raise HTTPException(404, "Generation not found")
+    for g in mem.get("ai_model_generations", []):
+        if g.get("seller_id") == payload["sub"] and g.get("product_id") == target.get("product_id"):
+            g["is_primary"] = (g["id"] == gen_id)
+    _persist_db()
+    return {"success": True, "primary": gen_id, "image": target.get("generated_image")}
+
 @api.post("/admin/change-password", dependencies=[Depends(require_admin)])
 def admin_change_password(body: dict):
     """Change an admin account password (admin auth is key-based, so this is

@@ -705,6 +705,33 @@ export async function adminBulkDeleteSellers(shopIds, adminKey) {
     return data;
 }
 
+// ── AI Model Generator (seller product photos) ─────────────────────────────────
+export async function aiModelUsage() {
+    const { data } = await api.get("/ai/model-usage");
+    return data; // { used, limit, remaining, premium }
+}
+export async function aiModelImages(productId) {
+    const params = productId ? { product_id: productId } : {};
+    const { data } = await api.get("/ai/model-images", { params });
+    return data?.images || [];
+}
+export async function aiGenerateModel(payload) {
+    const { data } = await api.post("/ai/generate-model", payload, { timeout: 90000 });
+    return data; // { id, image, status, settings, usage }
+}
+export async function aiRegenerateModel(payload) {
+    const { data } = await api.post("/ai/regenerate-model", payload, { timeout: 90000 });
+    return data;
+}
+export async function aiDeleteModelImage(genId) {
+    const { data } = await api.delete(`/ai/model-image/${genId}`);
+    return data;
+}
+export async function aiSetPrimaryModelImage(genId) {
+    const { data } = await api.post(`/ai/model-image/${genId}/primary`, {});
+    return data;
+}
+
 // ── Categories ────────────────────────────────────────────────────────────────
 export async function fetchCategories() {
     try {
