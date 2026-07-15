@@ -110,20 +110,20 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
         (to === "/marketplace" && location.pathname === "/shop");
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#FAF9F6" }}>
+        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#F5EFE6" }}>
 
-            {/* ── HEADER ── */}
+            {/* ── HEADER (V2 editorial) ── */}
             <motion.header
                 className="sticky top-0 z-40 border-b transition-all duration-300"
                 style={{
-                    backgroundColor: scrolled ? "rgba(250,249,246,0.88)" : "#FAF9F6",
-                    borderColor: "#E8E4DF",
-                    backdropFilter: scrolled ? "blur(20px) saturate(160%)" : "none",
-                    WebkitBackdropFilter: scrolled ? "blur(20px) saturate(160%)" : "none",
-                    boxShadow: scrolled ? "0 2px 20px rgba(44,36,27,0.06), 0 1px 0 rgba(255,255,255,0.8)" : "none",
+                    backgroundColor: scrolled ? "rgba(245,239,230,0.82)" : "#F5EFE6",
+                    borderColor: scrolled ? "rgba(20,18,16,0.08)" : "rgba(20,18,16,0.06)",
+                    backdropFilter: scrolled ? "blur(18px) saturate(150%)" : "none",
+                    WebkitBackdropFilter: scrolled ? "blur(18px) saturate(150%)" : "none",
+                    boxShadow: scrolled ? "0 1px 0 rgba(20,18,16,0.06)" : "none",
                 }}
             >
-                <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap min-w-0">
+                <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-3.5 flex items-center justify-between gap-4 min-w-0">
 
     {/* Logo */}
                     <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 min-w-0 group">
@@ -136,28 +136,28 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                         </motion.div>
                     </Link>
 
-                    {/* Center nav */}
-                    <nav className="hidden lg:flex items-center gap-5 text-sm flex-1 justify-center">
+                    {/* Center nav — editorial uppercase */}
+                    <nav className="hidden lg:flex items-center gap-7 flex-1 justify-center">
                         {NAV.map(link => (
                             <Link key={link.to} to={link.to}
-                                className="relative font-medium transition-colors py-1 whitespace-nowrap"
+                                className="relative py-1 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors"
                                 aria-current={isActive(link.to) ? "page" : undefined}
-                                style={{ color: isActive(link.to) ? "#1a1a1a" : "#6B5E52" }}
+                                style={{ color: isActive(link.to) ? "#141210" : "rgba(20,18,16,0.55)" }}
                             >
                                 {link.label}
                                 {isActive(link.to) && (
                                     <motion.span
                                         layoutId="nav-indicator"
-                                        className="absolute -bottom-0.5 left-0 right-0 h-0.5 rounded-full"
-                                        style={{ backgroundColor: "#C9A84C" }}
+                                        className="absolute -bottom-1 left-0 right-0 h-px"
+                                        style={{ backgroundColor: "#B08D3B" }}
                                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                                     />
                                 )}
                             </Link>
                         ))}
                         <Link to="/become-a-seller"
-                            className="flex items-center gap-1 font-medium transition-colors hover:opacity-80"
-                            style={{ color: "#C9A84C" }}>
+                            className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors hover:opacity-80"
+                            style={{ color: "#B08D3B" }}>
                             <span>✦</span> Become a Seller
                         </Link>
                     </nav>
@@ -231,8 +231,8 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                         {/* Admin pill — only when admin logged in */}
                         {isAdmin && (
                             <Link to="/admin/dashboard"
-                                className="hidden sm:block px-3 py-1.5 text-xs font-semibold rounded-lg ml-1 transition hover:opacity-80"
-                                style={{ backgroundColor: "#1a1a1a", color: "white" }}>
+                                className="hidden sm:block px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] rounded-full ml-1 transition hover:opacity-80"
+                                style={{ backgroundColor: "#141210", color: "#F5EFE6" }}>
                                 Admin ↗
                             </Link>
                         )}
@@ -242,8 +242,8 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             <motion.button
                                 whileTap={{ scale: 0.97 }}
                                 onClick={() => setAccountOpen(v => !v)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition hover:bg-black/5"
-                                style={{ color: "#1a1a1a", borderColor: "#E8E4DF" }}>
+                                className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] rounded-full border transition hover:bg-black/[0.04]"
+                                style={{ color: "#141210", borderColor: "rgba(20,18,16,0.16)" }}>
                                 {isLoggedIn ? (user?.name?.split(" ")[0] || "Account") : "Login"}
                                 <motion.span
                                     animate={{ rotate: accountOpen ? 180 : 0 }}

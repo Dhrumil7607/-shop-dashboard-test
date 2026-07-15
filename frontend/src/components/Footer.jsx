@@ -53,7 +53,7 @@ function FooterGroup({ id, title, headingDelay, children }) {
 
             {/* Desktop static heading — visible only at sm and above */}
             <motion.h4
-                className="hidden sm:block text-xs font-bold uppercase tracking-widest mb-5"
+                className="hidden sm:block text-[11px] font-bold uppercase tracking-[0.22em] mb-5"
                 style={{ color: "rgba(255,255,255,0.4)" }}
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
@@ -107,7 +107,7 @@ export default function Footer() {
     const sectionVariants = itemVariants.fadeInUp;
     
     return (
-        <footer style={{ backgroundColor: "#1a1a1a", color: "white" }} className="pt-14 pb-8 px-6 md:px-12">
+        <footer style={{ backgroundColor: "#141210", color: "#F5EFE6" }} className="pt-16 pb-8 px-6 md:px-12">
             <motion.div 
                 className="max-w-7xl mx-auto"
                 variants={footerBgVariants}
@@ -166,7 +166,7 @@ export default function Footer() {
                                     className="w-8 h-8 rounded-full flex items-center justify-center transition hover:opacity-100"
                                     style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)" }}
                                     variants={itemVariants.scaleInRotate}
-                                    whileHover={{ scale: 1.2, rotate: 10, color: "#C9A84C" }}
+                                    whileHover={{ scale: 1.15, color: "#B08D3B" }}
                                     whileTap={{ scale: 0.95 }}
                                     transition={{ duration: 0.3 }}
                                 >
