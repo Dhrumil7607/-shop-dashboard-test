@@ -45,6 +45,14 @@
       "dest": "/frontend/favicon.ico"
     },
     {
+      "src": "/brand-logo.png",
+      "dest": "/frontend/brand-logo.png"
+    },
+    {
+      "src": "/brand-mark.png",
+      "dest": "/frontend/brand-mark.png"
+    },
+    {
       "handle": "filesystem"
     },
     {
