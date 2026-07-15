@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useWishlist } from "@/contexts/WishlistContext";
 import Footer from "@/components/Footer";
 import CurrencySelector from "@/components/CurrencySelector";
+import BrandLogo from "@/components/BrandLogo";
 
 const NAV = [
     { label: "Home",          to: "/" },
@@ -124,25 +125,15 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
             >
                 <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap min-w-0">
 
-                    {/* Logo */}
+    {/* Logo */}
                     <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 min-w-0 group">
                         <motion.div
-                            className="w-8 h-8 rounded-full border-2 flex items-center justify-center"
-                            style={{ borderColor: "#C9A84C" }}
-                            whileHover={{ scale: 1.08, rotate: 5 }}
+                            whileHover={{ scale: 1.04 }}
                             transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                            className="flex items-center"
                         >
-                            <span className="font-serif font-bold text-sm" style={{ color: "#C9A84C" }}>S</span>
+                            <BrandLogo height={42} />
                         </motion.div>
-                        <div className="leading-none">
-                            <div className="font-bold text-sm tracking-tight flex items-baseline gap-0">
-                                <span style={{ color: "#1a1a1a" }}>ShopLive</span>
-                                <span style={{ color: "#C9A84C" }}>Bharat</span>
-                            </div>
-                            <p className="text-[8px] uppercase tracking-[0.2em] font-medium mt-0.5" style={{ color: "#9B8B7A" }}>
-                                Indian Luxury, Worldwide
-                            </p>
-                        </div>
                     </Link>
 
                     {/* Center nav */}

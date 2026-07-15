@@ -12,6 +12,7 @@ import GlassCard from "@/components/Checkout/GlassCard";
 import CouponField from "@/components/Checkout/CouponField";
 import TrustBadgeRow from "@/components/Checkout/TrustBadgeRow";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import PhoneInput from "@/components/PhoneInput";
 import { quoteShipping } from "@/lib/api";
 
 /* ─── Styled input ─────────────────────────────────────────── */
@@ -122,6 +123,7 @@ export default function Checkout() {
     const [currency, setCurrency] = useState("INR");
     const [selectedSizeProfileId, setSelectedSizeProfileId] = useState(null);
     const [couponDiscount, setCouponDiscount] = useState(0);
+    const [phoneValid, setPhoneValid] = useState(true);
 
     const [form, setForm] = useState({
         full_name: user?.name  || "",
@@ -376,7 +378,14 @@ export default function Checkout() {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 mb-5">
                                         <div>
                                             <label className={lbl} style={{ color: "#9B8B7A" }}>Phone</label>
-                                            <input className={inp} type="tel" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98765 43210" />
+                                            <PhoneInput
+                                                className={inp}
+                                                value={form.phone}
+                                                onChange={(full, meta) => { set("phone", full); setPhoneValid(meta.valid || full === ""); }}
+                                            />
+                                            {form.phone && !phoneValid && (
+                                                <p className="text-[11px] mt-1" style={{ color: "#C0392B" }}>Enter a valid phone number.</p>
+                                            )}
                                         </div>
                                         <div>
                                             <label className={lbl} style={{ color: "#9B8B7A" }}>Country</label>

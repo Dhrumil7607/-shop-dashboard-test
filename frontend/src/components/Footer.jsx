@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import BrandLogo from "@/components/BrandLogo";
 import {
     containerVariants,
     itemVariants,
@@ -133,18 +134,7 @@ export default function Footer() {
                             transition={{ duration: 0.6, delay: 0 }}
                         >
                             <Link to="/" className="inline-flex items-center gap-2.5 mb-5 group">
-                                <motion.div 
-                                    className="w-7 h-7 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                                    style={{ borderColor: "#C9A84C" }}
-                                    whileHover={{ scale: 1.1, rotate: 10 }}
-                                    transition={{ duration: 0.3 }}
-                                >
-                                    <span className="font-serif font-bold text-xs" style={{ color: "#C9A84C" }}>S</span>
-                                </motion.div>
-                                <div className="leading-none">
-                                    <span className="font-bold text-sm" style={{ color: "white" }}>ShopLive</span>
-                                    <span className="font-bold text-sm" style={{ color: "#C9A84C" }}>Bharat</span>
-                                </div>
+                                <BrandLogo height={44} dark />
                             </Link>
                         </motion.div>
                         
