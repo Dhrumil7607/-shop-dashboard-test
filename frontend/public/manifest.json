@@ -8,10 +8,16 @@
   "background_color": "#FAF9F6",
   "icons": [
     {
+      "src": "/brand-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/shop-assets/logo/logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/shop-assets/logo/favicon.ico",

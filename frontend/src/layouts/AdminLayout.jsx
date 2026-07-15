@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 import { LogOut, LayoutDashboard, Package, ShoppingBag, BookOpen, Users, Settings, Tag, RotateCcw, Shield, ListOrdered, LayoutGrid, UserRound } from "lucide-react";
 import { toast } from "sonner";
+import BrandLogo from "@/components/BrandLogo";
 
 const NAV_TABS = [
   { label: "Dashboard",    path: "/admin/dashboard",             icon: LayoutDashboard },
@@ -45,18 +46,11 @@ export default function AdminLayout({ children }) {
 
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full border-2 flex items-center justify-center"
-              style={{ borderColor: "#C9A84C" }}>
-              <span className="font-serif font-bold text-xs" style={{ color: "#C9A84C" }}>S</span>
-            </div>
-            <div className="leading-none">
-              <span className="font-bold text-sm text-white">ShopLive</span>
-              <span className="font-bold text-sm" style={{ color: "#C9A84C" }}>Bharat</span>
-              <span className="ml-2 text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "rgba(220,50,50,0.25)", color: "#FF9999" }}>
-                ADMIN
-              </span>
-            </div>
+            <BrandLogo height={34} dark />
+            <span className="text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: "rgba(220,50,50,0.25)", color: "#FF9999" }}>
+              ADMIN
+            </span>
           </div>
 
           {/* Right actions */}

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
+import BrandLogo from "@/components/BrandLogo";
 
 const IMAGE_URL =
     "https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?w=900&q=85";
@@ -156,15 +157,8 @@ export default function Register() {
                         >
                             {/* Brand + Title */}
                             <div className="text-center mb-7">
-                                <div className="inline-flex items-center gap-1.5 mb-4">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-                                        stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-                                        <line x1="3" y1="6" x2="21" y2="6"/>
-                                        <path d="M16 10a4 4 0 01-8 0"/>
-                                    </svg>
-                                    <span className="font-bold text-sm" style={{ color: "#C9A84C" }}>ShopLive</span>
-                                    <span className="font-bold text-sm" style={{ color: "#2C241B" }}>Bharat</span>
+                                <div className="inline-flex items-center justify-center mb-4">
+                                    <BrandLogo height={56} />
                                 </div>
                                 <h1 className="font-serif leading-none mb-2" style={{ fontSize: "clamp(1.75rem, 5vw, 2.2rem)", color: "#2C241B" }}>
                                     Create{" "}

@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { LogOut, Package, Radio, ClipboardList, CalendarDays, Tag, Eye, LayoutDashboard, Settings, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import BrandLogo from "@/components/BrandLogo";
 
 const NAV_TABS = [
   { label: "Overview",  to: "/seller/dashboard", icon: LayoutDashboard },
@@ -56,18 +57,11 @@ export default function SellerLayout({ children }) {
 
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full border-2 flex items-center justify-center"
-              style={{ borderColor: "#C9A84C" }}>
-              <span className="font-serif font-bold text-xs" style={{ color: "#C9A84C" }}>S</span>
-            </div>
-            <div className="leading-none">
-              <span className="font-bold text-sm text-white">ShopLive</span>
-              <span className="font-bold text-sm" style={{ color: "#C9A84C" }}>Bharat</span>
-              <span className="ml-2 text-[10px] uppercase tracking-widest font-semibold px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "rgba(162,70,107,0.3)", color: "#E8A4C0" }}>
-                SELLER
-              </span>
-            </div>
+            <BrandLogo height={34} dark />
+            <span className="text-[10px] uppercase tracking-widest font-semibold px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: "rgba(162,70,107,0.3)", color: "#E8A4C0" }}>
+              SELLER
+            </span>
           </div>
 
           {/* Right — store name + logout */}
