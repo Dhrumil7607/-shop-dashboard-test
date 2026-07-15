@@ -46,7 +46,7 @@ export default function AdminLayout({ children }) {
 
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <BrandLogo height={34} dark />
+            <BrandLogo variant="mark" height={32} dark />
             <span className="text-[10px] uppercase tracking-widest font-bold px-1.5 py-0.5 rounded"
               style={{ backgroundColor: "rgba(220,50,50,0.25)", color: "#FF9999" }}>
               ADMIN

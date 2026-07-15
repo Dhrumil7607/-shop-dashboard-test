@@ -57,7 +57,7 @@ export default function SellerLayout({ children }) {
 
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <BrandLogo height={34} dark />
+            <BrandLogo variant="mark" height={32} dark />
             <span className="text-[10px] uppercase tracking-widest font-semibold px-1.5 py-0.5 rounded"
               style={{ backgroundColor: "rgba(162,70,107,0.3)", color: "#E8A4C0" }}>
               SELLER

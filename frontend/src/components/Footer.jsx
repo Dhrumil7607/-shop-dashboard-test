@@ -134,7 +134,7 @@ export default function Footer() {
                             transition={{ duration: 0.6, delay: 0 }}
                         >
                             <Link to="/" className="inline-flex items-center gap-2.5 mb-5 group">
-                                <BrandLogo height={44} dark />
+                                <BrandLogo variant="mark" height={40} dark />
                             </Link>
                         </motion.div>
                         

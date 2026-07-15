@@ -132,7 +132,7 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             transition={{ type: "spring", stiffness: 400, damping: 20 }}
                             className="flex items-center"
                         >
-                            <BrandLogo height={42} />
+                            <BrandLogo variant="mark" height={38} />
                         </motion.div>
                     </Link>
 

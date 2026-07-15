@@ -1,55 +1,57 @@
 /**
  * BrandLogo.jsx
- * Renders the ShopLiveBharat logo image (public/brand-logo.png). If the image
- * is missing or fails to load, it gracefully falls back to the text wordmark so
- * the header/footer never breaks.
+ * Renders the ShopLiveBharat logo.
+ *   variant="full" (default) → the full logo image (icon + wordmark stacked).
+ *   variant="mark"           → just the icon graphic + a crisp text wordmark
+ *                              (best for slim navbars where the full logo is tiny).
+ * Falls back to a text wordmark if the image is missing so nothing ever breaks.
  *
  * Props:
- *   height   number   pixel height of the logo image (default 36)
- *   showText bool      show the wordmark text next to the mark (default false)
- *   dark     bool      use light-colored fallback text (for dark backgrounds)
+ *   variant  "full" | "mark"
+ *   height   number   pixel height of the logo image
+ *   dark     bool     light-colored wordmark text (for dark backgrounds)
  */
 import { useState } from "react";
 
-const LOGO_SRC = `${process.env.PUBLIC_URL || ""}/brand-logo.png`;
+const BASE = process.env.PUBLIC_URL || "";
+const FULL_SRC = `${BASE}/brand-logo.png`;
+const MARK_SRC = `${BASE}/brand-mark.png`;
 
-export default function BrandLogo({ height = 36, showText = false, dark = false }) {
+export default function BrandLogo({ variant = "full", height = 40, dark = false }) {
   const [failed, setFailed] = useState(false);
 
-  if (!failed) {
+  const Wordmark = () => (
+    <span className="font-bold tracking-tight leading-none" style={{ fontSize: Math.max(13, height * 0.42) }}>
+      <span style={{ color: dark ? "#fff" : "#1a1a1a" }}>ShopLive</span>
+      <span style={{ color: "#C9A84C" }}>Bharat</span>
+    </span>
+  );
+
+  if (failed) {
+    // Text-only fallback
     return (
-      <span className="flex items-center gap-2">
-        <img
-          src={LOGO_SRC}
-          alt="ShopLiveBharat"
-          style={{ height, width: "auto", display: "block" }}
-          onError={() => setFailed(true)}
-        />
-        {showText && (
-          <span className="font-bold text-sm tracking-tight leading-none">
-            <span style={{ color: dark ? "#fff" : "#1a1a1a" }}>ShopLive</span>
-            <span style={{ color: "#C9A84C" }}>Bharat</span>
-          </span>
-        )}
+      <span className="flex items-center gap-2.5">
+        <span className="rounded-full border-2 flex items-center justify-center"
+          style={{ borderColor: "#C9A84C", width: height, height }}>
+          <span className="font-serif font-bold" style={{ color: "#C9A84C", fontSize: height * 0.4 }}>S</span>
+        </span>
+        <Wordmark />
       </span>
     );
   }
 
-  // Fallback wordmark
+  if (variant === "mark") {
+    return (
+      <span className="flex items-center gap-2">
+        <img src={MARK_SRC} alt="ShopLiveBharat" style={{ height, width: "auto", display: "block" }}
+          onError={() => setFailed(true)} />
+        <Wordmark />
+      </span>
+    );
+  }
+
   return (
-    <span className="flex items-center gap-2.5">
-      <span
-        className="rounded-full border-2 flex items-center justify-center"
-        style={{ borderColor: "#C9A84C", width: height, height }}
-      >
-        <span className="font-serif font-bold text-sm" style={{ color: "#C9A84C" }}>S</span>
-      </span>
-      <span className="leading-none">
-        <span className="font-bold text-sm tracking-tight">
-          <span style={{ color: dark ? "#fff" : "#1a1a1a" }}>ShopLive</span>
-          <span style={{ color: "#C9A84C" }}>Bharat</span>
-        </span>
-      </span>
-    </span>
+    <img src={FULL_SRC} alt="ShopLiveBharat" style={{ height, width: "auto", display: "block" }}
+      onError={() => setFailed(true)} />
   );
 }
