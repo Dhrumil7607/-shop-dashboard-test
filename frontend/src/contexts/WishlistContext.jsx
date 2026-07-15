@@ -28,7 +28,7 @@ export function WishlistProvider({ children }) {
   function addToWishlist(product) {
     setItems((prev) => {
       if (prev.some((i) => i.id === product.id)) return prev;
-      toast.success("Added to wishlist ♡");
+      toast.success("Saved to Your Wishlist", { description: `${product.name || "Item"} has been added to your wishlist.` });
       return [...prev, product];
     });
   }
@@ -36,7 +36,7 @@ export function WishlistProvider({ children }) {
   function removeFromWishlist(productId) {
     setItems((prev) => {
       if (!prev.some((i) => i.id === productId)) return prev;
-      toast("Removed from wishlist");
+      toast.success("Removed from Wishlist", { description: "Item removed from your wishlist." });
       return prev.filter((i) => i.id !== productId);
     });
   }
@@ -45,10 +45,10 @@ export function WishlistProvider({ children }) {
     setItems((prev) => {
       const exists = prev.some((i) => i.id === product.id);
       if (exists) {
-        toast("Removed from wishlist");
+        toast.success("Removed from Wishlist", { description: "Item removed from your wishlist." });
         return prev.filter((i) => i.id !== product.id);
       } else {
-        toast.success("Added to wishlist ♡");
+        toast.success("Saved to Your Wishlist", { description: `${product.name || "Item"} has been added to your wishlist.` });
         return [...prev, product];
       }
     });

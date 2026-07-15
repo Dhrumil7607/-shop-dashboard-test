@@ -40,6 +40,9 @@ let webpackConfig = {
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      // Premium notification system — transparently replaces `sonner` everywhere
+      // (every `import { toast } from "sonner"` and <Toaster/> renders our luxury UI).
+      'sonner': path.resolve(__dirname, 'src/lib/notify.jsx'),
     },
     configure: (webpackConfig) => {
 

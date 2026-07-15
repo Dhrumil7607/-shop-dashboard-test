@@ -222,7 +222,7 @@ export default function Checkout() {
     const handlePlaceOrder = useCallback(async (e) => {
         e.preventDefault();
         if (!form.full_name || !form.email || !form.address) {
-            toast.error("Please fill in all required fields.");
+            toast.warning("A Few Details Needed", { description: "Please complete your name, email and address to continue." });
             return;
         }
 
@@ -260,11 +260,11 @@ export default function Checkout() {
                 description: `ShopLiveBharat — ${cartItems.length} item${cartItems.length !== 1 ? "s" : ""}`,
             });
             if (!short_url) throw new Error("Could not start payment.");
-            toast.loading("Redirecting to secure payment…", { id: "pay-status" });
+            toast.loading("Preparing Secure Checkout", { id: "pay-status", description: "Connecting you securely to Razorpay…" });
             window.location.href = short_url;   // leave the SPA → Razorpay hosted page
         } catch (err) {
             setLoading(false);
-            toast.error(err?.response?.data?.detail || err?.message || "Could not start payment. Please try again.");
+            toast.error("Payment Could Not Start", { description: err?.response?.data?.detail || err?.message || "Please try again in a moment." });
         }
     }, [form, cartItems, total, currency]);
 
@@ -274,13 +274,15 @@ export default function Checkout() {
         const paidId = params.get("paid");
         const failed = params.get("payment_failed");
         if (failed) {
-            toast.error("Payment was not completed. Please try again.");
+            toast.error("Payment Not Completed", { description: "Your payment didn't go through. Please try again." });
             window.history.replaceState({}, "", "/checkout");
             return;
         }
         if (!paidId) return;
         // Show success immediately (avoids the empty-cart flash), then enrich.
         clearCart();
+        toast.dismiss("pay-status");
+        toast.success("Payment Confirmed", { description: "Your order has been placed successfully." });
         setOrderData({
             orderId: paidId, email: "", items: [],
             subtotal: 0, shipping: 0, total: 0, payMethod: "razorpay",
