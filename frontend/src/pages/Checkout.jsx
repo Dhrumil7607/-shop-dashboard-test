@@ -12,6 +12,7 @@ import GlassCard from "@/components/Checkout/GlassCard";
 import CouponField from "@/components/Checkout/CouponField";
 import TrustBadgeRow from "@/components/Checkout/TrustBadgeRow";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { quoteShipping } from "@/lib/api";
 
 /* ─── Styled input ─────────────────────────────────────────── */
 const inp = "w-full px-3 py-2.5 border-b border-gray-200 bg-transparent text-sm outline-none focus:border-[#C9A84C] transition placeholder-gray-400";
@@ -136,10 +137,31 @@ export default function Checkout() {
     const set = useCallback((k, v) => setForm(prev => ({ ...prev, [k]: v })), []);
 
     const subtotal = getTotalPrice();
-    const shipping = subtotal > 15000 ? 0 : 499;
-    const tax      = Math.round(subtotal * 0.05);
+
+    // ── Backend-authoritative weight-based shipping ──────────────────────────
+    // The frontend only DISPLAYS the amount the backend returns. It re-quotes
+    // whenever the cart or destination country changes.
+    const [shippingQuote, setShippingQuote] = useState(null);
+    const [shippingLoading, setShippingLoading] = useState(false);
+    useEffect(() => {
+        if (!cartItems.length) { setShippingQuote(null); return; }
+        let cancelled = false;
+        setShippingLoading(true);
+        const items = cartItems.map(i => ({ product_id: i.product_id || i.id, quantity: i.quantity || 1 }));
+        quoteShipping({ items, country: form.country, subtotal })
+            .then(q => { if (!cancelled) setShippingQuote(q); })
+            .catch(() => { if (!cancelled) setShippingQuote(null); })
+            .finally(() => { if (!cancelled) setShippingLoading(false); });
+        return () => { cancelled = true; };
+    }, [cartItems, form.country, subtotal]);
+
+    // Fallback keeps the page usable if the quote call fails.
+    const shipping = shippingQuote
+        ? shippingQuote.amount
+        : (subtotal > 15000 ? 0 : 499);
     const discount = Math.round(subtotal * couponDiscount / 100);
-    const total    = subtotal + shipping + tax - discount;
+    // Grand Total = Products + Shipping − Discounts  (no tax)
+    const total    = subtotal + shipping - discount;
 
     const minDelivery = new Date(); minDelivery.setDate(minDelivery.getDate() + 7);
     const maxDelivery = new Date(); maxDelivery.setDate(maxDelivery.getDate() + 14);
@@ -189,11 +211,11 @@ export default function Checkout() {
             orderId: saved.id || saved.order_id || `SLB-${Date.now().toString(36).toUpperCase()}`,
             email:   form.email,
             items:   saved.items || cartItems,
-            subtotal, shipping, tax,
+            subtotal, shipping,
             total:   saved.total ?? total,
             payMethod,
         });
-    }, [form, cartItems, subtotal, shipping, tax, total, payMethod, currency, couponDiscount, clearCart, selectedSizeProfileId]);
+    }, [form, cartItems, subtotal, shipping, total, payMethod, currency, couponDiscount, clearCart, selectedSizeProfileId]);
 
     const handlePlaceOrder = useCallback(async (e) => {
         e.preventDefault();
@@ -259,7 +281,7 @@ export default function Checkout() {
         clearCart();
         setOrderData({
             orderId: paidId, email: "", items: [],
-            subtotal: 0, shipping: 0, tax: 0, total: 0, payMethod: "razorpay",
+            subtotal: 0, shipping: 0, total: 0, payMethod: "razorpay",
         });
         (async () => {
             try {
@@ -271,7 +293,7 @@ export default function Checkout() {
                         orderId: paidId,
                         email:   ord.email || "",
                         items:   ord.items || [],
-                        subtotal: ord.total || 0, shipping: 0, tax: 0,
+                        subtotal: ord.total || 0, shipping: 0,
                         total:   ord.total || 0,
                         payMethod: "razorpay",
                     });
@@ -504,26 +526,22 @@ export default function Checkout() {
                                         <span>{formatPrice(subtotal)}</span>
                                     </div>
                                     <div className="flex justify-between" style={{ color: "#4A3F35" }}>
-                                        <span>Shipping</span>
+                                        <span>Shipping{shippingQuote?.country && shippingQuote.country !== "India" ? ` to ${shippingQuote.country}` : ""}</span>
                                         <span style={{ color: shipping === 0 ? "#2D7A3A" : "#4A3F35" }}>
-                                            {shipping === 0 ? "FREE" : formatPrice(shipping)}
+                                            {shippingLoading ? "Calculating…" : shipping === 0 ? "FREE" : formatPrice(shipping)}
                                         </span>
                                     </div>
                                     <AnimatePresence>
-                                        {shipping === 0 && (
+                                        {!shippingLoading && shippingQuote?.weight_grams > 0 && (
                                             <motion.div
                                                 initial={{ opacity: 0, x: -16 }}
                                                 animate={{ opacity: 1, x: 0 }}
                                                 exit={{ opacity: 0, x: -16 }}
-                                                className="text-xs text-green-700 font-medium">
-                                                You saved ₹499 on shipping
+                                                className="text-[11px] font-medium" style={{ color: "#9B8B7A" }}>
+                                                Based on {(shippingQuote.weight_grams / 1000).toFixed(2)} kg total weight
                                             </motion.div>
                                         )}
                                     </AnimatePresence>
-                                    <div className="flex justify-between" style={{ color: "#4A3F35" }}>
-                                        <span>Tax</span>
-                                        <span>{formatPrice(tax)}</span>
-                                    </div>
                                     {discount > 0 && (
                                         <div className="flex justify-between" style={{ color: "#2D7A3A" }}>
                                             <span>Discount</span>

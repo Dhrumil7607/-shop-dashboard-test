@@ -48,9 +48,9 @@ export default function Cart() {
     }
 
     const subtotal = getTotalPrice();
-    const shipping = subtotal > 15000 ? 0 : 499;
-    const tax = Math.round(subtotal * 0.05);
-    const total = subtotal + shipping + tax;
+    // Shipping is weight- and destination-based; it's calculated at checkout.
+    // No tax. Total shown here is products only (shipping added at checkout).
+    const total = subtotal;
 
     return (
         <MarketplaceLayout>
@@ -154,17 +154,9 @@ export default function Cart() {
                                 </div>
                                 <div className="flex justify-between text-espresso">
                                     <span>Shipping</span>
-                                    <span className="font-medium">
-                                        {shipping === 0 ? (
-                                            <span className="text-green-600">Free</span>
-                                        ) : (
-                                            formatPrice(shipping)
-                                        )}
+                                    <span className="font-medium text-espresso/70">
+                                        Calculated at checkout
                                     </span>
-                                </div>
-                                <div className="flex justify-between text-espresso">
-                                    <span>Tax (5%)</span>
-                                    <span className="font-medium">{formatPrice(tax)}</span>
                                 </div>
                             </div>
 
@@ -175,11 +167,9 @@ export default function Cart() {
                                 </span>
                             </div>
 
-                            {shipping > 0 && (
-                                <p className="text-xs text-espresso/60 mb-4 text-center">
-                                    Free shipping on orders above {formatPrice(15000)}
-                                </p>
-                            )}
+                            <p className="text-xs text-espresso/60 mb-4 text-center">
+                                Shipping is calculated by weight & destination at checkout.
+                            </p>
 
                             <button
                                 onClick={() => navigate("/checkout")}

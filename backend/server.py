@@ -694,6 +694,8 @@ class ProductIn(BaseModel):
     color: str = ""; ready_to_ship: bool = False
     size_options: str = ""   # comma-separated sizes e.g. "XS,S,M,L,XL" or custom
     sku: str = ""            # seller SKU reference
+    images: List[str] = []   # gallery images (first = primary); image_url stays as primary
+    weight_grams: int = 0    # shipping weight; 0 → derive default from category
 
 class ProductOut(ProductIn):
     id: str; slug: str; shop_name: str = ""; created_at: str; updated_at: str
@@ -1781,6 +1783,124 @@ def archive_shop(shop_id: str):
         raise HTTPException(404, "Shop not found")
     return {"success": True}
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SHIPPING — weight-based, destination-aware. Backend is the source of truth;
+# the frontend only displays the quoted amount. Admin-editable config.
+# ══════════════════════════════════════════════════════════════════════════════
+_DEFAULT_SHIPPING_CONFIG = {
+    "currency": "INR",
+    "free_over_inr": 15000,   # domestic (India) free-shipping threshold
+    "domestic_flat": 499,     # India flat rate below the threshold
+    # Weight tiers (grams ceiling) → price per destination (INR).
+    "tiers": [
+        {"max_grams": 500,  "USA": 1999, "Canada": 2199, "UK": 1799},
+        {"max_grams": 750,  "USA": 2499, "Canada": 2699, "UK": 2199},
+        {"max_grams": 1000, "USA": 2799, "Canada": 2999, "UK": 2499},
+        {"max_grams": 2000, "USA": 3999, "Canada": 4299, "UK": 3499},
+        {"max_grams": 3000, "USA": 5499, "Canada": 5799, "UK": 4499},
+    ],
+    # For weight beyond the top tier, add per additional kg.
+    "overflow_per_kg": {"USA": 1500, "Canada": 1500, "UK": 1000},
+}
+
+def _shipping_config() -> dict:
+    return mem.get("_shipping_config") or _DEFAULT_SHIPPING_CONFIG
+
+# Default weights (grams) by category keyword — used when a product has none set.
+def _default_weight(category: str) -> int:
+    c = (category or "").lower()
+    table = [
+        (("dupatta", "shawl", "scarf"), 400),
+        (("saree",), 900),
+        (("lehenga", "chaniya", "choli", "sherwani", "bridal", "wedding"), 2000),
+        (("gown", "anarkali", "dress", "jumpsuit", "romper", "coat"), 800),
+        (("jacket", "blazer", "hoodie", "sweatshirt"), 800),
+        (("jeans", "trouser", "cargo", "jogger", "leggings"), 700),
+        (("kurta", "kurti", "shirt", "t-shirt", "tshirt", "polo", "top", "blouse", "tank", "crop", "salwar", "suit"), 400),
+        (("footwear", "sneaker", "boot", "sandal", "heel", "flat"), 900),
+        (("bag", "backpack", "handbag"), 700),
+        (("jewellery", "jewelry", "accessor", "wallet", "belt", "cap", "sock", "innerwear", "nightwear"), 150),
+    ]
+    for keys, grams in table:
+        if any(k in c for k in keys):
+            return grams
+    return 500
+
+def _product_weight(product: dict) -> int:
+    w = int(product.get("weight_grams") or 0)
+    return w if w > 0 else _default_weight(product.get("category", ""))
+
+def _normalize_country(country: str) -> str:
+    c = (country or "").strip().lower()
+    if c in ("usa", "us", "united states", "united states of america", "america"):
+        return "USA"
+    if c in ("canada", "ca"):
+        return "Canada"
+    if c in ("uk", "gb", "united kingdom", "england", "britain", "great britain"):
+        return "UK"
+    if c in ("india", "in", "bharat", ""):
+        return "India"
+    return "OTHER"
+
+def _quote_shipping(items: list, country: str, subtotal_inr: int = 0) -> dict:
+    cfg = _shipping_config()
+    total_grams = 0
+    for it in items or []:
+        prod = mem_first("products", id=(it.get("product_id") or it.get("id")))
+        if not prod:
+            continue
+        qty = int(it.get("quantity") or 1)
+        total_grams += _product_weight(prod) * max(1, qty)
+    dest = _normalize_country(country)
+    amount = 0
+    if dest in ("India",):
+        if subtotal_inr and subtotal_inr >= cfg.get("free_over_inr", 15000):
+            amount = 0
+        else:
+            amount = cfg.get("domestic_flat", 499)
+    else:
+        key = dest if dest in ("USA", "Canada", "UK") else "USA"  # OTHER → USA rate
+        tiers = sorted(cfg.get("tiers", []), key=lambda t: t["max_grams"])
+        chosen = None
+        for t in tiers:
+            if total_grams <= t["max_grams"]:
+                chosen = t
+                break
+        if chosen:
+            amount = int(chosen.get(key, 0))
+        elif tiers:
+            top = tiers[-1]
+            amount = int(top.get(key, 0))
+            extra_kg = max(0, (total_grams - top["max_grams"] + 999) // 1000)
+            amount += extra_kg * int(cfg.get("overflow_per_kg", {}).get(key, 1500))
+    return {"amount": int(amount), "currency": cfg.get("currency", "INR"),
+            "weight_grams": total_grams, "country": dest,
+            "free": amount == 0}
+
+@api.post("/shipping/quote")
+def shipping_quote(body: dict):
+    """Public: quote shipping for a cart. Body: { items:[{product_id,quantity}],
+    country, subtotal }. Backend is authoritative; the frontend only displays this."""
+    items = body.get("items") or []
+    country = body.get("country") or "India"
+    subtotal = int(body.get("subtotal") or 0)
+    return _quote_shipping(items, country, subtotal)
+
+@api.get("/admin/shipping-config", dependencies=[Depends(require_admin)])
+def admin_get_shipping_config():
+    return _shipping_config()
+
+@api.put("/admin/shipping-config", dependencies=[Depends(require_admin)])
+def admin_update_shipping_config(body: dict):
+    """Admin: replace the shipping config (tiers + rates). Validates structure."""
+    cfg = dict(_DEFAULT_SHIPPING_CONFIG)
+    cfg.update({k: v for k, v in body.items() if k in _DEFAULT_SHIPPING_CONFIG})
+    if not isinstance(cfg.get("tiers"), list) or not cfg["tiers"]:
+        raise HTTPException(400, "tiers must be a non-empty list")
+    mem["_shipping_config"] = cfg
+    _persist_db()
+    return {"success": True, "config": cfg}
+
 # ── Products ──────────────────────────────────────────────────────────────────
 @api.get("/products")
 def list_products(shop_id: Optional[str]=None, category: Optional[str]=None,
@@ -2597,7 +2717,7 @@ def seller_update_product(product_id: str, changes: dict, payload: dict = Depend
     prod = _owns_product(store_id, product_id)
     allowed = {"name","category","description","price","compare_at_price","image_url",
                "hover_image_url","stock","status","is_active","color","ready_to_ship",
-               "is_featured","badge"}
+               "is_featured","badge","size_options","sku","images","weight_grams"}
     patch = {k: v for k, v in changes.items() if k in allowed}
     # Keep stock/status coherent
     if patch.get("status") == "out_of_stock":

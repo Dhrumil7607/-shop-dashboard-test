@@ -30,11 +30,52 @@ export const ALL_CATEGORIES = [
   // Kids
   "Kids Traditional",
   "Kids Wear",
+  // Western — Tops
+  "T-Shirts",
+  "Polo Shirts",
+  "Tops",
+  "Blouses",
+  "Tank Tops",
+  "Crop Tops",
+  "Hoodies",
+  "Sweatshirts",
+  // Western — Bottoms
+  "Jeans",
+  "Trousers",
+  "Cargo Pants",
+  "Joggers",
+  "Shorts",
+  "Skirts",
+  "Leggings",
+  // Western — Outerwear
+  "Blazers",
+  "Coats",
+  // Western — Dresses & One-piece
+  "Dresses",
+  "Jumpsuits",
+  "Rompers",
+  // Western — Activewear / Loungewear
+  "Activewear",
+  "Gym Wear",
+  "Loungewear",
+  "Nightwear",
+  "Innerwear",
   // Accessories / No Size
   "Jewellery",
   "Accessories",
   "Bags",
+  "Backpacks",
+  "Handbags",
+  "Wallets",
+  "Belts",
+  "Caps",
+  "Socks",
   "Footwear",
+  "Sneakers",
+  "Boots",
+  "Sandals",
+  "Heels",
+  "Flats",
   "Home Décor",
   "Fabric",
   "Other",
@@ -47,10 +88,31 @@ export const NO_SIZE_CATS = new Set([
   "Jewellery",
   "Accessories",
   "Bags",
+  "Backpacks",
+  "Handbags",
+  "Wallets",
+  "Belts",
+  "Caps",
+  "Socks",
+  "Footwear",
+  "Sneakers",
+  "Boots",
+  "Sandals",
+  "Heels",
+  "Flats",
   "Home Décor",
   "Fabric",
   "Other",
 ]);
+
+// ── Western unisex apparel (standard XS–XXL sizing) ──────────────────────────
+export const WESTERN_CATS = new Set([
+  "T-Shirts", "Polo Shirts", "Tops", "Blouses", "Tank Tops", "Crop Tops",
+  "Hoodies", "Sweatshirts", "Jeans", "Trousers", "Cargo Pants", "Joggers",
+  "Shorts", "Skirts", "Leggings", "Blazers", "Coats", "Dresses", "Jumpsuits",
+  "Rompers", "Activewear", "Gym Wear", "Loungewear", "Nightwear", "Innerwear",
+]);
+export const WESTERN_STANDARD_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 
 // ── Men's categories ─────────────────────────────────────────────────────────
 export const MENS_CATS = new Set([
@@ -94,6 +156,7 @@ export const KIDS_SIZES = ["2-3Y", "4-5Y", "6-7Y", "8-9Y", "10-11Y", "12-13Y"];
 export function getSizeType(category) {
   if (!category) return "none";
   if (NO_SIZE_CATS.has(category)) return "none";
+  if (WESTERN_CATS.has(category)) return "western";
   if (MENS_CATS.has(category)) return "men";
   if (WOMENS_CATS.has(category)) return "women";
   if (category.toLowerCase().includes("kid")) return "kids";
@@ -119,6 +182,7 @@ export function getDefaultSizeOptions(category) {
     return MENS_STANDARD_SIZES.join(",");
   }
   if (type === "women") return WOMENS_STANDARD_SIZES.join(",");
+  if (type === "western") return WESTERN_STANDARD_SIZES.join(",");
   if (type === "kids") return KIDS_SIZES.join(",");
   return "";
 }

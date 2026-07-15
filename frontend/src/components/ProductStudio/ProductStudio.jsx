@@ -52,7 +52,7 @@ const EMPTY = {
   currency: "INR", image_url: "", hover_image_url: "",
   badge: "", is_featured: false, is_active: true,
   color: "", size_options: "", sku: "",
-  ready_to_ship: false, status: "live",
+  ready_to_ship: false, status: "live", weight_grams: "",
 };
 
 // ── Shared input ──────────────────────────────────────────────────────────────
@@ -454,6 +454,7 @@ export default function ProductStudio({
         sku: form.sku || "",
         color: form.color || "",
         size_options: form.size_options || "",
+        weight_grams: form.weight_grams ? Number(form.weight_grams) : 0,
         image_url: form.image_url,
         hover_image_url: form.hover_image_url || "",
         badge: form.badge || "",
@@ -754,6 +755,17 @@ export default function ProductStudio({
                         ⚠ Product will show as Out of Stock
                       </p>
                     )}
+                    <div className="mt-4">
+                      <Field label="Shipping Weight (grams)" hint="Used to calculate international shipping. Leave blank to auto-estimate from the category.">
+                        <input type="number" min="0" value={form.weight_grams}
+                          onChange={e => set("weight_grams", e.target.value)}
+                          placeholder="e.g. 800 (leave blank to auto-estimate)"
+                          className={inp.base} style={inp.style} />
+                        <p className="text-[11px] mt-1.5" style={{ color: C.muted }}>
+                          Accurate weight = accurate shipping charges for overseas customers.
+                        </p>
+                      </Field>
+                    </div>
                   </Field>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between p-3.5 rounded-xl border transition cursor-pointer hover:bg-stone-50"

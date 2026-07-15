@@ -705,6 +705,20 @@ export async function adminBulkDeleteSellers(shopIds, adminKey) {
     return data;
 }
 
+// ── Shipping (weight-based, backend-authoritative) ────────────────────────────
+export async function quoteShipping({ items, country, subtotal }) {
+    const { data } = await api.post("/shipping/quote", { items, country, subtotal });
+    return data; // { amount, currency, weight_grams, country, free }
+}
+export async function fetchShippingConfig(adminKey) {
+    const { data } = await api.get("/admin/shipping-config", adminHeaders(adminKey));
+    return data;
+}
+export async function updateShippingConfig(config, adminKey) {
+    const { data } = await api.put("/admin/shipping-config", config, adminHeaders(adminKey));
+    return data;
+}
+
 // ── AI Model Generator (seller product photos) ─────────────────────────────────
 export async function aiModelUsage() {
     const { data } = await api.get("/ai/model-usage");
