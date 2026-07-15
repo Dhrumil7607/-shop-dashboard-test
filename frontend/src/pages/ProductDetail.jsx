@@ -118,7 +118,9 @@ export default function ProductDetail() {
 
     if (!product) return null;
 
-    const images = [product.image_url, product.hover_image_url].filter(Boolean);
+    const images = (Array.isArray(product.images) && product.images.length
+        ? product.images
+        : [product.image_url, product.hover_image_url].filter(Boolean));
     const discount = product.compare_at_price
         ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100) : 0;
     const colors = product.color ? product.color.split(",").map(c => c.trim()).filter(Boolean) : [];

@@ -25,8 +25,9 @@ import {
   Info, Sparkles, TrendingUp, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
-import ImageUpload from "@/components/ImageUpload";
+import MultiImageUploader from "@/components/ProductStudio/MultiImageUploader";
 import AIModelGenerator from "@/components/ProductStudio/AIModelGenerator";
+import { uploadImage as sellerUploadImage, adminUploadImage } from "@/lib/api";
 import {
   ALL_CATEGORIES, getSizeType, getDefaultSizeOptions,
   MENS_STANDARD_SIZES, MENS_NUMERIC_SIZES, WOMENS_STANDARD_SIZES, KIDS_SIZES,
@@ -52,7 +53,7 @@ const EMPTY = {
   currency: "INR", image_url: "", hover_image_url: "",
   badge: "", is_featured: false, is_active: true,
   color: "", size_options: "", sku: "",
-  ready_to_ship: false, status: "live", weight_grams: "",
+  ready_to_ship: false, status: "live", weight_grams: "", images: [],
 };
 
 // ── Shared input ──────────────────────────────────────────────────────────────
@@ -382,10 +383,21 @@ export default function ProductStudio({
   const accentColor = mode === "admin" ? C.maroon : C.rose;
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
-  const [form, setForm] = useState(() => editProduct
-    ? { ...EMPTY, ...editProduct }
-    : { ...EMPTY, shop_id: storeId }
-  );
+  const [form, setForm] = useState(() => {
+    if (!editProduct) return { ...EMPTY, shop_id: storeId };
+    // Back-compat: derive the images[] gallery from an older single-image product.
+    const derived = Array.isArray(editProduct.images) && editProduct.images.length
+      ? editProduct.images
+      : [editProduct.image_url, editProduct.hover_image_url].filter(Boolean);
+    return { ...EMPTY, ...editProduct, images: derived };
+  });
+
+  // Upload handler routes to the admin or seller endpoint (both Cloudinary-backed).
+  const uploadFn = useCallback(async (dataUrl) => {
+    return mode === "admin"
+      ? await adminUploadImage(dataUrl, adminKey)
+      : await sellerUploadImage(dataUrl);
+  }, [mode, adminKey]);
 
   const set = useCallback((k, v) => {
     setForm(f => ({ ...f, [k]: v }));
@@ -429,7 +441,7 @@ export default function ProductStudio({
     if (!form.name?.trim()) errs.name = "Product name is required";
     if (!form.category) errs.category = "Please select a category";
     if (!form.price || Number(form.price) <= 0) errs.price = "Price must be greater than 0";
-    if (!form.image_url) errs.image_url = "Please upload a product image";
+    if (!(form.images && form.images.length) && !form.image_url) errs.image_url = "Please upload at least one product image";
     if (!form.description?.trim() || form.description.trim().length < 10) errs.description = "Description must be at least 10 characters";
     if (form.stock === "" || form.stock === undefined) errs.stock = "Stock quantity is required";
     setErrors(errs);
@@ -455,8 +467,9 @@ export default function ProductStudio({
         color: form.color || "",
         size_options: form.size_options || "",
         weight_grams: form.weight_grams ? Number(form.weight_grams) : 0,
-        image_url: form.image_url,
-        hover_image_url: form.hover_image_url || "",
+        images: form.images || [],
+        image_url: (form.images && form.images[0]) || form.image_url,
+        hover_image_url: (form.images && form.images[1]) || form.hover_image_url || "",
         badge: form.badge || "",
         is_featured: !!form.is_featured,
         ready_to_ship: !!form.ready_to_ship,
@@ -640,26 +653,21 @@ export default function ProductStudio({
             </Section>
 
             {/* Section 2: Media */}
-            <Section icon={ImageIcon} title="Media" subtitle="Product images shown on the marketplace" accent="#2563EB">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-4">
-                <div>
-                  {errors.image_url && (
-                    <p className="flex items-center gap-1 text-[11px] mb-2 font-medium" style={{ color: "#C0392B" }}>
-                      <AlertTriangle size={11} />{errors.image_url}
-                    </p>
-                  )}
-                  <ImageUpload
-                    label="Primary Image *"
-                    hint="Main image shown on product cards and detail page"
-                    value={form.image_url}
-                    onUpload={url => set("image_url", url)}
-                  />
-                </div>
-                <ImageUpload
-                  label="Hover Image (optional)"
-                  hint="Displayed when customers hover over the product card"
-                  value={form.hover_image_url}
-                  onUpload={url => set("hover_image_url", url)}
+            <Section icon={ImageIcon} title="Media" subtitle="Upload up to 20 images · drag to reorder · first is primary" accent="#2563EB">
+              <div className="mt-4">
+                {errors.image_url && (
+                  <p className="flex items-center gap-1 text-[11px] mb-2 font-medium" style={{ color: "#C0392B" }}>
+                    <AlertTriangle size={11} />{errors.image_url}
+                  </p>
+                )}
+                <MultiImageUploader
+                  value={form.images}
+                  onChange={(urls) => {
+                    setForm(f => ({ ...f, images: urls, image_url: urls[0] || "", hover_image_url: urls[1] || "" }));
+                    if (errors.image_url) setErrors(e => ({ ...e, image_url: null }));
+                  }}
+                  uploadFn={uploadFn}
+                  max={20}
                 />
               </div>
 
