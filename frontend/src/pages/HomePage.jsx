@@ -6,7 +6,7 @@
  */
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ArrowUpRight, Star, Radio, MapPin, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Star, Radio, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { fetchProducts, fetchCategories } from "@/lib/api";
@@ -35,15 +35,6 @@ const OCCASIONS = [
   { label: "Wedding Guest", q: "Wedding Wear", img: "https://images.unsplash.com/photo-1610173827043-9db50e0d8ef9?w=800&q=80" },
   { label: "Festive", q: "Festival Wear", img: "https://images.unsplash.com/photo-1468234847176-28606331216a?w=800&q=80" },
   { label: "Everyday", q: "Kurti / Kurtis", img: "https://images.unsplash.com/photo-1744551358303-46edae8b374b?w=800&q=80" },
-];
-
-const STATES = [
-  { label: "Banarasi · UP", q: "Sarees" },
-  { label: "Rajasthan", q: "Lehengas" },
-  { label: "Gujarat", q: "Chaniya Choli" },
-  { label: "Bengal", q: "Sarees" },
-  { label: "South India", q: "Sarees" },
-  { label: "Punjab", q: "Salwar Suit" },
 ];
 
 const STORIES = [
@@ -270,23 +261,6 @@ export default function HomePage() {
 
         {/* ── STORE DISCOVERY (preserved) ── */}
         <div style={{ background: IVORY }}><StoreDiscoverySection /></div>
-
-        {/* ── SHOP BY STATE ── */}
-        <section className="mx-auto max-w-[1280px] px-5 py-16 sm:px-8">
-          <Heading eyebrow="A Nation of Craft" title="Shop by Region"
-            sub="Every Indian state tells its story in thread, weave and colour." />
-          <div className="flex flex-wrap gap-3">
-            {STATES.map((s, i) => (
-              <motion.div key={s.label} {...rise} transition={{ ...rise.transition, delay: i * 0.04 }}>
-                <Link to={`/marketplace?q=${encodeURIComponent(s.q)}`}
-                  className="group inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-semibold transition-colors duration-200 hover:bg-black/[0.04]"
-                  style={{ borderColor: SAND, color: INK }}>
-                  <MapPin size={14} style={{ color: GOLD }} /> {s.label}
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </section>
 
         {/* ── LIVE SHOPPING (preserved) ── */}
         <LiveSessionsShowcase />
