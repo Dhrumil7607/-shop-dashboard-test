@@ -123,21 +123,21 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                     boxShadow: scrolled ? "0 1px 0 rgba(20,18,16,0.06)" : "none",
                 }}
             >
-                <div className="max-w-[1280px] mx-auto px-5 sm:px-8 py-3.5 flex items-center justify-between gap-4 min-w-0">
+                <div className="relative mx-auto flex h-16 max-w-[1280px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 min-w-0">
 
-    {/* Logo */}
-                    <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 min-w-0 group">
+                    {/* Logo */}
+                    <Link to="/" className="flex flex-shrink-0 items-center group">
                         <motion.div
                             whileHover={{ scale: 1.04 }}
                             transition={{ type: "spring", stiffness: 400, damping: 20 }}
                             className="flex items-center"
                         >
-                            <BrandLogo variant="mark" height={38} />
+                            <BrandLogo variant="mark" height={34} />
                         </motion.div>
                     </Link>
 
-                    {/* Center nav — editorial uppercase */}
-                    <nav className="hidden lg:flex items-center gap-7 flex-1 justify-center">
+                    {/* Center nav — truly centered, editorial uppercase (xl+) */}
+                    <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-6 xl:flex">
                         {NAV.map(link => (
                             <Link key={link.to} to={link.to}
                                 className="relative py-1 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors"
@@ -169,12 +169,12 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             <CurrencySelector />
                         </div>
 
-                        {/* Search */}
+                        {/* Search (xl+ — tablet/mobile use the menu search) */}
                         <motion.button
                             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                             onClick={() => setDesktopSearch(v => !v)}
-                            className="p-2 rounded-lg transition-colors hover:bg-black/5"
-                            aria-label="Search" style={{ color: "#6B5E52" }}>
+                            className="hidden xl:inline-flex p-2 rounded-lg transition-colors hover:bg-black/5"
+                            aria-label="Search" style={{ color: "rgba(20,18,16,0.6)" }}>
                             <Search size={18} />
                         </motion.button>
 
@@ -184,7 +184,7 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                                 to="/wishlist"
                                 className="relative p-2 rounded-lg transition-colors hover:bg-black/5 flex"
                                 aria-label="Wishlist"
-                                style={{ color: "#6B5E52" }}
+                                style={{ color: "rgba(20,18,16,0.6)" }}
                             >
                                 <Heart size={18} />
                                 <AnimatePresence>
@@ -208,7 +208,7 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                         <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                             <Link to="/cart"
                                 className="relative p-2 rounded-lg transition-colors hover:bg-black/5 flex"
-                                aria-label="Cart" style={{ color: "#6B5E52" }}>
+                                aria-label="Cart" style={{ color: "rgba(20,18,16,0.6)" }}>
                                 <ShoppingCart size={18} />
                                 <AnimatePresence>
                                     {cartCount > 0 && (
@@ -336,12 +336,12 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             </AnimatePresence>
                         </div>
 
-                        {/* Mobile hamburger */}
+                        {/* Mobile / tablet hamburger (below xl) */}
                         <motion.button
                             whileTap={{ scale: 0.92 }}
                             onClick={() => setMobileOpen(v => !v)}
-                            className="lg:hidden p-2 ml-1 rounded-lg transition hover:bg-black/5"
-                            aria-label="Menu" style={{ color: "#1a1a1a" }}>
+                            className="xl:hidden p-2 -mr-1 rounded-lg transition hover:bg-black/5 min-w-[40px] min-h-[40px] flex items-center justify-center"
+                            aria-label="Menu" style={{ color: "#141210" }}>
                             <AnimatePresence mode="wait" initial={false}>
                                 <motion.span
                                     key={mobileOpen ? "x" : "menu"}
@@ -365,8 +365,8 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -8 }}
                             transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
-                            className="hidden lg:block border-t px-6 py-4"
-                            style={{ borderColor: "#E8E4DF", backgroundColor: "#FAF9F6" }}
+                            className="hidden xl:block border-t px-6 py-4"
+                            style={{ borderColor: "rgba(20,18,16,0.08)", backgroundColor: "#F5EFE6" }}
                         >
                             <form onSubmit={handleDesktopSearch} className="max-w-2xl mx-auto flex items-center gap-3">
                                 <div className="relative flex-1">
@@ -419,8 +419,8 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                         <motion.div
                             variants={mobileAnim}
                             initial="hidden" animate="visible" exit="exit"
-                            className="lg:hidden border-t px-6 py-5 space-y-3 overflow-hidden"
-                            style={{ borderColor: "#E8E4DF", backgroundColor: "#FAF9F6" }}>
+                            className="xl:hidden border-t px-5 sm:px-6 py-5 space-y-1 overflow-hidden"
+                            style={{ borderColor: "rgba(20,18,16,0.08)", backgroundColor: "#F5EFE6" }}>
                             <form onSubmit={handleSearch} className="mb-3">
                                 <input type="search" value={search} onChange={e => setSearch(e.target.value)}
                                     placeholder="Search…"
@@ -429,15 +429,15 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                             </form>
                             {NAV.map(link => (
                                 <Link key={link.to} to={link.to}
-                                    className="flex items-center min-h-[44px] text-sm font-medium px-2"
+                                    className="flex items-center min-h-[46px] text-[13px] font-semibold uppercase tracking-[0.12em] px-2 border-b"
                                     aria-current={isActive(link.to) ? "page" : undefined}
-                                    style={{ color: isActive(link.to) ? "#1a1a1a" : "#6B5E52" }}>
+                                    style={{ color: isActive(link.to) ? "#141210" : "rgba(20,18,16,0.6)", borderColor: "rgba(20,18,16,0.06)" }}>
                                     {link.label}
                                 </Link>
                             ))}
                             <Link to="/become-a-seller"
-                                className="flex items-center min-h-[44px] text-sm font-semibold px-2"
-                                style={{ color: "#C9A84C" }}>
+                                className="flex items-center gap-1.5 min-h-[46px] text-[13px] font-semibold uppercase tracking-[0.12em] px-2"
+                                style={{ color: "#B08D3B" }}>
                                 ✦ Become a Seller
                             </Link>
 
