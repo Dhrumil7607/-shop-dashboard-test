@@ -265,8 +265,8 @@ export default function ProductDetail() {
                             {showSizeUI && (
                             <div className="mb-5">
 
-                                {/* AI Size Finder — premium two-panel modal (any sized item, not men's) */}
-                                {(isWomensCategory(product.category) || (!isMensCategory(product.category) && product.size_options && product.size_options.trim())) && (
+                                {/* AI Size Finder — premium two-panel modal (all apparel except men's) */}
+                                {!isMensCategory(product.category) && (
                                     <PerfectFitFinder
                                         product={product}
                                         onSizeSelect={(size) => setSelSize(size)}
