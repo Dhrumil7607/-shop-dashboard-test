@@ -113,11 +113,11 @@ export default function PerfectFitFinder({ product, onSizeSelect }) {
         <ArrowRight size={16} style={{ color: MAROON }} />
       </button>
 
-      {typeof document !== "undefined" && createPortal(
+      {typeof document !== "undefined" && open && createPortal(
         <AnimatePresence>
           {open && (
             <motion.div
-              className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+              className="fixed inset-0 z-[99999] flex items-center justify-center p-4"
               style={{ background: "rgba(20,18,16,0.45)", backdropFilter: "blur(4px)" }}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
