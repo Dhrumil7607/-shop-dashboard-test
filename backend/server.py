@@ -648,6 +648,29 @@ async def require_seller(payload: dict = Depends(get_current_user)):
             )
     return payload
 
+
+def _seller_ai_enabled(seller_id: str) -> bool:
+    """True when a seller's shop has AI Studio enabled by admin, or it's the
+    ShopLiveBharat main/admin store (always enabled)."""
+    user = mem_first("users", id=seller_id) or {}
+    shop = mem_first("shops", id=user.get("store_id")) if user.get("store_id") else None
+    if not shop:
+        return False
+    return bool(shop.get("ai_studio_enabled") or shop.get("is_admin_store") or shop.get("id") == "shop-shoplivebharat")
+
+
+async def require_ai_seller(payload: dict = Depends(require_seller)):
+    """Gate AI Studio generation endpoints: admins always pass; sellers must have
+    the admin-granted `ai_studio_enabled` flag (the main store is always on)."""
+    if payload.get("role") == "admin":
+        return payload
+    if not _seller_ai_enabled(payload["sub"]):
+        raise HTTPException(
+            status_code=403,
+            detail="AI Studio is not enabled for your store yet. Please contact ShopLiveBharat to request access.",
+        )
+    return payload
+
 # ── Pydantic models ───────────────────────────────────────────────────────────
 class RegisterIn(BaseModel):
     name: str = Field(min_length=2, max_length=80)
@@ -884,6 +907,8 @@ def _ensure_main_store():
             "instagram_url": "", "is_active": True, "is_admin_store": True,
             "online": True, "status": "active", "liveShoppingEnabled": True,
             "acceptsLiveBookings": True, "show_in_booking_page": True,
+            # Main store: AI Studio always enabled + unlimited usage.
+            "ai_studio_enabled": True, "plan": "unlimited",
             "display_order": 1, "source": "exclusive",
             "rating": 5.0, "followers": 0, "productCount": 0, "verified": True,
             "return_policy": "Easy 7-day returns on all exclusive products.",
@@ -892,6 +917,13 @@ def _ensure_main_store():
         }
         mem.setdefault("shops", []).append(main)
         logger.info("[DB] Restored main store (shop-shoplivebharat)")
+    else:
+        # Ensure existing main store always has AI Studio on + unlimited usage.
+        if not main.get("ai_studio_enabled") or main.get("plan") != "unlimited":
+            main["ai_studio_enabled"] = True
+            main["plan"] = "unlimited"
+            main["is_admin_store"] = True
+            main["updated_at"] = _now()
     # Ensure a seller user exists for the main store (for seller portal login)
     seller = next((u for u in mem.get("users", []) if u.get("store_id") == "shop-shoplivebharat" and u.get("role") == "seller"), None)
     if not seller:
@@ -2391,6 +2423,8 @@ def approve_application(app_id: str):
             "online": False, "liveShoppingEnabled": False,
             "acceptsLiveBookings": False,
             "admin_live_disabled": False,
+            # AI Studio is a premium feature — admin grants access per store.
+            "ai_studio_enabled": False,
             "verified": False, "rating": 0, "followers": 0, "productCount": 0,
             "return_policy": "", "shipping_policy": "",
             "display_order": 9999,   # for admin-controlled store ordering
@@ -3147,6 +3181,7 @@ def admin_live_eligibility(shop_id: str):
             "liveShoppingEnabled": shop.get("liveShoppingEnabled", False),
             "online": shop.get("online", False),
             "show_in_booking_page": shop.get("show_in_booking_page", False),
+            "ai_studio_enabled": shop.get("ai_studio_enabled", False),
         }
     }
 
@@ -3156,7 +3191,7 @@ def admin_live_override(shop_id: str, body: dict):
     shop = mem_first("shops", id=shop_id)
     if not shop:
         raise HTTPException(404, "Shop not found")
-    allowed = {"acceptsLiveBookings", "admin_live_disabled", "liveShoppingEnabled", "online", "show_in_booking_page"}
+    allowed = {"acceptsLiveBookings", "admin_live_disabled", "liveShoppingEnabled", "online", "show_in_booking_page", "ai_studio_enabled"}
     safe = {k: v for k, v in body.items() if k in allowed and isinstance(v, bool)}
     if not safe:
         raise HTTPException(400, "No valid boolean fields provided. Allowed: " + ", ".join(allowed))
@@ -4039,6 +4074,24 @@ _TRYON_PROMPTS = {
     "western": "Create a photo-realistic full-body image of a {model} model wearing this exact western outfit. The model should be in a confident fashion-editorial pose against an urban/minimalist backdrop. Professional studio lighting. Preserve the exact cut, color, pattern, and styling details of the original garment.",
     "accessory": "Create a photo-realistic styled shot of a {model} model using/wearing this exact accessory. Show it in context — if a bag show it held or on the shoulder, if sunglasses show on the face, if a scarf show it draped. Clean background, editorial lighting. Preserve the exact color, material, hardware, and design details.",
     "chaniya choli": "Create a photo-realistic full-body image of a {model} model wearing this exact chaniya choli for Navratri/Garba. Show the flared skirt in motion (mid-twirl), the blouse/choli fitted perfectly, and the dupatta flowing. Festive colorful background with mirror work/lantern bokeh. Preserve ALL mirror work, embroidery, colors, and patterns EXACTLY.",
+    "anarkali": "Create a photo-realistic full-body image of a {model} model wearing this exact Anarkali suit. Show the floor-length flared silhouette with the dupatta draped elegantly. Graceful standing pose against a soft palatial backdrop with warm lighting. Preserve ALL embroidery, colors, print and fabric of the original EXACTLY.",
+    "gown": "Create a photo-realistic full-body image of a {model} model wearing this exact gown. Show the full length and silhouette with an elegant evening pose against a refined studio/hall backdrop with soft cinematic lighting. Preserve the exact colour, embellishment, drape and fabric of the original EXACTLY.",
+    "salwar": "Create a photo-realistic full-body image of a {model} model wearing this exact salwar suit (kameez, bottoms and dupatta). Neat standing pose against a clean cream studio backdrop with soft natural lighting. Preserve the exact print, embroidery, neckline, colours and fabric of the original EXACTLY.",
+    "suit": "Create a photo-realistic full-body image of a {model} model wearing this exact suit set styled with matching bottoms and dupatta. Elegant standing pose, clean studio backdrop, soft lighting. Preserve the exact colours, print, embroidery and fabric of the original EXACTLY.",
+    "kurti": "Create a photo-realistic full-body image of a {model} model wearing this exact kurti styled with fitted bottoms. Relaxed contemporary pose against a minimal studio backdrop. Preserve the exact print, neckline, colours and fabric of the original EXACTLY.",
+    "blouse": "Create a photo-realistic image of a {model} model wearing this exact blouse styled with a plain complementary saree/skirt so the blouse is the clear focus. Studio lighting, elegant pose. Preserve the EXACT colour, neckline, sleeve style, embroidery and fabric of the original blouse.",
+    "dupatta": "Create a photo-realistic image of a {model} model draping this exact dupatta over a plain neutral outfit so the dupatta is the hero. Soft studio lighting, graceful drape across the shoulder. Preserve the EXACT colour, border, motif and fabric of the original dupatta.",
+    "gharara": "Create a photo-realistic full-body image of a {model} model wearing this exact gharara/sharara set. Show the wide flared legs and short kurti with dupatta, festive elegant pose, warm palatial lighting. Preserve ALL embroidery, colours and patterns of the original EXACTLY.",
+    "indo-western": "Create a photo-realistic full-body image of a {model} model wearing this exact indo-western outfit. Modern confident fashion-editorial pose against a minimalist urban backdrop, professional studio lighting. Preserve the exact cut, colour, drape and detailing of the original EXACTLY.",
+    "dress": "Create a photo-realistic full-body image of a {model} model wearing this exact dress. Confident editorial pose against a clean modern backdrop with soft studio lighting. Preserve the exact cut, colour, print and fabric of the original EXACTLY.",
+    "co-ord": "Create a photo-realistic full-body image of a {model} model wearing this exact co-ord set. Relaxed contemporary pose against a minimal studio backdrop, soft daylight. Preserve the exact print, colour and fabric of the original EXACTLY.",
+    "kids": "Create a photo-realistic full-body image of a {model} child model wearing this exact outfit. Cheerful natural pose against a soft, bright studio backdrop. Preserve the exact colours, print, embroidery and fabric of the original EXACTLY.",
+}
+
+# Extra instruction appended per requested view (front vs back look).
+_TRYON_VIEWS = {
+    "front": " Photograph the model from the FRONT, facing the camera, so the full front of the outfit is clearly visible.",
+    "back": " Photograph the model from BEHIND (back view), so the entire BACK of the outfit — back neckline, closures and any back detailing — is clearly visible. Keep the same model, outfit, colours and setting.",
 }
 
 _PRODUCT_PROMPTS = {
@@ -4074,11 +4127,12 @@ _PRODUCT_PROMPTS = {
     },
 }
 
-def _get_tryon_prompt(category: str, model_type: str) -> str:
+def _get_tryon_prompt(category: str, model_type: str, view: str = "front") -> str:
     model_desc = model_type.replace("_", " ")
     cat = category.lower().strip()
     template = _TRYON_PROMPTS.get(cat, _TRYON_PROMPTS.get("western"))
-    return template.format(model=model_desc)
+    prompt = template.format(model=model_desc)
+    return prompt + _TRYON_VIEWS.get(view, _TRYON_VIEWS["front"])
 
 def _get_product_prompt(shot_type: str, style: str, category: str) -> str:
     style_prompts = _PRODUCT_PROMPTS.get(shot_type, _PRODUCT_PROMPTS["hero"])
@@ -4096,12 +4150,19 @@ def _get_product_prompt(shot_type: str, style: str, category: str) -> str:
     )
 
 def _ai_usage_today(seller_id: str) -> dict:
-    """Count today's AI generations for a seller."""
+    """Count today's AI generations for a seller.
+    Premium / the ShopLiveBharat main store get UNLIMITED usage (no caps)."""
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     gens = mem.get("ai_generations", [])
     tryon = sum(1 for g in gens if g.get("seller_id") == seller_id and g.get("type") == "tryon" and (g.get("created_at") or "").startswith(today))
     product_img = sum(1 for g in gens if g.get("seller_id") == seller_id and g.get("type") == "product_images" and (g.get("created_at") or "").startswith(today))
-    return {"tryon_used": tryon, "tryon_limit": _AI_TRYON_DAILY_LIMIT, "tryon_remaining": max(0, _AI_TRYON_DAILY_LIMIT - tryon),
+    # Unlimited for our own store / premium sellers.
+    if _seller_is_premium(seller_id):
+        return {"unlimited": True,
+                "tryon_used": tryon, "tryon_limit": None, "tryon_remaining": None,
+                "product_img_used": product_img, "product_img_limit": None, "product_img_remaining": None}
+    return {"unlimited": False,
+            "tryon_used": tryon, "tryon_limit": _AI_TRYON_DAILY_LIMIT, "tryon_remaining": max(0, _AI_TRYON_DAILY_LIMIT - tryon),
             "product_img_used": product_img, "product_img_limit": _AI_PRODUCT_IMG_DAILY_LIMIT, "product_img_remaining": max(0, _AI_PRODUCT_IMG_DAILY_LIMIT - product_img)}
 
 # Candidate image-EDITING models (accept an input image → preserve the product).
@@ -4230,61 +4291,74 @@ def _call_gemini_text(prompt_parts) -> Optional[str]:
 
 @api.get("/seller/ai/usage")
 async def ai_usage(payload: dict = Depends(require_seller)):
-    return _ai_usage_today(payload["sub"])
+    u = _ai_usage_today(payload["sub"])
+    u["enabled"] = payload.get("role") == "admin" or _seller_ai_enabled(payload["sub"])
+    return u
 
 @api.post("/seller/ai/tryon")
 @limiter.limit("10/minute")
-async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: str = Form("female_indian"), category: str = Form("saree"), payload: dict = Depends(require_seller)):
+async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: str = Form("female_indian"), category: str = Form("saree"), payload: dict = Depends(require_ai_seller)):
     """Generate a virtual try-on image using Gemini."""
     if not GEMINI_API_KEY:
         raise HTTPException(503, "AI Studio is not configured. Contact admin.")
     usage = _ai_usage_today(payload["sub"])
-    if usage["tryon_remaining"] <= 0:
+    if usage["tryon_remaining"] is not None and usage["tryon_remaining"] <= 0:
         raise HTTPException(429, f"Daily limit reached ({_AI_TRYON_DAILY_LIMIT} try-ons/day). Try again tomorrow.")
     if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
         raise HTTPException(400, "Only JPEG, PNG, or WebP images are accepted.")
     content = await image.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Image must be under 10MB.")
-    # Build the highly-specific prompt
-    prompt = _get_tryon_prompt(category, model_type)
+    # Generate a FRONT look and a BACK look of the model wearing the garment.
+    views = ["front", "back"]
     try:
         import base64 as _b64_ai
-        result_image = _call_gemini_image(prompt, content, image.content_type)
-        # If image gen isn't available, get a text response instead
-        if not result_image:
-            from google.genai import types as _genai_types
-            image_part = _genai_types.Part.from_bytes(data=content, mime_type=image.content_type)
-            txt = _call_gemini_text([
-                f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model. "
-                f"Include details about styling, draping, color harmony, and suggested accessories. Be specific and vivid.",
-                image_part
-            ])
-            caption = txt if txt else "AI analysis complete."
-            result_image = _b64_ai.b64encode(content).decode()  # Return original with analysis
-            generated = False
-        else:
-            caption = f"AI-generated try-on: {category.title()} on a {model_type.replace('_', ' ')} model"
-            generated = True
+        images = []
+        captions = []
+        real_count = 0
+        text_analysis = None
+        for view in views:
+            prompt = _get_tryon_prompt(category, model_type, view)
+            img = _call_gemini_image(prompt, content, image.content_type)
+            if img:
+                images.append(img)
+                captions.append(f"{view.title()} look — {category.title()} on a {model_type.replace('_', ' ')} model")
+                real_count += 1
+            else:
+                # Fallback: original image + a one-time text styling analysis.
+                if text_analysis is None:
+                    from google.genai import types as _genai_types
+                    image_part = _genai_types.Part.from_bytes(data=content, mime_type=image.content_type)
+                    txt = _call_gemini_text([
+                        f"Analyze this {category} product image. Describe how it would look on a {model_type.replace('_', ' ')} model, "
+                        f"front and back. Include styling, draping, color harmony, and suggested accessories. Be specific and vivid.",
+                        image_part
+                    ])
+                    text_analysis = txt if txt else "AI analysis complete."
+                images.append(_b64_ai.b64encode(content).decode())
+                captions.append(f"{view.title()} look (styling guide)")
     except Exception as e:
         logger.warning(f"[AI] Gemini tryon error: {e}")
         raise HTTPException(422, "Our AI couldn't process this image. Please try a different photo or category.")
-    # Record generation
+    generated = real_count > 0
+    caption = captions[0] if generated else (text_analysis or "AI analysis complete.")
+    # Record generation (a single try-on request = one usage unit)
     gen = {"id": str(uuid.uuid4()), "seller_id": payload["sub"], "type": "tryon",
            "model_type": model_type, "category": category, "caption": caption[:500],
            "created_at": _now()}
     mem.setdefault("ai_generations", []).append(gen)
     _persist_db()
-    return {"image": result_image, "caption": caption, "generated": generated, "usage": _ai_usage_today(payload["sub"])}
+    return {"image": images[0], "images": images, "captions": captions,
+            "caption": caption, "generated": generated, "usage": _ai_usage_today(payload["sub"])}
 
 @api.post("/seller/ai/product-images")
 @limiter.limit("10/minute")
-async def ai_product_images(request: Request, image: UploadFile = File(...), style: str = Form("studio_white"), category: str = Form("saree"), payload: dict = Depends(require_seller)):
+async def ai_product_images(request: Request, image: UploadFile = File(...), style: str = Form("studio_white"), category: str = Form("saree"), payload: dict = Depends(require_ai_seller)):
     """Generate 3 professional product images using Gemini with distinct prompts."""
     if not GEMINI_API_KEY:
         raise HTTPException(503, "AI Studio is not configured. Contact admin.")
     usage = _ai_usage_today(payload["sub"])
-    if usage["product_img_remaining"] <= 0:
+    if usage["product_img_remaining"] is not None and usage["product_img_remaining"] <= 0:
         raise HTTPException(429, f"Daily limit reached ({_AI_PRODUCT_IMG_DAILY_LIMIT} sets/day). Try again tomorrow.")
     if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
         raise HTTPException(400, "Only JPEG, PNG, or WebP images are accepted.")
@@ -4501,12 +4575,12 @@ def ai_model_status(gen_id: str, payload: dict = Depends(require_seller)):
 
 @api.post("/ai/generate-model")
 @limiter.limit("10/minute")
-def ai_generate_model(request: Request, body: AIModelIn, payload: dict = Depends(require_seller)):
+def ai_generate_model(request: Request, body: AIModelIn, payload: dict = Depends(require_ai_seller)):
     return _generate_ai_model(body, payload["sub"], regenerate=False)
 
 @api.post("/ai/regenerate-model")
 @limiter.limit("10/minute")
-def ai_regenerate_model(request: Request, body: AIModelIn, payload: dict = Depends(require_seller)):
+def ai_regenerate_model(request: Request, body: AIModelIn, payload: dict = Depends(require_ai_seller)):
     return _generate_ai_model(body, payload["sub"], regenerate=True)
 
 @api.delete("/ai/model-image/{gen_id}")

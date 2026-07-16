@@ -15,7 +15,11 @@ const MODEL_TYPES = [
   { value: "female_western", label: "Female — Western" },
   { value: "male_western", label: "Male — Western" },
 ];
-const CATEGORIES = ["Saree", "Lehenga", "Kurta", "Jewellery", "Western", "Accessory", "Sherwani", "Chaniya Choli"];
+const CATEGORIES = [
+  "Saree", "Lehenga", "Chaniya Choli", "Anarkali", "Salwar", "Suit", "Kurti", "Kurta",
+  "Gown", "Blouse", "Dupatta", "Gharara", "Sherwani", "Indo-Western", "Dress", "Co-ord",
+  "Western", "Kids", "Jewellery", "Accessory",
+];
 const STYLES = [
   { value: "studio_white", label: "Studio White" },
   { value: "lifestyle_warm", label: "Lifestyle Warm" },
@@ -90,8 +94,13 @@ export default function SellerAIStudio() {
   // Gallery
   const [gallery, setGallery] = useState([]);
 
+  // Access gate — AI Studio is granted per store by admin.
+  const [access, setAccess] = useState("loading"); // "loading" | "enabled" | "disabled"
+
   const loadUsage = useCallback(() => {
-    api.get("/seller/ai/usage").then(r => setUsage(r.data)).catch(() => {});
+    api.get("/seller/ai/usage")
+      .then(r => { setUsage(r.data); setAccess(r.data?.enabled === false ? "disabled" : "enabled"); })
+      .catch(err => { if (err?.response?.status === 403) setAccess("disabled"); });
   }, []);
 
   const loadGallery = useCallback(() => {
@@ -138,6 +147,32 @@ export default function SellerAIStudio() {
 
   const selectStyle = { borderColor: "#E8E4DF", background: "white", color: "#1a1a1a", padding: "8px 12px", borderRadius: "8px", fontSize: "14px", border: "1px solid #E8E4DF" };
 
+  if (access === "disabled") {
+    return (
+      <SellerLayout>
+        <div style={{ backgroundColor: "#FAF9F6", minHeight: "80vh" }}>
+          <div className="max-w-lg mx-auto px-6 py-24 text-center">
+            <div className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center mb-5"
+              style={{ background: "linear-gradient(135deg, #C9A84C, #8B3A3A)" }}>
+              <Sparkles size={26} color="white" />
+            </div>
+            <h1 className="text-2xl font-bold mb-2" style={{ color: "#1a1a1a" }}>AI Studio is a premium feature</h1>
+            <p className="text-sm leading-relaxed" style={{ color: "#6B5E52" }}>
+              AI Studio lets you create virtual try-ons and professional product photos in seconds.
+              It isn't enabled for your store yet. Please contact ShopLiveBharat to request access —
+              once approved, it will appear here automatically.
+            </p>
+            <a href="mailto:sellers@shoplivebharat.com?subject=Request%20AI%20Studio%20access"
+              className="inline-flex items-center gap-2 mt-6 px-5 py-3 rounded-xl text-sm font-bold text-white"
+              style={{ background: "#1a1a1a" }}>
+              Request Access
+            </a>
+          </div>
+        </div>
+      </SellerLayout>
+    );
+  }
+
   return (
     <SellerLayout>
       <div style={{ backgroundColor: "#FAF9F6", minHeight: "80vh" }}>
@@ -154,10 +189,19 @@ export default function SellerAIStudio() {
               </div>
             </div>
             {usage && (
-              <div className="text-right text-xs" style={{ color: "#6B5E52" }}>
-                <p>Try-ons: <strong>{usage.tryon_remaining}/{usage.tryon_limit}</strong> left today</p>
-                <p>Product sets: <strong>{usage.product_img_remaining}/{usage.product_img_limit}</strong> left today</p>
-              </div>
+              usage.unlimited ? (
+                <div className="text-right text-xs">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold"
+                    style={{ background: "linear-gradient(135deg, #C9A84C, #8B3A3A)", color: "white" }}>
+                    <Sparkles size={12} /> Unlimited access
+                  </span>
+                </div>
+              ) : (
+                <div className="text-right text-xs" style={{ color: "#6B5E52" }}>
+                  <p>Try-ons: <strong>{usage.tryon_remaining}/{usage.tryon_limit}</strong> left today</p>
+                  <p>Product sets: <strong>{usage.product_img_remaining}/{usage.product_img_limit}</strong> left today</p>
+                </div>
+              )
             )}
           </div>
 
@@ -178,7 +222,7 @@ export default function SellerAIStudio() {
               <h2 className="font-semibold flex items-center gap-2" style={{ color: "#1a1a1a" }}>
                 <Wand2 size={18} style={{ color: "#C9A84C" }} /> Virtual Try-On
               </h2>
-              <p className="text-sm" style={{ color: "#9B8B7A" }}>Upload a product image and our AI will generate a model wearing it.</p>
+              <p className="text-sm" style={{ color: "#9B8B7A" }}>Upload a product image and our AI will generate a model wearing it — as both a front look and a back look.</p>
               <DropZone file={tryonFile} setFile={setTryonFile} label="Upload your product image" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -207,7 +251,11 @@ export default function SellerAIStudio() {
                       AI image generation is not enabled on this account yet, so we're showing your original photo with an AI styling analysis below. To produce brand-new model/product photos, enable billing on the Gemini API project (Imagen &amp; image models require a paid plan).
                     </div>
                   )}
-                  <ResultImage base64={tryonResult.image} label="Virtual Try-On" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {(tryonResult.images || [tryonResult.image]).map((img, i) => (
+                      <ResultImage key={i} base64={img} label={["Front Look", "Back Look"][i] || `Look ${i + 1}`} />
+                    ))}
+                  </div>
                   {tryonResult.caption && <p className="text-sm italic" style={{ color: "#6B5E52" }}>{tryonResult.caption}</p>}
                 </div>
               )}

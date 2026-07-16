@@ -4,13 +4,14 @@
  * customer-facing site. No customer navbar, no cart, no wishlist.
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { LogOut, Package, Radio, ClipboardList, CalendarDays, Tag, Eye, LayoutDashboard, Settings, Sparkles } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import BrandLogo from "@/components/BrandLogo";
+import { fetchSellerMe } from "@/lib/api";
 
 const NAV_TABS = [
   { label: "Overview",  to: "/seller/dashboard", icon: LayoutDashboard },
@@ -27,6 +28,7 @@ export default function SellerLayout({ children }) {
   const { isLoggedIn, isSeller, user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [aiEnabled, setAiEnabled] = useState(false);
 
   // Route guard — only sellers can see this layout
   useEffect(() => {
@@ -39,6 +41,21 @@ export default function SellerLayout({ children }) {
       navigate("/", { replace: true });
     }
   }, [isLoggedIn, isSeller, navigate]);
+
+  // AI Studio is admin-gated per store — only show the tab when granted.
+  useEffect(() => {
+    if (!isLoggedIn || !isSeller) return;
+    let alive = true;
+    fetchSellerMe()
+      .then((d) => {
+        const shop = d?.shop || {};
+        if (alive) setAiEnabled(!!(shop.ai_studio_enabled || shop.is_admin_store || shop.id === "shop-shoplivebharat"));
+      })
+      .catch(() => { if (alive) setAiEnabled(false); });
+    return () => { alive = false; };
+  }, [isLoggedIn, isSeller]);
+
+  const navTabs = NAV_TABS.filter((t) => t.to !== "/seller/ai-studio" || aiEnabled);
 
   const handleLogout = () => {
     logout();
@@ -88,7 +105,7 @@ export default function SellerLayout({ children }) {
         {/* ── Tab bar ── */}
         <div className="border-t" style={{ borderColor: "rgba(255,255,255,0.08)", backgroundColor: "#141414" }}>
           <div className="max-w-7xl mx-auto px-6 flex items-center overflow-x-auto">
-            {NAV_TABS.map(({ label, to, icon: Icon }) => {
+            {navTabs.map(({ label, to, icon: Icon }) => {
               const active = location.pathname === to;
               return (
                 <Link key={to} to={to}

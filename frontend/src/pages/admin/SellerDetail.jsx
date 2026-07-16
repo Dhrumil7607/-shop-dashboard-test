@@ -311,6 +311,13 @@ export default function SellerDetail() {
                         positive: true,
                       },
                       {
+                        key: "ai_studio_enabled",
+                        label: "Enable AI Studio",
+                        desc: "Grants this store access to AI Studio (virtual try-on + product photos). Until enabled, the seller won't see the feature.",
+                        value: eligibility.overrides.ai_studio_enabled,
+                        positive: true,
+                      },
+                      {
                         key: "admin_live_disabled",
                         label: "Admin Kill-Switch (disable live)",
                         desc: "Force-disables live shopping regardless of seller settings. Toggle OFF to remove the block.",
