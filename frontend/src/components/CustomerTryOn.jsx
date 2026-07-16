@@ -9,7 +9,7 @@
  * Props: onClose(), product
  */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { X, Sparkles, UploadCloud, Camera, Download, RotateCcw, ShieldCheck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { customerTryOn } from "@/lib/api";
@@ -19,13 +19,28 @@ const GOLD = "#C8A146";
 const INK = "#1a1a1a";
 const BORDER = "#ECE8E1";
 const ACCEPT = ["image/jpeg", "image/png", "image/webp"];
+const LOADING_MSGS = [
+  "Analysing your photo…",
+  "Studying the garment’s fabric & colours…",
+  "Tailoring the perfect fit…",
+  "Draping the outfit on you…",
+  "Rendering your look…",
+];
 
 export default function CustomerTryOn({ onClose, product }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [msgIdx, setMsgIdx] = useState(0);
   const inputRef = useRef(null);
+
+  // Rotate the status messages while the AI works.
+  useEffect(() => {
+    if (!loading) { setMsgIdx(0); return undefined; }
+    const t = setInterval(() => setMsgIdx((i) => (i + 1) % LOADING_MSGS.length), 2200);
+    return () => clearInterval(t);
+  }, [loading]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
@@ -104,7 +119,49 @@ export default function CustomerTryOn({ onClose, product }) {
         </div>
 
         <div className="px-6 py-5 space-y-4">
-          {!result && (
+          {/* ── Animated processing state ── */}
+          {loading && (
+            <div className="py-3">
+              <div className="relative mx-auto overflow-hidden rounded-2xl" style={{ aspectRatio: "3/4", maxWidth: 260, background: "#EDE7DE" }}>
+                <img src={preview || product?.image_url} alt="Generating" className="h-full w-full object-cover"
+                  onError={(e) => { e.target.style.opacity = 0.3; }} />
+                <div className="absolute inset-0" style={{ background: "linear-gradient(rgba(20,18,16,0.35), rgba(20,18,16,0.12))" }} />
+                {/* moving scan shimmer */}
+                <motion.div className="absolute inset-x-0 h-20"
+                  style={{ background: "linear-gradient(to bottom, transparent, rgba(201,168,76,0.55), transparent)" }}
+                  initial={{ y: "-25%" }} animate={{ y: "125%" }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }} />
+                {/* pulsing ring */}
+                <motion.div className="absolute inset-0 rounded-2xl"
+                  style={{ boxShadow: "inset 0 0 0 2px rgba(201,168,76,0.5)" }}
+                  animate={{ opacity: [0.35, 0.85, 0.35] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }} />
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full px-3 py-1"
+                  style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(6px)" }}>
+                  <motion.span animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}>
+                    <Sparkles size={12} className="text-white" />
+                  </motion.span>
+                  <span className="text-[10px] font-medium text-white">ShopLive AI</span>
+                </div>
+              </div>
+
+              <div className="mt-4 h-6 overflow-hidden text-center">
+                <AnimatePresence mode="wait">
+                  <motion.p key={msgIdx} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18 }} className="text-sm font-semibold" style={{ color: INK }}>
+                    {LOADING_MSGS[msgIdx]}
+                  </motion.p>
+                </AnimatePresence>
+              </div>
+
+              <div className="mt-3 mx-auto h-1.5 w-56 overflow-hidden rounded-full" style={{ background: "#EEE7DB" }}>
+                <motion.div className="h-full w-1/3 rounded-full" style={{ background: `linear-gradient(90deg, ${GOLD}, ${MAROON})` }}
+                  animate={{ x: ["-110%", "320%"] }} transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }} />
+              </div>
+              <p className="mt-3 text-center text-[11px]" style={{ color: "#9B8B7A" }}>This usually takes 15–30 seconds…</p>
+            </div>
+          )}
+
+          {!result && !loading && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-2xl overflow-hidden" style={{ ...glass, aspectRatio: "3/4" }}>
