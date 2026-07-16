@@ -11,8 +11,9 @@ import { toast } from "sonner";
 import SellerLayout from "@/layouts/SellerLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { getSellerProducts, sellerCreateProduct, sellerUpdateProduct, sellerDeleteProduct } from "@/lib/api";
+import { getSellerProducts, sellerCreateProduct, sellerUpdateProduct, sellerDeleteProduct, getSellerAiStatus } from "@/lib/api";
 import ProductStudio from "@/components/ProductStudio/ProductStudio";
+import { Sparkles } from "lucide-react";
 
 const STATUS_BADGE = {
   live:         { label: "Live",         bg: "rgba(45,122,58,0.1)",  text: "#2D7A3A" },
@@ -35,11 +36,13 @@ export default function SellerProducts() {
   const [studioOpen,  setStudioOpen]  = useState(false);
   const [editProduct, setEditProduct] = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const [aiStatus,    setAiStatus]    = useState({}); // { productId: { status, optimized } }
 
   const refresh = useCallback(async () => {
     try {
-      const list = await getSellerProducts();
+      const [list, ai] = await Promise.all([getSellerProducts(), getSellerAiStatus()]);
       setProducts((list || []).filter(p => p.status !== "removed"));
+      setAiStatus(ai || {});
     } catch { setProducts([]); }
     finally { setLoading(false); }
   }, []);
@@ -173,6 +176,17 @@ export default function SellerProducts() {
                         <div className="flex items-center gap-2 flex-wrap mb-0.5">
                           <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "#C9A84C" }}>{p.category}</span>
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: badge.bg, color: badge.text }}>{badge.label}</span>
+                          {aiStatus[p.id]?.optimized ? (
+                            <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ backgroundColor: "rgba(201,168,76,0.16)", color: "#8A6D1B" }}>
+                              <Sparkles size={9} /> AI Optimized
+                            </span>
+                          ) : aiStatus[p.id] && (aiStatus[p.id].status === "queued" || aiStatus[p.id].status === "processing") ? (
+                            <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                              style={{ backgroundColor: "rgba(155,139,122,0.14)", color: "#6B5E52" }}>
+                              <Sparkles size={9} /> AI Processing
+                            </span>
+                          ) : null}
                           {lowStock && (
                             <span className="flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(192,57,43,0.1)", color: "#C0392B" }}>
                               <AlertTriangle size={9} /> Only {p.stock} left

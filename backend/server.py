@@ -70,7 +70,7 @@ else:
     logger.info("[DB] Using in-memory database")
 
 # ── MongoDB-backed persistence ────────────────────────────────────────────────
-_COLLECTIONS = ["users", "shops", "products", "orders", "carts", "wishlists", "bookings", "waitlist", "slots", "seller_applications", "coupons", "returns", "email_log", "shipments", "categories", "ai_generations", "size_profiles", "_meta"]
+_COLLECTIONS = ["users", "shops", "products", "orders", "carts", "wishlists", "bookings", "waitlist", "slots", "seller_applications", "coupons", "returns", "email_log", "shipments", "categories", "ai_generations", "size_profiles", "ai_training", "_meta"]
 
 def _load_from_mongo() -> Optional[Dict[str, list]]:
     """Load all collections from MongoDB."""
@@ -158,7 +158,7 @@ else:
         "bookings": [], "waitlist": [], "slots": [],
         "seller_applications": [], "coupons": [], "returns": [],
         "email_log": [], "shipments": [], "categories": [], "_meta": [],
-        "size_profiles": [],
+        "size_profiles": [], "ai_training": [],
     }
 
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "shoplivebharat-admin")
@@ -3628,6 +3628,65 @@ def _store_image(data_url: str, by: str, folder: str = "shoplivebharat/products"
     mem.setdefault("image_store", {})[image_id] = {"url": data_url, "uploaded_at": _now(), "by": by}
     return {"url": data_url, "image_id": image_id, "source": "data_url"}
 
+# ── Cloudinary PRIVATE video (AI Try-On training data) ───────────────────────
+# Videos are uploaded as `authenticated` assets so their delivery URLs require a
+# signature — they are never publicly guessable and never exposed to customers.
+def _cloudinary_upload_video_file(path: str, folder: str = "shoplivebharat/ai-training") -> Optional[dict]:
+    if not _cloudinary_configure():
+        return None
+    try:
+        import cloudinary.uploader  # type: ignore
+        res = cloudinary.uploader.upload_large(
+            path, resource_type="video", type="authenticated",
+            folder=folder, chunk_size=20_000_000,
+        )
+        return {"public_id": res.get("public_id"), "bytes": res.get("bytes", 0),
+                "duration": res.get("duration"), "format": res.get("format")}
+    except Exception as e:
+        logger.warning(f"[CLOUDINARY] video upload failed: {e}")
+        return None
+
+def _cloudinary_signed_url(public_id: str, fmt: str = "mp4", **opts) -> Optional[str]:
+    if not public_id or not _cloudinary_configure():
+        return None
+    try:
+        import cloudinary.utils  # type: ignore
+        url, _ = cloudinary.utils.cloudinary_url(
+            public_id, resource_type="video", type="authenticated",
+            sign_url=True, format=fmt, secure=True, **opts,
+        )
+        return url
+    except Exception as e:
+        logger.warning(f"[CLOUDINARY] signed url failed: {e}")
+        return None
+
+def _cloudinary_video_frame_urls(public_id: str, duration: Optional[float], count: int = 6) -> list:
+    """Signed still-frame JPG URLs sampled across the video (private)."""
+    if not public_id:
+        return []
+    if duration and duration > 0:
+        offsets = [round(duration * (i + 1) / (count + 1), 2) for i in range(count)]
+    else:
+        offsets = [1, 3, 5, 7, 9, 11][:count]
+    urls = []
+    for off in offsets:
+        u = _cloudinary_signed_url(public_id, fmt="jpg", start_offset=str(off),
+                                   transformation=[{"width": 640, "crop": "limit"}])
+        if u:
+            urls.append(u)
+    return urls
+
+def _cloudinary_delete_video(public_id: str) -> bool:
+    if not public_id or not _cloudinary_configure():
+        return False
+    try:
+        import cloudinary.uploader  # type: ignore
+        cloudinary.uploader.destroy(public_id, resource_type="video", type="authenticated")
+        return True
+    except Exception as e:
+        logger.warning(f"[CLOUDINARY] video delete failed: {e}")
+        return False
+
 # ── Image upload (Cloudinary when configured, else base64 data-url fallback) ──
 # Max ~10 MB per image (browser should pre-resize before sending).
 @api.post("/upload-image", status_code=201)
@@ -4730,7 +4789,7 @@ async def ai_usage(payload: dict = Depends(require_seller)):
 
 @api.post("/seller/ai/tryon")
 @limiter.limit("10/minute")
-async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: str = Form("female_indian"), category: str = Form("saree"), payload: dict = Depends(require_ai_seller)):
+async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: str = Form("female_indian"), category: str = Form("saree"), product_id: str = Form(""), payload: dict = Depends(require_ai_seller)):
     """Generate a virtual try-on image using Gemini."""
     if not GEMINI_API_KEY:
         raise HTTPException(503, "AI Studio is not configured. Contact admin.")
@@ -4742,6 +4801,8 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
     content = await image.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Image must be under 10MB.")
+    # Prioritise the seller's private 360° garment study when available.
+    profile_snippet = _ai_training_prompt_snippet(product_id)
     # Generate a FRONT look and a BACK look of the model wearing the garment.
     views = ["front", "back"]
     try:
@@ -4751,7 +4812,7 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
         real_count = 0
         text_analysis = None
         for view in views:
-            prompt = _get_tryon_prompt(category, model_type, view)
+            prompt = profile_snippet + _get_tryon_prompt(category, model_type, view)
             img = _call_gemini_image(prompt, content, image.content_type)
             if img:
                 images.append(img)
@@ -4778,15 +4839,16 @@ async def ai_tryon(request: Request, image: UploadFile = File(...), model_type: 
     # Record generation (a single try-on request = one usage unit)
     gen = {"id": str(uuid.uuid4()), "seller_id": payload["sub"], "type": "tryon",
            "model_type": model_type, "category": category, "caption": caption[:500],
-           "created_at": _now()}
+           "ai_optimized": bool(profile_snippet), "created_at": _now()}
     mem.setdefault("ai_generations", []).append(gen)
     _persist_db()
     return {"image": images[0], "images": images, "captions": captions,
-            "caption": caption, "generated": generated, "usage": _ai_usage_today(payload["sub"])}
+            "caption": caption, "generated": generated,
+            "ai_optimized": bool(profile_snippet), "usage": _ai_usage_today(payload["sub"])}
 
 @api.post("/seller/ai/product-images")
 @limiter.limit("10/minute")
-async def ai_product_images(request: Request, image: UploadFile = File(...), style: str = Form("studio_white"), category: str = Form("saree"), payload: dict = Depends(require_ai_seller)):
+async def ai_product_images(request: Request, image: UploadFile = File(...), style: str = Form("studio_white"), category: str = Form("saree"), product_id: str = Form(""), payload: dict = Depends(require_ai_seller)):
     """Generate 3 professional product images using Gemini with distinct prompts."""
     if not GEMINI_API_KEY:
         raise HTTPException(503, "AI Studio is not configured. Contact admin.")
@@ -4798,9 +4860,11 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
     content = await image.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Image must be under 10MB.")
+    # Prioritise the seller's private 360° garment study when available.
+    profile_snippet = _ai_training_prompt_snippet(product_id)
     # Front, back and a close-up detail shot
     shot_types = ["front", "back", "detail"]
-    prompts = [_get_product_prompt(st, style, category) for st in shot_types]
+    prompts = [profile_snippet + _get_product_prompt(st, style, category) for st in shot_types]
     try:
         import base64 as _b64_ai
         images = []
@@ -4839,6 +4903,245 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
     mem.setdefault("ai_generations", []).append(gen)
     _persist_db()
     return {"images": images, "captions": captions, "style": style, "generated": generated, "usage": _ai_usage_today(payload["sub"])}
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PRIVATE AI TRY-ON DATA — optional seller 360° garment video
+# The video is stored as a Cloudinary AUTHENTICATED (private) asset. It is never
+# shown on the product page, never in galleries, never downloadable by customers.
+# In the background we sample frames and build a garment "profile" (fabric,
+# embroidery, colour, drape, sleeve/neck/border details) that enriches AI try-on
+# prompts for more realistic results. Only sellers (own product) and admins can
+# manage or preview it.
+# ══════════════════════════════════════════════════════════════════════════════
+_AI_VIDEO_MAX_BYTES = 200 * 1024 * 1024
+_AI_VIDEO_MAX_DURATION = 65          # seconds (30–60s recommended)
+_AI_VIDEO_FRAMES = 6
+
+def _fetch_url_bytes(url: str, timeout: int = 25) -> Optional[bytes]:
+    try:
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return r.read()
+    except Exception as e:
+        logger.warning(f"[AI-TRAIN] frame fetch failed: {e}")
+        return None
+
+def _build_garment_profile(frame_urls: list, category: str) -> Optional[dict]:
+    """Analyse sampled frames with Gemini and return a structured garment profile."""
+    if not GEMINI_API_KEY or not frame_urls:
+        return None
+    try:
+        import json as _json
+        from google.genai import types as _t
+        parts = [(
+            "You are a senior fashion garment analyst. These frames come from a private 360° "
+            f"studio video of a single {category or 'garment'}. Describe the garment precisely for an "
+            "AI try-on system. Respond with ONLY strict minified JSON in this shape: "
+            '{"fabric_texture":"","embroidery":"","color":"","shine":"","pattern":"",'
+            '"garment_shape":"","sleeve_design":"","neck_design":"","border_work":"","drape":"",'
+            '"prompt_snippet":""}. "prompt_snippet" must be one vivid sentence (max 40 words) '
+            "capturing the most important visual details to preserve during try-on."
+        )]
+        added = 0
+        for u in frame_urls[:_AI_VIDEO_FRAMES]:
+            b = _fetch_url_bytes(u)
+            if b:
+                parts.append(_t.Part.from_bytes(data=b, mime_type="image/jpeg"))
+                added += 1
+        if added == 0:
+            return None
+        txt = _call_gemini_text(parts)
+        if not txt:
+            return None
+        s, e = txt.find("{"), txt.rfind("}")
+        if s >= 0 and e > s:
+            return _json.loads(txt[s:e + 1])
+    except Exception as ex:
+        logger.warning(f"[AI-TRAIN] profile build failed: {ex}")
+    return None
+
+def _process_ai_training(record_id: str):
+    """Background: sample frames + build the garment profile."""
+    rec = mem_first("ai_training", id=record_id)
+    if not rec:
+        return
+    mem_update("ai_training", record_id, {"status": "processing", "error": None, "updated_at": _now()})
+    try:
+        frames = _cloudinary_video_frame_urls(rec.get("video_public_id"), rec.get("duration"), _AI_VIDEO_FRAMES)
+        profile = _build_garment_profile(frames, rec.get("category", ""))
+        if profile:
+            mem_update("ai_training", record_id, {
+                "status": "ready", "profile": profile, "frame_count": len(frames),
+                "processed_at": _now(), "updated_at": _now(), "error": None,
+            })
+        else:
+            mem_update("ai_training", record_id, {
+                "status": "failed", "updated_at": _now(),
+                "error": "AI analysis is unavailable right now. You can reprocess later.",
+            })
+    except Exception as ex:
+        logger.warning(f"[AI-TRAIN] processing error: {ex}")
+        mem_update("ai_training", record_id, {"status": "failed", "error": str(ex)[:200], "updated_at": _now()})
+
+def _ai_training_public(rec: dict, include_preview: bool = False) -> dict:
+    """Safe representation — never leaks the raw asset publicly."""
+    out = {
+        "id": rec.get("id"), "product_id": rec.get("product_id"),
+        "status": rec.get("status"), "optimized": rec.get("status") == "ready",
+        "duration": rec.get("duration"), "bytes": rec.get("bytes", 0),
+        "has_profile": bool(rec.get("profile")), "updated_at": rec.get("updated_at"),
+    }
+    if include_preview and rec.get("video_public_id"):
+        out["preview_url"] = _cloudinary_signed_url(rec["video_public_id"], fmt="mp4")
+    return out
+
+def _ai_training_prompt_snippet(product_id: str) -> str:
+    """Prompt enrichment from a product's ready garment profile (private)."""
+    if not product_id:
+        return ""
+    rec = mem_first("ai_training", product_id=product_id)
+    if not rec or rec.get("status") != "ready":
+        return ""
+    prof = rec.get("profile") or {}
+    snip = (prof.get("prompt_snippet") or "").strip()
+    if not snip:
+        bits = [f"{k.replace('_', ' ')}: {v}" for k, v in prof.items()
+                if isinstance(v, str) and v and k != "prompt_snippet"]
+        snip = "; ".join(bits[:8])
+    if not snip:
+        return ""
+    return ("Using the seller's private 360° garment study, preserve these EXACT details: " + snip + ". ")
+
+
+@api.post("/seller/products/{product_id}/ai-video")
+async def seller_upload_ai_video(product_id: str, video: UploadFile = File(...), payload: dict = Depends(require_seller)):
+    """Upload an optional private 360° garment video for AI try-on training."""
+    _, store_id = _seller_ctx(payload)
+    prod = _owns_product(store_id, product_id)
+    if not _cloudinary_configured():
+        raise HTTPException(503, "Private video storage isn't configured yet. Please contact ShopLiveBharat.")
+    if video.content_type not in ("video/mp4", "video/quicktime", "video/x-quicktime", "video/mov"):
+        raise HTTPException(400, "Only MP4 or MOV videos are accepted.")
+    import tempfile, os as _os, threading as _threading
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".vid")
+    size = 0
+    try:
+        while True:
+            chunk = await video.read(1024 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > _AI_VIDEO_MAX_BYTES:
+                tmp.close(); _os.unlink(tmp.name)
+                raise HTTPException(400, "Video must be under 200MB.")
+            tmp.write(chunk)
+        tmp.close()
+        up = _cloudinary_upload_video_file(tmp.name)
+    finally:
+        try: _os.unlink(tmp.name)
+        except Exception: pass
+    if not up or not up.get("public_id"):
+        raise HTTPException(422, "We couldn't process this video. Please try a different file.")
+    dur = up.get("duration")
+    if dur and dur > _AI_VIDEO_MAX_DURATION:
+        _cloudinary_delete_video(up["public_id"])
+        raise HTTPException(400, "Please keep the video under 60 seconds.")
+    existing = mem_first("ai_training", product_id=product_id)
+    if existing and existing.get("video_public_id"):
+        _cloudinary_delete_video(existing["video_public_id"])
+    rec_id = existing["id"] if existing else str(uuid.uuid4())
+    rec = {
+        "id": rec_id, "product_id": product_id, "seller_id": payload["sub"],
+        "shop_id": store_id, "category": prod.get("category", ""),
+        "video_public_id": up["public_id"], "bytes": up.get("bytes", 0), "duration": dur,
+        "status": "queued", "profile": None, "error": None,
+        "created_at": (existing or {}).get("created_at") or _now(), "updated_at": _now(),
+    }
+    if existing:
+        mem_update("ai_training", rec_id, rec)
+    else:
+        mem_insert("ai_training", rec)
+    _threading.Thread(target=_process_ai_training, args=(rec_id,), daemon=True).start()
+    return {"exists": True, **_ai_training_public(rec, include_preview=True)}
+
+@api.get("/seller/products/{product_id}/ai-video")
+def seller_get_ai_video(product_id: str, payload: dict = Depends(require_seller)):
+    _, store_id = _seller_ctx(payload)
+    _owns_product(store_id, product_id)
+    rec = mem_first("ai_training", product_id=product_id)
+    if not rec:
+        return {"exists": False}
+    return {"exists": True, **_ai_training_public(rec, include_preview=True)}
+
+@api.delete("/seller/products/{product_id}/ai-video")
+def seller_delete_ai_video(product_id: str, payload: dict = Depends(require_seller)):
+    _, store_id = _seller_ctx(payload)
+    _owns_product(store_id, product_id)
+    rec = mem_first("ai_training", product_id=product_id)
+    if not rec:
+        return {"success": True, "deleted": False}
+    if rec.get("video_public_id"):
+        _cloudinary_delete_video(rec["video_public_id"])
+    mem_delete("ai_training", rec["id"])
+    return {"success": True, "deleted": True}
+
+@api.get("/seller/products/ai-status")
+def seller_ai_status_map(payload: dict = Depends(require_seller)):
+    """Map of {product_id: {status, optimized}} for the seller's AI badges."""
+    _, store_id = _seller_ctx(payload)
+    out = {}
+    for r in mem_get("ai_training", shop_id=store_id):
+        out[r["product_id"]] = {"status": r.get("status"), "optimized": r.get("status") == "ready"}
+    return out
+
+@api.get("/admin/ai-training/stats", dependencies=[Depends(require_admin)])
+def admin_ai_training_stats():
+    from collections import Counter
+    recs = mem.get("ai_training", [])
+    counts = Counter(r.get("status", "unknown") for r in recs)
+    total_bytes = sum((r.get("bytes", 0) or 0) for r in recs)
+    return {
+        "total": len(recs), "total_bytes": total_bytes,
+        "total_mb": round(total_bytes / 1048576, 1),
+        "by_status": dict(counts),
+        "queue": counts.get("queued", 0) + counts.get("processing", 0),
+        "cloudinary": _cloudinary_configured(),
+    }
+
+@api.get("/admin/ai-training", dependencies=[Depends(require_admin)])
+def admin_ai_training_list():
+    items = []
+    for r in mem.get("ai_training", []):
+        prod = mem_first("products", id=r.get("product_id")) or {}
+        shop = mem_first("shops", id=r.get("shop_id")) or {}
+        items.append({
+            **_ai_training_public(r, include_preview=True),
+            "product_name": prod.get("name", ""), "shop_name": shop.get("name", ""),
+            "seller_id": r.get("seller_id"), "error": r.get("error"),
+            "created_at": r.get("created_at"),
+        })
+    items.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    return {"items": items}
+
+@api.post("/admin/ai-training/{rec_id}/reprocess", dependencies=[Depends(require_admin)])
+def admin_ai_training_reprocess(rec_id: str):
+    import threading as _threading
+    rec = mem_first("ai_training", id=rec_id)
+    if not rec:
+        raise HTTPException(404, "Record not found")
+    mem_update("ai_training", rec_id, {"status": "queued", "error": None, "updated_at": _now()})
+    _threading.Thread(target=_process_ai_training, args=(rec_id,), daemon=True).start()
+    return {"success": True}
+
+@api.delete("/admin/ai-training/{rec_id}", dependencies=[Depends(require_admin)])
+def admin_ai_training_delete(rec_id: str):
+    rec = mem_first("ai_training", id=rec_id)
+    if not rec:
+        return {"success": True, "deleted": False}
+    if rec.get("video_public_id"):
+        _cloudinary_delete_video(rec["video_public_id"])
+    mem_delete("ai_training", rec_id)
+    return {"success": True, "deleted": True}
 
 @api.get("/seller/ai/gallery")
 async def ai_gallery(page: int = Query(1, ge=1), payload: dict = Depends(require_seller)):

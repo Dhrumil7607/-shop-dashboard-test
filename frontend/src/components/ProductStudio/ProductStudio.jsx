@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import MultiImageUploader from "@/components/ProductStudio/MultiImageUploader";
 import AIModelGenerator from "@/components/ProductStudio/AIModelGenerator";
+import AIVideoUploader from "@/components/ProductStudio/AIVideoUploader";
 import { uploadImage as sellerUploadImage, adminUploadImage } from "@/lib/api";
 import {
   ALL_CATEGORIES, getSizeType, getDefaultSizeOptions, parseSizeOptions,
@@ -769,6 +770,16 @@ export default function ProductStudio({
                   productId={editProduct?.id || ""}
                   onSetCover={url => set("image_url", url)}
                 />
+              )}
+
+              {/* Private AI Try-On Data (360° video) — seller only */}
+              {mode === "seller" && (
+                <div className="mt-5">
+                  <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>
+                    AI Try-On Data (Optional)
+                  </p>
+                  <AIVideoUploader productId={editProduct?.id || ""} />
+                </div>
               )}
             </Section>
 

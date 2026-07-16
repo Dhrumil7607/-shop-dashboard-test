@@ -772,6 +772,54 @@ export async function aiSetPrimaryModelImage(genId) {
     return data;
 }
 
+// ── Private AI Try-On 360° video (seller) ──────────────────────────────────
+export async function uploadAiVideo(productId, file, onProgress) {
+    const fd = new FormData();
+    fd.append("video", file);
+    const { data } = await api.post(`/seller/products/${productId}/ai-video`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 600000, // large uploads
+        onUploadProgress: (e) => {
+            if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+        },
+    });
+    return data;
+}
+export async function getAiVideo(productId) {
+    try {
+        const { data } = await api.get(`/seller/products/${productId}/ai-video`);
+        return data;
+    } catch { return { exists: false }; }
+}
+export async function deleteAiVideo(productId) {
+    const { data } = await api.delete(`/seller/products/${productId}/ai-video`);
+    return data;
+}
+export async function getSellerAiStatus() {
+    try {
+        const { data } = await api.get("/seller/products/ai-status");
+        return data || {};
+    } catch { return {}; }
+}
+
+// ── Admin: AI Training management ───────────────────────────────────────────
+export async function adminAiTrainingList(adminKey) {
+    const { data } = await api.get("/admin/ai-training", adminHeaders(adminKey));
+    return data?.items || [];
+}
+export async function adminAiTrainingStats(adminKey) {
+    const { data } = await api.get("/admin/ai-training/stats", adminHeaders(adminKey));
+    return data || {};
+}
+export async function adminReprocessAiTraining(recId, adminKey) {
+    const { data } = await api.post(`/admin/ai-training/${recId}/reprocess`, {}, adminHeaders(adminKey));
+    return data;
+}
+export async function adminDeleteAiTraining(recId, adminKey) {
+    const { data } = await api.delete(`/admin/ai-training/${recId}`, adminHeaders(adminKey));
+    return data;
+}
+
 // ── Categories ────────────────────────────────────────────────────────────────
 export async function fetchCategories() {
     try {

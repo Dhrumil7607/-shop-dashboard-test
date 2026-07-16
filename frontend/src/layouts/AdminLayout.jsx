@@ -7,7 +7,7 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
-import { LogOut, LayoutDashboard, Package, ShoppingBag, BookOpen, Users, Settings, Tag, RotateCcw, Shield, ListOrdered, LayoutGrid, UserRound } from "lucide-react";
+import { LogOut, LayoutDashboard, Package, ShoppingBag, BookOpen, Users, Settings, Tag, RotateCcw, Shield, ListOrdered, LayoutGrid, UserRound, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import BrandLogo from "@/components/BrandLogo";
 
@@ -16,6 +16,7 @@ const NAV_TABS = [
   { label: "Sellers",      path: "/admin/sellers",               icon: Users },
   { label: "Customers",    path: "/admin/customers",             icon: UserRound },
   { label: "Products",     path: "/admin/products",              icon: Package },
+  { label: "AI Training",  path: "/admin/ai-training",           icon: Sparkles },
   { label: "Orders",       path: "/admin/orders",                icon: ShoppingBag },
   { label: "Bookings",     path: "/admin/bookings",              icon: BookOpen },
   { label: "Returns",      path: "/admin/returns",               icon: RotateCcw },

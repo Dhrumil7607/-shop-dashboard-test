@@ -66,6 +66,7 @@ const AdminCustomers = lazy(() => import("@/pages/admin/Customers"));
 const AdminOrders = lazy(() => import("@/pages/admin/Orders"));
 const AdminBookings = lazy(() => import("@/pages/admin/Bookings"));
 const AdminSellerApplications = lazy(() => import("@/pages/admin/SellerApplications"));
+const AdminAITraining = lazy(() => import("@/pages/admin/AITraining"));
 
 const SizeProfiles = lazy(() => import("@/pages/account/SizeProfiles"));
 const AccountBookings = lazy(() => import("@/pages/account/Bookings"));
@@ -268,6 +269,14 @@ function AppRoutes() {
                     element={
                         <ProtectedAdminRoute>
                             <AdminReturns />
+                        </ProtectedAdminRoute>
+                    }
+                />
+                <Route
+                    path="/admin/ai-training"
+                    element={
+                        <ProtectedAdminRoute>
+                            <AdminAITraining />
                         </ProtectedAdminRoute>
                     }
                 />
