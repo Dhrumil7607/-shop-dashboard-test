@@ -441,6 +441,12 @@ export async function recommendSize(payload) {
     const { data } = await api.post("/size/recommend", payload);
     return data;
 }
+export async function getTryOnAvailable(productId) {
+    try {
+        const { data } = await api.get(`/products/${productId}/tryon-available`);
+        return !!data?.available;
+    } catch { return false; }
+}
 export async function customerTryOn(productId, file) {
     const fd = new FormData();
     fd.append("image", file);

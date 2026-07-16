@@ -13,7 +13,7 @@ import CustomMeasurements from "@/components/CustomMeasurements";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useWishlist } from "@/contexts/WishlistContext";
-import { fetchProducts, fetchShops } from "@/lib/api";
+import { fetchProducts, fetchShops, getTryOnAvailable } from "@/lib/api";
 import { isMensCategory } from "@/lib/categoryUtils";
 import { getDefaultSizeOptions, parseSizeOptions } from "@/lib/sizeConfig";
 
@@ -55,6 +55,7 @@ export default function ProductDetail() {
     const [customMeasure, setCustomMeasure] = useState(null); // { label, measurements }
     const [activeSizeModal, setActiveSizeModal] = useState(null); // "fit" | "guide" | null
     const [tryOnOpen, setTryOnOpen] = useState(false);
+    const [tryOnAvailable, setTryOnAvailable] = useState(false); // only when a 360° video is processed
 
     // Wishlist state from context (replaces local fav state)
     const fav = product ? isWishlisted(product.id) : false;
@@ -63,6 +64,7 @@ export default function ProductDetail() {
         setLoading(true);
         setActiveSizeModal(null);
         setTryOnOpen(false);
+        setTryOnAvailable(false);
         (async () => {
             try {
                 const [prods, shops] = await Promise.all([
@@ -76,6 +78,8 @@ export default function ProductDetail() {
                 setProduct(found);
                 setAllProds(allP);
                 setSelColor(found.color || "");
+                // AI Try-On is available only once the seller's 360° video is processed.
+                getTryOnAvailable(found.id).then(setTryOnAvailable).catch(() => setTryOnAvailable(false));
                 // Use the exact same resolved list for preselection, buttons and modals.
                 const sizes = getProductSizes(found);
                 setSelSize(sizes[0] || "");
@@ -147,9 +151,10 @@ export default function ProductDetail() {
     const canUseFitFinder = showSizeUI
         && !isMensCategory(product.category)
         && !(product.category || "").toLowerCase().includes("kid");
-    // AI Try-On makes sense for wearables (apparel, jewellery, footwear, accessories),
-    // not for home décor, fabric or bags.
-    const canTryOn = !/home|d[eé]cor|fabric|\bbag|backpack|wallet|textile/i.test((product.category || "").toLowerCase());
+    // AI Try-On shows ONLY when the seller has uploaded + processed a 360° video
+    // for this product (and it's a wearable category).
+    const _tryOnWearable = !/home|d[eé]cor|fabric|\bbag|backpack|wallet|textile/i.test((product.category || "").toLowerCase());
+    const canTryOn = tryOnAvailable && _tryOnWearable;
 
     return (
         <MarketplaceLayout>

@@ -4962,9 +4962,22 @@ async def size_recommend(body: SizeRecommendIn, payload: Optional[dict] = Depend
 
 
 # ── Customer AI Try-On ───────────────────────────────────────────────────────
-# The customer uploads their own photo; we dress them in this product using
-# Gemini image-editing, prioritising the seller's private 360° garment profile.
+# Available ONLY for products where the seller has uploaded + processed a private
+# 360° garment video. The customer uploads their own photo; we dress them in the
+# product using Gemini image-editing enriched by that 360° garment profile.
 # The uploaded photo is processed only and NEVER stored.
+def _product_tryon_ready(product_id: str) -> bool:
+    if not product_id:
+        return False
+    rec = mem_first("ai_training", product_id=product_id)
+    return bool(rec and rec.get("status") == "ready")
+
+@api.get("/products/{product_id}/tryon-available")
+def product_tryon_available(product_id: str):
+    """Public: whether AI Try-On is enabled for this product (has a processed
+    360° garment video). No private data is exposed."""
+    return {"available": _product_tryon_ready(product_id)}
+
 @api.post("/try-on")
 @limiter.limit("6/minute")
 async def customer_try_on(request: Request, image: UploadFile = File(...),
@@ -4982,6 +4995,9 @@ async def customer_try_on(request: Request, image: UploadFile = File(...),
     prod = mem_first("products", id=product_id)
     if not prod:
         raise HTTPException(404, "Product not found.")
+    # AI Try-On requires the seller's processed 360° garment video.
+    if not _product_tryon_ready(product_id):
+        raise HTTPException(400, "AI Try-On isn’t available for this product yet.")
     garment_url = prod.get("image_url") or (prod.get("images") or [None])[0]
     if not garment_url:
         raise HTTPException(422, "This product has no image to try on.")
