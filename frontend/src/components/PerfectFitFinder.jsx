@@ -7,13 +7,16 @@
  * heuristic — no backend change). Calls onSizeSelect(size) when applied.
  *
  * Props:
+ *   open          boolean controlled by ProductDetail
+ *   onClose       () => void
  *   product       { image_url, name, size_options }
+ *   sizes         string[] resolved by ProductDetail
  *   onSizeSelect  (size:string) => void
  */
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Sparkles, MoveVertical, Scale, Shirt, Check, Lock, ArrowRight } from "lucide-react";
+import { X, Sparkles, MoveVertical, Scale, Shirt, Check, Lock } from "lucide-react";
 import { parseSizeOptions } from "@/lib/sizeConfig";
 
 const MAROON = "#8B3A3A";
@@ -42,26 +45,43 @@ function estimate(h, w) {
   };
 }
 
-export default function PerfectFitFinder({ product, onSizeSelect }) {
-  const [open, setOpen] = useState(false);
+export default function PerfectFitFinder({ open, onClose, product, sizes: availableSizes = [], onSizeSelect }) {
   const [height, setHeight] = useState("");
   const [weight, setWeight] = useState("");
   const [fit, setFit] = useState("classic");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const analysisTimerRef = useRef(null);
 
   const sizes = useMemo(() => {
-    const s = parseSizeOptions(product?.size_options);
-    return s.length ? s : ["S", "M", "L", "XL", "XXL"];
-  }, [product?.size_options]);
+    const provided = Array.isArray(availableSizes) ? availableSizes.filter(Boolean) : [];
+    if (provided.length) return provided;
+    const configured = parseSizeOptions(product?.size_options);
+    return configured.length ? configured : ["XS", "S", "M", "L", "XL", "XXL"];
+  }, [availableSizes, product?.size_options]);
 
   const measures = estimate(height, weight);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    if (open) { document.addEventListener("keydown", onKey); document.body.style.overflow = "hidden"; }
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [open]);
+    if (!open) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const onKey = (event) => {
+      if (event.key === "Escape") onClose?.();
+    };
+
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open, onClose]);
+
+  useEffect(() => () => {
+    if (analysisTimerRef.current) window.clearTimeout(analysisTimerRef.current);
+  }, []);
 
   const generate = useCallback(() => {
     const w = Number(weight), h = Number(height);
@@ -69,7 +89,7 @@ export default function PerfectFitFinder({ product, onSizeSelect }) {
     setLoading(true);
     setResult(null);
     // Heuristic: map weight (with slight height influence) onto the size list.
-    setTimeout(() => {
+    analysisTimerRef.current = window.setTimeout(() => {
       let t = (w - 45) / (110 - 45);          // 0..1 over a plausible adult range
       t += ((h - 162) / 200) * 0.18;           // taller → slightly larger
       t = clamp(t, 0, 1);
@@ -84,7 +104,10 @@ export default function PerfectFitFinder({ product, onSizeSelect }) {
     }, 650);
   }, [weight, height, fit, sizes]);
 
-  const applySize = (size) => { onSizeSelect?.(size); setOpen(false); };
+  const applySize = (size) => {
+    onSizeSelect?.(size);
+    onClose?.();
+  };
 
   const inputStyle = { borderColor: BORDER };
 
@@ -95,35 +118,22 @@ export default function PerfectFitFinder({ product, onSizeSelect }) {
     </div>
   );
 
-  return (
-    <>
-      {/* Trigger */}
-      <button type="button" onClick={() => setOpen(true)}
-        className="mb-4 flex w-full items-center justify-between gap-3 rounded-2xl border px-5 py-4 text-left transition hover:shadow-sm"
-        style={{ borderColor: BORDER, background: "linear-gradient(135deg, rgba(200,161,70,0.06), rgba(139,58,58,0.05))" }}>
-        <span className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: `linear-gradient(135deg, ${GOLD}, ${MAROON})` }}>
-            <Sparkles size={17} className="text-white" />
-          </span>
-          <span>
-            <span className="block text-sm font-bold" style={{ color: INK }}>Find Your Perfect Fit</span>
-            <span className="block text-[11px]" style={{ color: "#9B8B7A" }}>AI size recommendation in seconds</span>
-          </span>
-        </span>
-        <ArrowRight size={16} style={{ color: MAROON }} />
-      </button>
+  if (typeof document === "undefined") return null;
 
-      {typeof document !== "undefined" && open && createPortal(
-        <AnimatePresence>
-          {open && (
+  return createPortal(
+    <AnimatePresence>
+      {open && (
             <motion.div
               className="fixed inset-0 z-[99999] flex items-center justify-center p-4"
               style={{ background: "rgba(20,18,16,0.45)", backdropFilter: "blur(4px)" }}
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
-              onClick={() => setOpen(false)}
+              onClick={onClose}
             >
               <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="perfect-fit-title"
                 onClick={(e) => e.stopPropagation()}
                 initial={{ opacity: 0, y: 12, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 8, scale: 0.98 }} transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
@@ -154,13 +164,13 @@ export default function PerfectFitFinder({ product, onSizeSelect }) {
 
                 {/* RIGHT — form */}
                 <div className="relative overflow-y-auto p-6 sm:p-8">
-                  <button type="button" onClick={() => setOpen(false)} aria-label="Close"
+                  <button type="button" onClick={onClose} aria-label="Close size finder" autoFocus
                     className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border transition hover:bg-black/5"
                     style={{ borderColor: BORDER }}>
                     <X size={15} style={{ color: "#6B5E52" }} />
                   </button>
 
-                  <h2 className="font-serif text-3xl" style={{ color: INK, fontWeight: 400 }}>Find Your Perfect Drape</h2>
+                  <h2 id="perfect-fit-title" className="font-serif text-3xl" style={{ color: INK, fontWeight: 400 }}>Find Your Perfect Drape</h2>
                   <p className="mt-2 max-w-md text-sm leading-relaxed" style={{ color: "#8B8074" }}>
                     Our AI analyzes your unique measurements to recommend the ideal fit for this silhouette. Precision tailoring, instantly.
                   </p>
@@ -261,10 +271,8 @@ export default function PerfectFitFinder({ product, onSizeSelect }) {
                 </div>
               </motion.div>
             </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
       )}
-    </>
+    </AnimatePresence>,
+    document.body
   );
 }

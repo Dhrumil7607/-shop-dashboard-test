@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Minus, Plus, Heart, ShoppingCart, ArrowRight, Ruler } from "lucide-react";
+import { Minus, Plus, Heart, ShoppingCart, ArrowRight, Ruler, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import ProductCard from "@/components/ProductCard";
-import SizeGuideModal, { getSizesForCategory, needsSizeSelection } from "@/components/SizeGuideModal";
+import SizeGuideModal from "@/components/SizeGuideModal";
 import MensSizeGuideModal from "@/components/MensSizeGuideModal";
 import PerfectFitFinder from "@/components/PerfectFitFinder";
 import CustomMeasurements from "@/components/CustomMeasurements";
@@ -13,13 +13,27 @@ import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useWishlist } from "@/contexts/WishlistContext";
 import { fetchProducts, fetchShops } from "@/lib/api";
-import { isWomensCategory, isMensCategory, getMensSizes } from "@/lib/categoryUtils";
+import { isMensCategory } from "@/lib/categoryUtils";
+import { getDefaultSizeOptions, parseSizeOptions } from "@/lib/sizeConfig";
 
 const COLOR_MAP = {
     "Ivory":"#FAF8F5","Gold":"#D4AF37","Maroon":"#8B3A3A","Crimson":"#DC143C",
     "Navy":"#1B2A6B","Rani Pink":"#E8417A","Pastel Pink":"#FFB7C5",
     "Cream":"#F5F0E8","Yellow":"#FFD700","Pink":"#E8417A",
 };
+
+const NO_SIZE_CATEGORY_RE = /jewel|accessor|bag|backpack|handbag|wallet|belt|\bcap\b|\bsock|home|d[eé]cor|fabric|dupatta|shawl|footwear|sneaker|boot|sandal|heel|flat|saree/i;
+const FALLBACK_APPAREL_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
+
+function getProductSizes(product) {
+    const sellerSizes = parseSizeOptions(product?.size_options);
+    if (sellerSizes.length) return sellerSizes;
+
+    const defaultSizes = parseSizeOptions(getDefaultSizeOptions(product?.category));
+    if (defaultSizes.length) return defaultSizes;
+
+    return NO_SIZE_CATEGORY_RE.test(product?.category || "") ? [] : FALLBACK_APPAREL_SIZES;
+}
 
 export default function ProductDetail() {
     const { productId } = useParams();
@@ -38,13 +52,14 @@ export default function ProductDetail() {
     const [selColor, setSelColor] = useState("");
     const [selSize,  setSelSize]  = useState("");
     const [customMeasure, setCustomMeasure] = useState(null); // { label, measurements }
-    const [showSizeGuide, setShowSizeGuide] = useState(false);
+    const [activeSizeModal, setActiveSizeModal] = useState(null); // "fit" | "guide" | null
 
     // Wishlist state from context (replaces local fav state)
     const fav = product ? isWishlisted(product.id) : false;
 
     useEffect(() => {
         setLoading(true);
+        setActiveSizeModal(null);
         (async () => {
             try {
                 const [prods, shops] = await Promise.all([
@@ -58,10 +73,8 @@ export default function ProductDetail() {
                 setProduct(found);
                 setAllProds(allP);
                 setSelColor(found.color || "");
-                // Pre-select the first available size
-                const sizes = isMensCategory(found.category)
-                    ? getMensSizes(found.category)
-                    : getSizesForCategory(found.category);
+                // Use the exact same resolved list for preselection, buttons and modals.
+                const sizes = getProductSizes(found);
                 setSelSize(sizes[0] || "");
 
                 const shopInfo = (shops || []).find(s => s.id === found.shop_id);
@@ -125,19 +138,12 @@ export default function ProductDetail() {
         ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100) : 0;
     const colors = product.color ? product.color.split(",").map(c => c.trim()).filter(Boolean) : [];
 
-    // ── Size UI visibility ─────────────────────────────────────────────
-    // Show sizes + AI Size Finder for ALL apparel. Only hide for clearly
-    // one-size categories (jewellery, bags, footwear, saree, fabric, etc.).
-    const _catLower = (product.category || "").toLowerCase();
-    const _noSizeRe = /jewel|accessor|bag|backpack|handbag|wallet|belt|\bcap\b|\bsock|home|d[eé]cor|fabric|dupatta|shawl|footwear|sneaker|boot|sandal|heel|flat|saree/i;
-    const _isNoSizeCat = _noSizeRe.test(_catLower);
-    const _hasSizeOptions = !!(product.size_options && product.size_options.trim());
-    const showSizeUI = _hasSizeOptions || !_isNoSizeCat;
-    const sizeList = _hasSizeOptions
-        ? product.size_options.split(",").map(s => s.trim()).filter(Boolean)
-        : (isMensCategory(product.category)
-            ? getMensSizes(product.category)
-            : ["XS", "S", "M", "L", "XL", "XXL", "3XL"]);
+    // One resolved list drives preselection, buttons, the guide and the finder.
+    const sizeList = getProductSizes(product);
+    const showSizeUI = sizeList.length > 0;
+    const canUseFitFinder = showSizeUI
+        && !isMensCategory(product.category)
+        && !(product.category || "").toLowerCase().includes("kid");
 
     return (
         <MarketplaceLayout>
@@ -264,33 +270,40 @@ export default function ProductDetail() {
                                  have seller-defined sizes but no built-in size chart). ── */}
                             {showSizeUI && (
                             <div className="mb-5">
-
-                                {/* AI Size Finder — premium two-panel modal (all apparel except men's) */}
-                                {!isMensCategory(product.category) && (
-                                    <PerfectFitFinder
-                                        product={product}
-                                        onSizeSelect={(size) => setSelSize(size)}
-                                    />
-                                )}
-
-                                {/* Size buttons + Size Guide link */}
-                                <div className="flex items-center justify-between mb-2">
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                                     <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "#9B8B7A" }}>
                                         {isMensCategory(product.category) ? "SELECT YOUR SIZE" : "SIZE"}
                                     </p>
-                                    <button
-                                        onClick={() => setShowSizeGuide(true)}
-                                        className="flex items-center gap-1.5 text-xs transition hover:opacity-70"
-                                        style={{ color: "#9B8B7A" }}
-                                    >
-                                        <Ruler size={13} />
-                                        Size Guide
-                                    </button>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                        {canUseFitFinder && (
+                                            <button
+                                                type="button"
+                                                aria-haspopup="dialog"
+                                                onClick={() => setActiveSizeModal("fit")}
+                                                className="flex min-h-[44px] items-center gap-1.5 text-xs font-semibold transition hover:opacity-70"
+                                                style={{ color: "#8B3A3A" }}
+                                            >
+                                                <Sparkles size={13} />
+                                                Find My Perfect Size
+                                            </button>
+                                        )}
+                                        <button
+                                            type="button"
+                                            aria-haspopup="dialog"
+                                            onClick={() => setActiveSizeModal("guide")}
+                                            className="flex min-h-[44px] items-center gap-1.5 text-xs transition hover:opacity-70"
+                                            style={{ color: "#9B8B7A" }}
+                                        >
+                                            <Ruler size={13} />
+                                            Size Guide
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center gap-2 flex-wrap">
                                     {sizeList.map(size => (
                                         <button
+                                            type="button"
                                             key={size}
                                             onClick={() => setSelSize(size)}
                                             className="px-4 py-2 rounded border-2 text-sm font-semibold transition min-h-[44px]"
@@ -437,20 +450,34 @@ export default function ProductDetail() {
                 </div>
             </motion.div>
 
-            {/* Size Guide Modal — gender-aware; opens for any sized apparel */}
-            {showSizeGuide && (
+            {/* One controlled Perfect Fit modal, mounted outside clipping containers. */}
+            {canUseFitFinder && (
+                <PerfectFitFinder
+                    open={activeSizeModal === "fit"}
+                    onClose={() => setActiveSizeModal(null)}
+                    product={product}
+                    sizes={sizeList}
+                    onSizeSelect={(size) => {
+                        setCustomMeasure(null);
+                        setSelSize(size);
+                    }}
+                />
+            )}
+
+            {/* One mutually exclusive, gender-aware Size Guide modal. */}
+            {activeSizeModal === "guide" && (
                 isMensCategory(product.category) ? (
                     <MensSizeGuideModal
                         category={product.category}
                         shopName={product.shop_name || shop?.name}
-                        onClose={() => setShowSizeGuide(false)}
+                        onClose={() => setActiveSizeModal(null)}
                     />
                 ) : (
                     <SizeGuideModal
                         category={product.category}
                         sizes={sizeList}
                         shopName={product.shop_name || shop?.name}
-                        onClose={() => setShowSizeGuide(false)}
+                        onClose={() => setActiveSizeModal(null)}
                     />
                 )
             )}

@@ -220,7 +220,7 @@ export default function SellerAIStudio() {
               <h2 className="font-semibold flex items-center gap-2" style={{ color: "#1a1a1a" }}>
                 <Image size={18} style={{ color: "#C9A84C" }} /> Product Image Generator
               </h2>
-              <p className="text-sm" style={{ color: "#9B8B7A" }}>Generate 3 professional shots: hero, detail, and lifestyle — powered by AI.</p>
+              <p className="text-sm" style={{ color: "#9B8B7A" }}>Generate 3 professional shots: front view, back view, and detail shot — powered by AI.</p>
               <DropZone file={prodFile} setFile={setProdFile} label="Upload your product image" />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
