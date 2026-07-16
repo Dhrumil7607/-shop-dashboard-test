@@ -125,6 +125,20 @@ export default function ProductDetail() {
         ? Math.round(((product.compare_at_price - product.price) / product.compare_at_price) * 100) : 0;
     const colors = product.color ? product.color.split(",").map(c => c.trim()).filter(Boolean) : [];
 
+    // ── Size UI visibility ─────────────────────────────────────────────
+    // Show sizes + AI Size Finder for ALL apparel. Only hide for clearly
+    // one-size categories (jewellery, bags, footwear, saree, fabric, etc.).
+    const _catLower = (product.category || "").toLowerCase();
+    const _noSizeRe = /jewel|accessor|bag|backpack|handbag|wallet|belt|\bcap\b|\bsock|home|d[eé]cor|fabric|dupatta|shawl|footwear|sneaker|boot|sandal|heel|flat|saree/i;
+    const _isNoSizeCat = _noSizeRe.test(_catLower);
+    const _hasSizeOptions = !!(product.size_options && product.size_options.trim());
+    const showSizeUI = _hasSizeOptions || !_isNoSizeCat;
+    const sizeList = _hasSizeOptions
+        ? product.size_options.split(",").map(s => s.trim()).filter(Boolean)
+        : (isMensCategory(product.category)
+            ? getMensSizes(product.category)
+            : ["XS", "S", "M", "L", "XL", "XXL", "3XL"]);
+
     return (
         <MarketplaceLayout>
             <motion.div
@@ -248,7 +262,7 @@ export default function ProductDetail() {
                             {/* ── Size Selection — show whenever the product has sizes OR the
                                  category needs a picker (fixes western/other categories that
                                  have seller-defined sizes but no built-in size chart). ── */}
-                            {(needsSizeSelection(product.category) || (product.size_options && product.size_options.trim())) && (
+                            {showSizeUI && (
                             <div className="mb-5">
 
                                 {/* AI Size Finder — premium two-panel modal (any sized item, not men's) */}
@@ -275,14 +289,7 @@ export default function ProductDetail() {
                                 </div>
 
                                 <div className="flex items-center gap-2 flex-wrap">
-                                    {(
-                                        // Use product's own size_options if seller set them
-                                        product.size_options
-                                            ? product.size_options.split(",").map(s => s.trim()).filter(Boolean)
-                                            : isMensCategory(product.category)
-                                                ? getMensSizes(product.category)
-                                                : getSizesForCategory(product.category)
-                                    ).map(size => (
+                                    {sizeList.map(size => (
                                         <button
                                             key={size}
                                             onClick={() => setSelSize(size)}
