@@ -24,6 +24,9 @@ function _fromApi(o) {
     address: o.customer_address || "",
     country: (o.shipping_address && o.shipping_address.country) || "",
     amount: o.total || 0,
+    myAmount: o.my_subtotal ?? o.total ?? 0,
+    earnings: o.my_earnings ?? null,
+    feeRate: o.platform_fee_rate ?? 0.12,
     status: o.status || "pending",
     date: (o.created_at || "").slice(0, 10),
     awb: o.tracking_number || o.awb || "",
@@ -168,9 +171,17 @@ export default function SellerOrders() {
                         </div>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
-                        <span className="text-base font-bold" style={{ color: "#1a1a1a" }}>
-                          ₹{o.amount.toLocaleString("en-IN")}
-                        </span>
+                        <div className="text-right">
+                          <span className="block text-base font-bold" style={{ color: "#1a1a1a" }}>
+                            ₹{o.amount.toLocaleString("en-IN")}
+                          </span>
+                          {o.earnings != null && (
+                            <span className="block text-[11px] font-semibold" style={{ color: "#2D7A3A" }}
+                              title={`After ${Math.round(o.feeRate * 100)}% platform fee`}>
+                              You earn ₹{o.earnings.toLocaleString("en-IN")}
+                            </span>
+                          )}
+                        </div>
                         {/* Status updater */}
                         <div className="relative">
                           <select value={o.status} onChange={e => updateStatus(o.id, e.target.value)}

@@ -80,6 +80,14 @@ function OrderDetail({ order, onClose, onUpdated, onShip }) {
                             <span className="text-sm font-semibold">Total</span>
                             <span className="text-sm font-bold">₹{(order.total || 0).toLocaleString("en-IN")}</span>
                         </div>
+                        <div className="flex justify-between px-1 mt-1">
+                            <span className="text-xs" style={{ color: "#9B8B7A" }}>Platform fee (12%)</span>
+                            <span className="text-xs font-semibold" style={{ color: "#8B3A3A" }}>₹{(order.platform_fee || 0).toLocaleString("en-IN")}</span>
+                        </div>
+                        <div className="flex justify-between px-1">
+                            <span className="text-xs" style={{ color: "#9B8B7A" }}>Seller earnings</span>
+                            <span className="text-xs font-semibold" style={{ color: "#2D7A3A" }}>₹{(order.seller_earnings || 0).toLocaleString("en-IN")}</span>
+                        </div>
                     </div>
 
                     {/* Customer + address */}
@@ -181,6 +189,9 @@ export default function AdminOrders() {
     });
 
     const totalRevenue = orders.filter(o => o.status !== "cancelled").reduce((s, o) => s + (o.total || 0), 0);
+    const platformFees = orders
+        .filter(o => o.payment_status === "paid" || ["confirmed", "shipped", "delivered"].includes(o.status))
+        .reduce((s, o) => s + (o.platform_fee || 0), 0);
     const delivered = orders.filter(o => o.status === "delivered").length;
     const pending = orders.filter(o => ["pending", "processing", "confirmed"].includes(o.status)).length;
 
@@ -219,6 +230,9 @@ export default function AdminOrders() {
                     <div className="bg-white rounded-xl border p-4" style={{ borderColor: "#E8E4DF" }}>
                         <p className="text-xs uppercase tracking-wider" style={{ color: "#9B8B7A" }}>Revenue</p>
                         <p className="text-2xl font-bold">₹{(totalRevenue / 100000).toFixed(1)}L</p>
+                        <p className="text-[11px] mt-0.5 font-semibold" style={{ color: "#2D7A3A" }}>
+                            Platform fees (12%): ₹{platformFees.toLocaleString("en-IN")}
+                        </p>
                     </div>
                 </div>
 

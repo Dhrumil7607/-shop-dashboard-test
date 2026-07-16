@@ -426,12 +426,13 @@ function ColorTags({ value, onChange }) {
 }
 
 // ── Profit calculator ─────────────────────────────────────────────────────────
+const PLATFORM_FEE_RATE = 0.12; // 12% marketplace commission per product
+
 function ProfitCalculator({ price, comparePrice }) {
   const p = Number(price) || 0;
   const c = Number(comparePrice) || 0;
-  const platform = Math.round(p * 0.02); // 2% platform fee estimate
+  const platform = Math.round(p * PLATFORM_FEE_RATE); // 12% platform fee
   const payout = p - platform;
-  const margin = c > 0 ? Math.round(((p - c * 0.6) / p) * 100) : null; // rough margin
 
   if (!p) return null;
   return (
@@ -439,12 +440,12 @@ function ProfitCalculator({ price, comparePrice }) {
       className="rounded-xl p-4 mt-3 space-y-2"
       style={{ backgroundColor: "rgba(201,168,76,0.06)", border: `1px solid rgba(201,168,76,0.2)` }}>
       <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.gold }}>
-        Earnings Estimate
+        Earnings Estimate (per unit)
       </p>
       <div className="grid grid-cols-3 gap-2">
         {[
           { label: "You Earn", value: `₹${payout.toLocaleString("en-IN")}`, color: "#2D7A3A" },
-          { label: "Platform Fee ~2%", value: `₹${platform.toLocaleString("en-IN")}`, color: C.muted },
+          { label: "Platform Fee 12%", value: `−₹${platform.toLocaleString("en-IN")}`, color: C.muted },
           { label: c > 0 ? `Discount ${Math.round(((c-p)/c)*100)}%` : "No Discount", value: c > 0 ? `-₹${(c-p).toLocaleString("en-IN")}` : "—", color: c > 0 ? C.maroon : C.muted },
         ].map(({ label, value, color }) => (
           <div key={label} className="text-center">

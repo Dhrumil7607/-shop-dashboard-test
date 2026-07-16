@@ -2281,9 +2281,16 @@ def seller_orders(payload: dict = Depends(require_seller)):
     shop_product_ids = {p["id"] for p in mem_get("products", shop_id=store_id)}
     orders = []
     for o in mem["orders"]:
-        has_my_product = any(i["product_id"] in shop_product_ids for i in o.get("items", []))
-        if has_my_product:
-            orders.append(_enrich_order(o))
+        my_items = [i for i in o.get("items", []) if i.get("product_id") in shop_product_ids]
+        if my_items:
+            eo = _enrich_order(o)
+            # Seller-specific totals: only THIS shop's items, after the 12% fee.
+            mybd = _fee_breakdown(my_items)
+            eo["my_subtotal"] = mybd["products_subtotal"]
+            eo["my_platform_fee"] = mybd["platform_fee"]
+            eo["my_earnings"] = mybd["seller_earnings"]
+            eo["platform_fee_rate"] = mybd["platform_fee_rate"]
+            orders.append(eo)
     return {"orders": orders}
 
 @api.get("/seller/bookings")
@@ -2299,6 +2306,12 @@ def admin_stats():
         "products": len([p for p in mem["products"] if p.get("is_active",True)]),
         "orders":   len(mem["orders"]),
         "revenue":  sum(o.get("total",0) for o in mem["orders"]),
+        "platform_fee_rate": PLATFORM_FEE_RATE,
+        "platform_fees": sum(
+            _fee_breakdown(o.get("items", []))["platform_fee"]
+            for o in mem["orders"]
+            if o.get("payment_status") == "paid" or o.get("status") in ("confirmed", "shipped", "delivered")
+        ),
         "bookings": len(mem["bookings"]),
     }
 
@@ -3045,9 +3058,36 @@ def seller_update_order(order_id: str, changes: dict, payload: dict = Depends(re
     return _enrich_order(order)
 
 # ── Enrich orders with customer contact (name/email/phone/address) ────────────
+# ── Marketplace platform fee (commission) ────────────────────────────────────
+# ShopLiveBharat charges a 12% platform fee on the product subtotal of each sale.
+# This is a commission deducted from the seller's payout — it is NOT added to the
+# customer's total (the customer pays products + shipping − discounts).
+PLATFORM_FEE_RATE = float(os.environ.get("PLATFORM_FEE_RATE", "0.12"))
+
+def _item_line_total(it: dict) -> int:
+    lt = it.get("line_total")
+    if lt is not None:
+        return int(lt)
+    return int(it.get("price", 0)) * int(it.get("quantity", 1))
+
+def _platform_fee(subtotal) -> int:
+    return int(round((subtotal or 0) * PLATFORM_FEE_RATE))
+
+def _fee_breakdown(items: list) -> dict:
+    """Product subtotal, 12% platform fee and seller earnings for a set of items."""
+    subtotal = sum(_item_line_total(it) for it in (items or []))
+    fee = _platform_fee(subtotal)
+    return {
+        "products_subtotal": subtotal,
+        "platform_fee_rate": PLATFORM_FEE_RATE,
+        "platform_fee": fee,
+        "seller_earnings": subtotal - fee,
+    }
+
 def _enrich_order(o: dict) -> dict:
     user = mem_first("users", id=o.get("user_id"))
     addr = o.get("shipping_address", {}) or {}
+    bd = _fee_breakdown(o.get("items", []))
     return {
         **o,
         "customer_name": addr.get("name") or (user or {}).get("name", ""),
@@ -3057,6 +3097,11 @@ def _enrich_order(o: dict) -> dict:
             addr.get("address"), addr.get("city"), addr.get("state"),
             addr.get("country"), addr.get("pincode") or addr.get("zip"),
         ])),
+        # Marketplace commission (computed, not persisted)
+        "products_subtotal": bd["products_subtotal"],
+        "platform_fee_rate": bd["platform_fee_rate"],
+        "platform_fee": bd["platform_fee"],
+        "seller_earnings": bd["seller_earnings"],
     }
 
 # ── Admin: seller detail (merged shop/products/orders/bookings/revenue) ────────
@@ -3081,6 +3126,10 @@ def admin_seller_detail(shop_id: str):
     delivered_revenue = sum(o.get("total", 0) for o in orders if o.get("status") == "delivered")
     total_revenue = sum(o.get("total", 0) for o in orders if o.get("status") in ("confirmed", "shipped", "delivered"))
     pending_revenue = sum(o.get("total", 0) for o in orders if o.get("status") in ("pending", "processing"))
+    # Platform commission on THIS shop's items (confirmed → delivered)
+    _earned_items = [i for o in orders if o.get("status") in ("confirmed", "shipped", "delivered")
+                     for i in o.get("items", []) if i.get("product_id") in shop_product_ids]
+    _shop_bd = _fee_breakdown(_earned_items)
     # Stats
     stats = {
         "total_orders": len(orders),
@@ -3098,6 +3147,9 @@ def admin_seller_detail(shop_id: str):
         "total_revenue": total_revenue,
         "delivered_revenue": delivered_revenue,
         "pending_revenue": pending_revenue,
+        "platform_fee_rate": PLATFORM_FEE_RATE,
+        "platform_fee": _shop_bd["platform_fee"],
+        "seller_earnings": _shop_bd["seller_earnings"],
     }
     # Credentials from application if available
     app = next((a for a in mem.get("seller_applications", []) if a.get("store_id") == shop_id), None)
