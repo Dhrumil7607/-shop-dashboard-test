@@ -109,13 +109,20 @@ api.interceptors.response.use(
         // Auto-clear stale/fake tokens on 401 so user gets redirected to login
         if (error.response?.status === 401) {
             const token = localStorage.getItem("slb_token");
-            // Only clear if it looks like a mock/fake token (not a real JWT)
-            if (token && !token.startsWith("ey")) {
+            // A 401 with a token present means it's expired/invalid — clear the
+            // dead session and send the user to the right login page so the
+            // portal doesn't just look "disconnected" (empty lists, failed uploads).
+            if (token) {
                 localStorage.removeItem("slb_token");
                 localStorage.removeItem("slb_user");
-                // Soft reload to reset auth state
-                if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
-                    window.location.href = "/login";
+                if (typeof window !== "undefined") {
+                    const p = window.location.pathname;
+                    if (!p.includes("/login")) {
+                        const dest = p.startsWith("/seller") ? "/seller/login"
+                            : p.startsWith("/admin") ? "/admin/login"
+                            : "/login";
+                        window.location.href = dest;
+                    }
                 }
             }
         }
