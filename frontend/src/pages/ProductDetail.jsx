@@ -245,12 +245,14 @@ export default function ProductDetail() {
                                 onClear={() => { setCustomMeasure(null); setSelSize(""); }}
                             />
 
-                            {/* ── Size Selection — uses product size_options if set, else category defaults ── */}
-                            {needsSizeSelection(product.category) && (
+                            {/* ── Size Selection — show whenever the product has sizes OR the
+                                 category needs a picker (fixes western/other categories that
+                                 have seller-defined sizes but no built-in size chart). ── */}
+                            {(needsSizeSelection(product.category) || (product.size_options && product.size_options.trim())) && (
                             <div className="mb-5">
 
-                                {/* WOMEN'S: Premium AI Size Finder */}
-                                {isWomensCategory(product.category) && (
+                                {/* AI Size Finder — women's & unisex sized items (not men's) */}
+                                {(isWomensCategory(product.category) || (!isMensCategory(product.category) && product.size_options && product.size_options.trim())) && (
                                     <WomensSizeFinder
                                         product={product}
                                         onSizeSelect={(size) => setSelSize(size)}
