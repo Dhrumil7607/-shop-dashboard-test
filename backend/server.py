@@ -4832,17 +4832,53 @@ async def customer_try_on(request: Request, image: UploadFile = File(...),
         raise HTTPException(422, "Couldn’t load the product image. Please try again.")
     category = prod.get("category", "outfit")
     snippet = _ai_training_prompt_snippet(product_id)
-    prompt = (
+    inputs = [(person, image.content_type), (garment, "image/jpeg")]
+
+    # Two phrasings — the model sometimes just echoes the garment reference photo,
+    # so we detect that and retry with a stronger "edit the customer" instruction.
+    prompt_a = (
         snippet +
-        f"Create a photorealistic image of the PERSON in the FIRST image wearing the exact {category} "
-        "shown in the SECOND image. Keep the person's face, hair, body shape, skin tone and pose "
-        "unchanged — replace ONLY their clothing with this garment. Preserve the garment's EXACT colours, "
-        "prints, patterns, embroidery, fabric, texture and design. Ensure a natural, realistic fit and drape. "
-        "Full-body composition, clean lighting. No text, no watermark, no logo."
+        "You are a virtual try-on engine. You are given TWO images. IMAGE 1 is a photo of a real customer — "
+        "you MUST keep this EXACT person: same face, hairstyle, skin tone, body shape and pose. "
+        f"IMAGE 2 shows a {category}; ignore any model, mannequin or watermark in IMAGE 2 and take ONLY the "
+        "garment's design, colours, print, embroidery, fabric and cut. Output ONE brand-new photorealistic "
+        "image of the SAME customer from IMAGE 1 now wearing that garment, naturally fitted and draped. "
+        "The result MUST clearly be the person from IMAGE 1 — NOT the person shown in IMAGE 2. "
+        "Do NOT return or copy IMAGE 2. Remove any watermark. Full-body, clean lighting. No text, no logo."
     )
-    result = _call_gemini_image_multi(prompt, [(person, image.content_type), (garment, "image/jpeg")])
+    prompt_b = (
+        snippet +
+        f"Edit IMAGE 1 (the customer's own photo): replace whatever clothing the customer is currently wearing "
+        f"with the {category} taken from IMAGE 2 — match its exact colours, print, embroidery, fabric and cut. "
+        "Keep the customer's face, hair, body and background from IMAGE 1 unchanged. The output must be the "
+        "edited photo of the customer from IMAGE 1 only. Never output the IMAGE 2 model/product photo. Remove any watermark."
+    )
+
+    def _too_similar_to_garment(b64_img: str) -> bool:
+        # Guard against the model echoing the product image back as the "result".
+        try:
+            from PIL import Image as _PILImage
+            import io as _io, base64 as _b64c
+            a = _PILImage.open(_io.BytesIO(_b64c.b64decode(b64_img))).convert("L").resize((32, 32))
+            b = _PILImage.open(_io.BytesIO(garment)).convert("L").resize((32, 32))
+            pa, pb = list(a.getdata()), list(b.getdata())
+            diff = sum(abs(x - y) for x, y in zip(pa, pb)) / len(pa)
+            return diff < 11  # near-identical → it just returned the garment photo
+        except Exception:
+            return False
+
+    result = None
+    for pr in (prompt_a, prompt_b):
+        img = _call_gemini_image_multi(pr, inputs)
+        if img and not _too_similar_to_garment(img):
+            result = img
+            break
     if not result:
-        raise HTTPException(422, "Our AI couldn’t create a try-on from this photo. Try a clear, well-lit full-body photo.")
+        raise HTTPException(
+            422,
+            "Our AI couldn’t place this outfit on your photo. Please use a clear, well-lit, "
+            "front-facing full-body photo with a plain background and try again.",
+        )
     # Note: the customer photo is intentionally NOT stored.
     return {"image": result, "generated": True, "ai_optimized": bool(snippet)}
 
