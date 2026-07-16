@@ -123,21 +123,23 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                     boxShadow: scrolled ? "0 1px 0 rgba(20,18,16,0.06)" : "none",
                 }}
             >
-                <div className="relative mx-auto flex h-16 max-w-[1280px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 min-w-0">
+                <div className="mx-auto flex h-16 max-w-[1280px] items-center gap-3 px-4 sm:px-6 lg:px-8 min-w-0">
 
-                    {/* Logo */}
-                    <Link to="/" className="flex flex-shrink-0 items-center group">
-                        <motion.div
-                            whileHover={{ scale: 1.04 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                            className="flex items-center"
-                        >
-                            <BrandLogo variant="mark" height={34} />
-                        </motion.div>
-                    </Link>
+                    {/* Left: Logo (flex-1 keeps the nav visually centered) */}
+                    <div className="flex flex-1 items-center min-w-0">
+                        <Link to="/" className="flex flex-shrink-0 items-center group">
+                            <motion.div
+                                whileHover={{ scale: 1.04 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                                className="flex items-center"
+                            >
+                                <BrandLogo variant="mark" height={34} />
+                            </motion.div>
+                        </Link>
+                    </div>
 
-                    {/* Center nav — truly centered, editorial uppercase (xl+) */}
-                    <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-6 xl:flex">
+                    {/* Center nav — in-flow (reserves space, never overlaps), editorial uppercase (xl+) */}
+                    <nav className="hidden flex-none items-center gap-5 xl:flex">
                         {NAV.map(link => (
                             <Link key={link.to} to={link.to}
                                 className="relative py-1 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors"
@@ -162,10 +164,10 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                         </Link>
                     </nav>
 
-                    {/* Right actions */}
-                    <div className="flex items-center gap-0.5">
-                        {/* Currency Selector */}
-                        <div className="hidden md:block mr-1">
+                    {/* Right actions (flex-1 justify-end balances against the logo) */}
+                    <div className="flex flex-1 items-center justify-end gap-0.5 min-w-0">
+                        {/* Currency Selector (xl+ so it never crowds the nav on laptops) */}
+                        <div className="hidden xl:block mr-1">
                             <CurrencySelector />
                         </div>
 
