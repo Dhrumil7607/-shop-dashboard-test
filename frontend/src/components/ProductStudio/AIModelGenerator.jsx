@@ -78,10 +78,6 @@ export default function AIModelGenerator({ primaryImage, productId, onSetCover }
 
   const generate = async (regen = false) => {
     if (!primaryImage) { toast.error("Upload a product image first."); return; }
-    if (!primaryImage.startsWith("data:image/")) {
-      toast.error("AI generation needs the uploaded image. Re-upload the product photo and try again.");
-      return;
-    }
     setLoading(true); setLatest(null); startProgress();
     try {
       const fn = regen ? aiRegenerateModel : aiGenerateModel;

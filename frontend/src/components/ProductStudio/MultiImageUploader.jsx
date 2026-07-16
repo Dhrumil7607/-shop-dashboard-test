@@ -22,7 +22,7 @@ import { Upload, X, Star, RefreshCw, GripVertical, ImageOff, Loader2 } from "luc
 import { toast } from "sonner";
 
 const ACCEPT = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-const MAX_SIZE_MB = 10;
+const MAX_SIZE_MB = 25;
 
 // Compress an image file to a JPEG/WebP data URL (max dimension + quality).
 function compressImage(file, maxDim = 1600, quality = 0.82) {

@@ -5550,13 +5550,19 @@ def _generate_ai_model(body: AIModelIn, seller_id: str, regenerate: bool = False
     if usage["limit"] is not None and usage["remaining"] <= 0:
         raise HTTPException(429, f"Monthly AI limit reached ({usage['limit']} generations). Upgrade to Premium for unlimited.")
 
-    raw, mime = _decode_data_url(body.image_data_url)
+    src = (body.image_data_url or "").strip()
+    raw, mime = _decode_data_url(src)
+    if not raw and src.startswith("http"):
+        # Accept a hosted (Cloudinary) product image — fetch its bytes.
+        raw = _fetch_url_bytes(src)
+        low = src.lower().split("?")[0]
+        mime = "image/png" if low.endswith(".png") else "image/webp" if low.endswith(".webp") else "image/jpeg"
     if not raw:
-        raise HTTPException(400, "Provide a valid product image (data URL).")
+        raise HTTPException(400, "Provide a valid product image.")
     if mime not in ("image/jpeg", "image/jpg", "image/png", "image/webp"):
-        raise HTTPException(400, "Only JPG, JPEG, PNG or WEBP images are accepted.")
-    if len(raw) > 10 * 1024 * 1024:
-        raise HTTPException(400, "Image must be under 10MB.")
+        mime = "image/jpeg"
+    if len(raw) > 25 * 1024 * 1024:
+        raise HTTPException(400, "Image must be under 25MB.")
 
     settings = {"gender": body.gender, "age": body.age, "body_type": body.body_type,
                 "skin_tone": body.skin_tone, "pose": body.pose, "background": body.background}
