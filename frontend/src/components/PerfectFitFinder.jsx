@@ -33,7 +33,7 @@ const SCAN_STEPS = [
   "Turn to your right", "Face forward again", "Hold still…",
 ];
 const FRAME_COUNT = 6;
-const FRAME_INTERVAL = 1300;
+const FRAME_INTERVAL = 1000;
 
 const CONF_COLOR = { High: "#2D7A3A", Medium: "#C8A146", Low: "#9B8B7A" };
 
@@ -53,6 +53,8 @@ export default function PerfectFitFinder({ onClose, product, sizes = [], onSizeS
   const [gender, setGender] = useState(guessGender(product?.category));
   const [consent, setConsent] = useState(false);
 
+  const [camState, setCamState] = useState("idle"); // idle | starting | ready | error
+  const [camError, setCamError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [scanIdx, setScanIdx] = useState(0);
   const [scanMsg, setScanMsg] = useState("");
@@ -72,6 +74,7 @@ export default function PerfectFitFinder({ onClose, product, sizes = [], onSizeS
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) { try { videoRef.current.srcObject = null; } catch { /* noop */ } }
     setScanning(false);
   }, []);
 
@@ -139,45 +142,82 @@ export default function PerfectFitFinder({ onClose, product, sizes = [], onSizeS
     }
   }, [heightCm, weightKg, gender, consent, isLoggedIn, runRecommend]);
 
+  // Capture one frame from the live <video> onto the canvas → JPEG blob.
   const captureFrame = useCallback(() => {
     const v = videoRef.current, c = canvasRef.current;
-    if (!v || !c || !v.videoWidth) return;
-    const w = 480, h = Math.round((v.videoHeight / v.videoWidth) * w) || 640;
+    if (!v || !c) return false;
+    const vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw || !vh) return false;
+    const w = 480, h = Math.round((vh / vw) * w) || 640;
     c.width = w; c.height = h;
-    c.getContext("2d").drawImage(v, 0, 0, w, h);
-    c.toBlob((blob) => { if (blob) framesRef.current.push(blob); }, "image/jpeg", 0.82);
+    try { c.getContext("2d").drawImage(v, 0, 0, w, h); } catch { return false; }
+    const url = c.toDataURL("image/jpeg", 0.82);
+    const bin = atob(url.split(",")[1]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    framesRef.current.push(new Blob([bytes], { type: "image/jpeg" }));
+    return true;
   }, []);
 
-  const startScan = useCallback(async () => {
-    setScanMsg("");
-    framesRef.current = [];
+  // Open the camera and show the live preview as soon as we reach the scan step.
+  const startCamera = useCallback(async () => {
+    if (streamRef.current) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCamState("error");
+      setCamError("This browser can’t access the camera. Use “Skip scan” to continue with height & weight.");
+      return;
+    }
+    setCamState("starting");
+    setCamError("");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 1280 } },
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+      const v = videoRef.current;
+      if (v) {
+        v.srcObject = stream;
+        v.onloadedmetadata = () => { v.play().catch(() => {}); setCamState("ready"); };
+        // Safari sometimes fires play readiness without onloadedmetadata.
+        v.play().then(() => setCamState("ready")).catch(() => {});
       }
-      setScanning(true);
-      setScanIdx(0);
-      let n = 0;
-      timerRef.current = setInterval(() => {
-        captureFrame();
-        n += 1;
-        setScanIdx(n);
-        if (n >= FRAME_COUNT) {
-          stopStream();
-          runAnalyze(framesRef.current);
-        }
-      }, FRAME_INTERVAL);
     } catch (err) {
-      toast.error("Camera unavailable. You can continue with height & weight instead.");
-      setScanMsg("Camera access was blocked. Use “Skip scan” to continue with height & weight.");
+      streamRef.current = null;
+      setCamState("error");
+      const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
+      setCamError(denied
+        ? "Camera permission was blocked. Allow camera access in your browser, then tap “Retry camera”. Or use “Skip scan”."
+        : "We couldn’t start your camera. Tap “Retry camera”, or use “Skip scan” to continue with height & weight.");
     }
-  }, [captureFrame, stopStream, runAnalyze]);
+  }, []);
+
+  // Auto-open the camera on entering the scan step; release it on leaving.
+  useEffect(() => {
+    if (step !== "scan") return undefined;
+    startCamera();
+    return () => { stopStream(); setCamState("idle"); };
+  }, [step, startCamera, stopStream]);
+
+  // Begin the guided capture loop (only once the preview is live).
+  const beginCapture = useCallback(() => {
+    if (camState !== "ready") { startCamera(); return; }
+    setScanMsg("");
+    framesRef.current = [];
+    setScanning(true);
+    setScanIdx(0);
+    let real = 0, ticks = 0;
+    const maxTicks = FRAME_COUNT + 6;
+    timerRef.current = setInterval(() => {
+      ticks += 1;
+      if (captureFrame()) { real += 1; setScanIdx(real); }
+      if (real >= FRAME_COUNT || ticks >= maxTicks) {
+        clearInterval(timerRef.current); timerRef.current = null;
+        stopStream();
+        runAnalyze(framesRef.current);
+      }
+    }, FRAME_INTERVAL);
+  }, [camState, captureFrame, startCamera, stopStream, runAnalyze]);
 
   const useSavedProfile = useCallback(async () => {
     if (!savedProfile?.measurements) return;
@@ -334,22 +374,36 @@ export default function PerfectFitFinder({ onClose, product, sizes = [], onSizeS
           {step === "scan" && (
             <div className="space-y-4">
               <div className="relative mx-auto overflow-hidden rounded-3xl" style={{ aspectRatio: "3/4", maxWidth: 320, background: "#1a1714" }}>
-                <video ref={videoRef} playsInline muted className="h-full w-full object-cover" style={{ transform: "scaleX(-1)" }} />
+                <video ref={videoRef} autoPlay playsInline muted
+                  className="h-full w-full object-cover"
+                  style={{ transform: "scaleX(-1)", opacity: camState === "ready" ? 1 : 0.15 }} />
                 {/* silhouette guide */}
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="rounded-[50%]" style={{ width: "56%", height: "82%", border: `2px dashed rgba(255,255,255,0.5)` }} />
                 </div>
+                {camState === "starting" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/80">
+                    <Loader2 size={26} className="animate-spin" />
+                    <p className="text-xs">Starting camera…</p>
+                  </div>
+                )}
+                {camState === "error" && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center text-white/80">
+                    <Camera size={30} />
+                    <p className="text-[11px] leading-snug">{camError}</p>
+                  </div>
+                )}
+                {camState === "ready" && !scanning && (
+                  <div className="absolute inset-x-0 bottom-0 p-3 text-center" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}>
+                    <p className="text-[11px] text-white/90">Preview live — tap start, then rotate slowly</p>
+                  </div>
+                )}
                 {scanning && (
                   <div className="absolute inset-x-0 bottom-0 p-3 text-center" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.6), transparent)" }}>
                     <p className="text-sm font-semibold text-white">{SCAN_STEPS[Math.min(scanIdx, SCAN_STEPS.length - 1)]}</p>
                     <div className="mx-auto mt-2 h-1.5 w-40 overflow-hidden rounded-full bg-white/25">
                       <div className="h-full rounded-full transition-all" style={{ width: `${(scanIdx / FRAME_COUNT) * 100}%`, background: GOLD }} />
                     </div>
-                  </div>
-                )}
-                {!scanning && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Camera size={40} style={{ color: "rgba(255,255,255,0.6)" }} />
                   </div>
                 )}
               </div>
@@ -361,11 +415,23 @@ export default function PerfectFitFinder({ onClose, product, sizes = [], onSizeS
               {scanMsg && <p className="text-xs" style={{ color: MAROON }}>{scanMsg}</p>}
               <canvas ref={canvasRef} className="hidden" />
               <div className="flex flex-col gap-2">
-                <button type="button" disabled={scanning} onClick={startScan}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-white transition disabled:opacity-60"
-                  style={{ background: `linear-gradient(135deg, ${MAROON}, #6E2D2D)` }}>
-                  {scanning ? <><Loader2 size={15} className="animate-spin" /> Scanning… hold still</> : <><Camera size={15} /> Start 360° scan</>}
-                </button>
+                {camState === "error" ? (
+                  <button type="button" onClick={startCamera}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-white"
+                    style={{ background: `linear-gradient(135deg, ${MAROON}, #6E2D2D)` }}>
+                    <RotateCcw size={15} /> Retry camera
+                  </button>
+                ) : (
+                  <button type="button" disabled={scanning || camState !== "ready"} onClick={beginCapture}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-white transition disabled:opacity-60"
+                    style={{ background: `linear-gradient(135deg, ${MAROON}, #6E2D2D)` }}>
+                    {scanning
+                      ? <><Loader2 size={15} className="animate-spin" /> Scanning… keep rotating</>
+                      : camState === "ready"
+                        ? <><Camera size={15} /> Start 360° scan</>
+                        : <><Loader2 size={15} className="animate-spin" /> Preparing camera…</>}
+                  </button>
+                )}
                 <button type="button" disabled={scanning} onClick={() => runAnalyze([])}
                   className="w-full rounded-2xl border py-3 text-xs font-semibold transition disabled:opacity-50"
                   style={{ borderColor: BORDER, color: "#6B5E52" }}>
