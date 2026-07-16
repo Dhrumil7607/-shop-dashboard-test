@@ -434,6 +434,16 @@ export async function recommendSize(payload) {
     const { data } = await api.post("/size/recommend", payload);
     return data;
 }
+export async function customerTryOn(productId, file) {
+    const fd = new FormData();
+    fd.append("image", file);
+    fd.append("product_id", productId);
+    const { data } = await api.post("/try-on", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 120000,
+    });
+    return data;
+}
 export async function getBodyProfile() {
     try {
         const { data } = await api.get("/size/profile");

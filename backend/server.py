@@ -4299,6 +4299,47 @@ def _call_gemini_image(prompt: str, image_bytes: bytes, mime_type: str) -> Optio
         logger.warning(f"[AI] Gemini image gen failed: {e}")
     return None
 
+def _call_gemini_image_multi(prompt: str, images: list) -> Optional[str]:
+    """Gemini image-editing with MULTIPLE input images (e.g. person + garment).
+    `images` is a list of (bytes, mime_type). Returns base64 image or None."""
+    import base64 as _b64_ai
+    try:
+        from google import genai
+        from google.genai import types
+    except Exception as e:
+        logger.warning(f"[AI] google-genai SDK import failed: {e}")
+        return None
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        parts = [prompt] + [types.Part.from_bytes(data=b, mime_type=m) for (b, m) in images]
+        cfg = types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"])
+        cached = _GEMINI_IMAGE_MODEL_CACHE.get("name")
+        order = ([cached] if cached else []) + [m for m in _GEMINI_IMAGE_MODELS if m != cached]
+        last_err = None
+        for model_name in order:
+            try:
+                response = client.models.generate_content(model=model_name, contents=parts, config=cfg)
+                if response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        inline = getattr(part, "inline_data", None)
+                        if inline and getattr(inline, "data", None):
+                            _GEMINI_IMAGE_MODEL_CACHE["name"] = model_name
+                            data = inline.data
+                            if isinstance(data, (bytes, bytearray)):
+                                return _b64_ai.b64encode(bytes(data)).decode()
+                            return data if isinstance(data, str) else _b64_ai.b64encode(bytes(data)).decode()
+            except Exception as inner:
+                last_err = inner
+                msg = str(inner)
+                if "404" in msg or "not found" in msg.lower() or "not supported" in msg.lower():
+                    continue
+                break
+        if last_err:
+            logger.warning(f"[AI] Gemini multi-image gen failed on all models. Last error: {last_err}")
+    except Exception as e:
+        logger.warning(f"[AI] Gemini multi-image gen error: {e}")
+    return None
+
 def _call_imagen(prompt: str) -> Optional[str]:
     """Generate a fresh image from a text prompt using Imagen 4 Fast.
     Returns base64-encoded image bytes or None. (Text-to-image: does not take
@@ -4760,6 +4801,50 @@ async def size_recommend(body: SizeRecommendIn, payload: Optional[dict] = Depend
         raise HTTPException(422, "Could not compute a recommendation for this size chart.")
     result["used_seller_chart"] = used_seller_chart
     return result
+
+
+# ── Customer AI Try-On ───────────────────────────────────────────────────────
+# The customer uploads their own photo; we dress them in this product using
+# Gemini image-editing, prioritising the seller's private 360° garment profile.
+# The uploaded photo is processed only and NEVER stored.
+@api.post("/try-on")
+@limiter.limit("6/minute")
+async def customer_try_on(request: Request, image: UploadFile = File(...),
+                          product_id: str = Form(...),
+                          payload: Optional[dict] = Depends(optional_user)):
+    if not GEMINI_API_KEY:
+        raise HTTPException(503, "AI Try-On isn’t available right now. Please try later.")
+    if image.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(400, "Please upload a JPEG, PNG or WebP photo.")
+    person = await image.read()
+    if not person:
+        raise HTTPException(400, "The photo appears to be empty.")
+    if len(person) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Photo must be under 10MB.")
+    prod = mem_first("products", id=product_id)
+    if not prod:
+        raise HTTPException(404, "Product not found.")
+    garment_url = prod.get("image_url") or (prod.get("images") or [None])[0]
+    if not garment_url:
+        raise HTTPException(422, "This product has no image to try on.")
+    garment = _fetch_url_bytes(garment_url)
+    if not garment:
+        raise HTTPException(422, "Couldn’t load the product image. Please try again.")
+    category = prod.get("category", "outfit")
+    snippet = _ai_training_prompt_snippet(product_id)
+    prompt = (
+        snippet +
+        f"Create a photorealistic image of the PERSON in the FIRST image wearing the exact {category} "
+        "shown in the SECOND image. Keep the person's face, hair, body shape, skin tone and pose "
+        "unchanged — replace ONLY their clothing with this garment. Preserve the garment's EXACT colours, "
+        "prints, patterns, embroidery, fabric, texture and design. Ensure a natural, realistic fit and drape. "
+        "Full-body composition, clean lighting. No text, no watermark, no logo."
+    )
+    result = _call_gemini_image_multi(prompt, [(person, image.content_type), (garment, "image/jpeg")])
+    if not result:
+        raise HTTPException(422, "Our AI couldn’t create a try-on from this photo. Try a clear, well-lit full-body photo.")
+    # Note: the customer photo is intentionally NOT stored.
+    return {"image": result, "generated": True, "ai_optimized": bool(snippet)}
 
 
 @api.get("/size/profile")

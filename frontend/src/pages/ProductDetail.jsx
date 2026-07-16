@@ -8,6 +8,7 @@ import ProductCard from "@/components/ProductCard";
 import SizeGuideModal from "@/components/SizeGuideModal";
 import MensSizeGuideModal from "@/components/MensSizeGuideModal";
 import PerfectFitFinder from "@/components/PerfectFitFinder";
+import CustomerTryOn from "@/components/CustomerTryOn";
 import CustomMeasurements from "@/components/CustomMeasurements";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -53,6 +54,7 @@ export default function ProductDetail() {
     const [selSize,  setSelSize]  = useState("");
     const [customMeasure, setCustomMeasure] = useState(null); // { label, measurements }
     const [activeSizeModal, setActiveSizeModal] = useState(null); // "fit" | "guide" | null
+    const [tryOnOpen, setTryOnOpen] = useState(false);
 
     // Wishlist state from context (replaces local fav state)
     const fav = product ? isWishlisted(product.id) : false;
@@ -60,6 +62,7 @@ export default function ProductDetail() {
     useEffect(() => {
         setLoading(true);
         setActiveSizeModal(null);
+        setTryOnOpen(false);
         (async () => {
             try {
                 const [prods, shops] = await Promise.all([
@@ -144,6 +147,9 @@ export default function ProductDetail() {
     const canUseFitFinder = showSizeUI
         && !isMensCategory(product.category)
         && !(product.category || "").toLowerCase().includes("kid");
+    // AI Try-On makes sense for wearables (apparel, jewellery, footwear, accessories),
+    // not for home décor, fabric or bags.
+    const canTryOn = !/home|d[eé]cor|fabric|\bbag|backpack|wallet|textile/i.test((product.category || "").toLowerCase());
 
     return (
         <MarketplaceLayout>
@@ -320,6 +326,27 @@ export default function ProductDetail() {
                             </div>
                             )}
 
+                            {/* ── AI Try-On (customer) ── */}
+                            {canTryOn && (
+                                <button
+                                    type="button"
+                                    onClick={() => setTryOnOpen(true)}
+                                    className="mb-5 flex w-full items-center justify-between gap-3 rounded-2xl border px-5 py-4 text-left transition hover:shadow-sm"
+                                    style={{ borderColor: "#ECE8E1", background: "linear-gradient(135deg, rgba(200,161,70,0.06), rgba(139,58,58,0.05))" }}
+                                >
+                                    <span className="flex items-center gap-3">
+                                        <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "linear-gradient(135deg, #C8A146, #8B3A3A)" }}>
+                                            <Sparkles size={17} className="text-white" />
+                                        </span>
+                                        <span>
+                                            <span className="block text-sm font-bold" style={{ color: "#1a1a1a" }}>AI Try-On — see it on you</span>
+                                            <span className="block text-[11px]" style={{ color: "#9B8B7A" }}>Upload your photo, our AI dresses you in this piece</span>
+                                        </span>
+                                    </span>
+                                    <ArrowRight size={16} style={{ color: "#8B3A3A" }} />
+                                </button>
+                            )}
+
                             {/* ── Low stock warning ── */}
                             {product.stock > 0 && product.stock <= 5 && (
                                 <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg text-xs font-semibold"
@@ -449,6 +476,11 @@ export default function ProductDetail() {
                     )}
                 </div>
             </motion.div>
+
+            {/* Customer AI Try-On modal — mounted only while open. */}
+            {canTryOn && tryOnOpen && (
+                <CustomerTryOn product={product} onClose={() => setTryOnOpen(false)} />
+            )}
 
             {/* Perfect Fit modal — mounted only while open, same as Size Guide. */}
             {canUseFitFinder && activeSizeModal === "fit" && (
