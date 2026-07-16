@@ -4832,47 +4832,72 @@ async def customer_try_on(request: Request, image: UploadFile = File(...),
         raise HTTPException(422, "Couldn’t load the product image. Please try again.")
     category = prod.get("category", "outfit")
     snippet = _ai_training_prompt_snippet(product_id)
-    inputs = [(person, image.content_type), (garment, "image/jpeg")]
 
-    # Two phrasings — the model sometimes just echoes the garment reference photo,
-    # so we detect that and retry with a stronger "edit the customer" instruction.
-    prompt_a = (
-        snippet +
-        "You are a virtual try-on engine. You are given TWO images. IMAGE 1 is a photo of a real customer — "
-        "you MUST keep this EXACT person: same face, hairstyle, skin tone, body shape and pose. "
-        f"IMAGE 2 shows a {category}; ignore any model, mannequin or watermark in IMAGE 2 and take ONLY the "
-        "garment's design, colours, print, embroidery, fabric and cut. Output ONE brand-new photorealistic "
-        "image of the SAME customer from IMAGE 1 now wearing that garment, naturally fitted and draped. "
-        "The result MUST clearly be the person from IMAGE 1 — NOT the person shown in IMAGE 2. "
-        "Do NOT return or copy IMAGE 2. Remove any watermark. Full-body, clean lighting. No text, no logo."
-    )
-    prompt_b = (
-        snippet +
-        f"Edit IMAGE 1 (the customer's own photo): replace whatever clothing the customer is currently wearing "
-        f"with the {category} taken from IMAGE 2 — match its exact colours, print, embroidery, fabric and cut. "
-        "Keep the customer's face, hair, body and background from IMAGE 1 unchanged. The output must be the "
-        "edited photo of the customer from IMAGE 1 only. Never output the IMAGE 2 model/product photo. Remove any watermark."
-    )
+    # Build a rich textual description of the garment. Prefer the seller's private
+    # AI profile; otherwise analyse the product image with a text model.
+    def _garment_description() -> str:
+        rec = mem_first("ai_training", product_id=product_id)
+        if rec and rec.get("status") == "ready":
+            prof = rec.get("profile") or {}
+            snip = (prof.get("prompt_snippet") or "").strip()
+            if snip:
+                return f"a {category} — {snip}"
+        try:
+            from google.genai import types as _t
+            part = _t.Part.from_bytes(data=garment, mime_type="image/jpeg")
+            txt = _call_gemini_text([
+                f"Describe ONLY the {category} garment in this product image for a virtual try-on, in one "
+                "detailed sentence: exact colours, print/pattern, embroidery/border work, neckline, sleeve "
+                "length, overall length, fabric, and any dupatta or bottoms. Ignore the model, mannequin, "
+                "background and any watermark.",
+                part,
+            ])
+            if txt:
+                return f"a {category} — " + " ".join(txt.split())[:400]
+        except Exception as e:
+            logger.warning(f"[TRYON] garment describe failed: {e}")
+        return f"the {category} shown in the product image, preserving its exact colours and design"
 
-    def _too_similar_to_garment(b64_img: str) -> bool:
-        # Guard against the model echoing the product image back as the "result".
+    desc = _garment_description()
+
+    def _nearly_identical(b64_img: str, ref: bytes, threshold: float) -> bool:
         try:
             from PIL import Image as _PILImage
             import io as _io, base64 as _b64c
             a = _PILImage.open(_io.BytesIO(_b64c.b64decode(b64_img))).convert("L").resize((32, 32))
-            b = _PILImage.open(_io.BytesIO(garment)).convert("L").resize((32, 32))
+            b = _PILImage.open(_io.BytesIO(ref)).convert("L").resize((32, 32))
             pa, pb = list(a.getdata()), list(b.getdata())
             diff = sum(abs(x - y) for x, y in zip(pa, pb)) / len(pa)
-            return diff < 11  # near-identical → it just returned the garment photo
+            return diff < threshold
         except Exception:
             return False
 
     result = None
-    for pr in (prompt_a, prompt_b):
-        img = _call_gemini_image_multi(pr, inputs)
-        if img and not _too_similar_to_garment(img):
-            result = img
-            break
+    # PRIMARY: single-image edit of the CUSTOMER photo (best identity preservation).
+    edit_prompt = (
+        snippet +
+        f"Edit this photograph of a person. Keep the SAME person — identical face, hairstyle, skin tone, "
+        f"body shape, pose and background. Replace ONLY the clothes they are wearing with {desc}. "
+        "Dress them in this outfit with a natural, realistic fit and drape. Photorealistic, high detail, "
+        "true-to-reference colours. No text, no watermark, no logo."
+    )
+    img = _call_gemini_image(edit_prompt, person, image.content_type)
+    # Accept unless the clothing clearly wasn't changed (result ≈ original person photo).
+    if img and not _nearly_identical(img, person, 6):
+        result = img
+
+    # FALLBACK: two-image transfer (person + garment) if the edit didn't produce a change.
+    if not result:
+        two_prompt = (
+            snippet +
+            "IMAGE 1 is the customer (KEEP this exact person: face, body, pose, background). "
+            f"IMAGE 2 shows {desc}. Output a NEW photo of the customer from IMAGE 1 wearing that garment. "
+            "Do NOT return IMAGE 2. Remove any watermark. Photorealistic."
+        )
+        img2 = _call_gemini_image_multi(two_prompt, [(person, image.content_type), (garment, "image/jpeg")])
+        if img2 and not _nearly_identical(img2, garment, 11):
+            result = img2
+
     if not result:
         raise HTTPException(
             422,
