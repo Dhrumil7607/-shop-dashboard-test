@@ -7,7 +7,7 @@ import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import ProductCard from "@/components/ProductCard";
 import SizeGuideModal, { getSizesForCategory, needsSizeSelection } from "@/components/SizeGuideModal";
 import MensSizeGuideModal from "@/components/MensSizeGuideModal";
-import WomensSizeFinder from "@/components/WomensSizeFinder";
+import PerfectFitFinder from "@/components/PerfectFitFinder";
 import CustomMeasurements from "@/components/CustomMeasurements";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
@@ -251,9 +251,9 @@ export default function ProductDetail() {
                             {(needsSizeSelection(product.category) || (product.size_options && product.size_options.trim())) && (
                             <div className="mb-5">
 
-                                {/* AI Size Finder — women's & unisex sized items (not men's) */}
+                                {/* AI Size Finder — premium two-panel modal (any sized item, not men's) */}
                                 {(isWomensCategory(product.category) || (!isMensCategory(product.category) && product.size_options && product.size_options.trim())) && (
-                                    <WomensSizeFinder
+                                    <PerfectFitFinder
                                         product={product}
                                         onSizeSelect={(size) => setSelSize(size)}
                                     />
