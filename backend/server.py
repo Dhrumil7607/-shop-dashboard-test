@@ -4060,6 +4060,18 @@ _PRODUCT_PROMPTS = {
         "dark_luxury": "Lifestyle context shot: this {category} displayed on a dark wooden mannequin bust or hanger in a luxury boutique setting. Moody ambient lighting, other premium items slightly visible in background. Exclusive boutique feel.",
         "outdoor_natural": "Lifestyle context shot: this {category} hanging on a clothesline or draped over a balcony railing with a beautiful Indian cityscape/landscape behind. Morning light, gentle breeze making fabric flutter slightly. Aspirational lifestyle image.",
     },
+    "front": {
+        "studio_white": "Professional e-commerce FRONT-VIEW product photograph of this {category} shown from the front on an invisible mannequin against a pure white seamless backdrop. Perfectly centered and symmetrical, soft diffused studio lighting, sharp focus. The full front of the garment is clearly visible.",
+        "lifestyle_warm": "Front-view product shot of this {category} on an invisible mannequin in a warm-toned studio, golden natural light from the left. The complete front of the garment is clearly and symmetrically visible, sharp and prominent.",
+        "dark_luxury": "Front-view product shot of this {category} on an invisible mannequin against a rich dark backdrop with a dramatic spotlight. The full front of the garment glows, elegant luxury aesthetic.",
+        "outdoor_natural": "Front-view product shot of this {category} on an invisible mannequin in a soft natural outdoor setting. The complete front of the garment is clearly visible with fresh daylight.",
+    },
+    "back": {
+        "studio_white": "Professional e-commerce BACK-VIEW product photograph of this {category} shown from BEHIND on an invisible mannequin against a pure white seamless backdrop. Show the complete BACK of the garment — back neckline, back panel, closures, and any back detailing. Perfectly centered, soft studio lighting, sharp focus. Preserve the exact colours, prints and fabric of the original.",
+        "lifestyle_warm": "Back-view product shot of this {category} photographed from behind on an invisible mannequin, warm studio lighting. Show the entire BACK of the garment and its detailing clearly, preserving the original colours and fabric.",
+        "dark_luxury": "Back-view product shot of this {category} from behind on an invisible mannequin against a dark luxury backdrop with a spotlight. The full BACK of the garment is clearly visible, preserving the original design and colours.",
+        "outdoor_natural": "Back-view product shot of this {category} from behind on an invisible mannequin in a natural outdoor setting with soft daylight. The complete BACK of the garment is clearly shown, true to the original colours.",
+    },
 }
 
 def _get_tryon_prompt(category: str, model_type: str) -> str:
@@ -4279,8 +4291,8 @@ async def ai_product_images(request: Request, image: UploadFile = File(...), sty
     content = await image.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(400, "Image must be under 10MB.")
-    # 3 completely different prompts
-    shot_types = ["hero", "detail", "lifestyle"]
+    # Front, back and a close-up detail shot
+    shot_types = ["front", "back", "detail"]
     prompts = [_get_product_prompt(st, style, category) for st in shot_types]
     try:
         import base64 as _b64_ai

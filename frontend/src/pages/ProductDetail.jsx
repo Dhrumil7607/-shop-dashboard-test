@@ -437,8 +437,8 @@ export default function ProductDetail() {
                 </div>
             </motion.div>
 
-            {/* Size Guide Modal — gender-aware */}
-            {showSizeGuide && needsSizeSelection(product.category) && (
+            {/* Size Guide Modal — gender-aware; opens for any sized apparel */}
+            {showSizeGuide && (
                 isMensCategory(product.category) ? (
                     <MensSizeGuideModal
                         category={product.category}
@@ -448,6 +448,7 @@ export default function ProductDetail() {
                 ) : (
                     <SizeGuideModal
                         category={product.category}
+                        sizes={sizeList}
                         shopName={product.shop_name || shop?.name}
                         onClose={() => setShowSizeGuide(false)}
                     />

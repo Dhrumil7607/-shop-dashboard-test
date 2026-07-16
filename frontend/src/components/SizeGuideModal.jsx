@@ -216,8 +216,9 @@ export function needsSizeSelection(category) {
 }
 
 /** The modal itself */
-export default function SizeGuideModal({ category, shopName, onClose }) {
+export default function SizeGuideModal({ category, shopName, onClose, sizes = [] }) {
     const cfg = getSizeConfig(category);
+    const availableSizes = (sizes || []).filter(s => s && s.toLowerCase() !== "free size");
 
     // Close on Escape
     useEffect(() => {
@@ -278,7 +279,38 @@ export default function SizeGuideModal({ category, shopName, onClose }) {
                 {/* Body */}
                 <div className="px-8 py-6 space-y-6">
 
-                    {!cfg ? (
+                    {!cfg && availableSizes.length > 0 ? (
+                        /* No built-in chart, but the product defines sizes — show them + a standard reference */
+                        <>
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: "#9B8B7A" }}>Available Sizes</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {availableSizes.map(s => (
+                                        <span key={s} className="px-3.5 py-2 rounded-lg border text-sm font-semibold"
+                                            style={{ borderColor: "#E8E4DF", color: "#1a1a1a" }}>{s}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="rounded-xl p-5 text-sm" style={{ backgroundColor: "#FAF9F6", color: "#6B5E52" }}>
+                                <p className="mb-3"><strong>Standard reference (inches)</strong> — measure against a well-fitting garment.</p>
+                                <SizeTable
+                                    headers={["Size", "Bust", "Waist", "Hip"]}
+                                    rows={[
+                                        ["XS", "32", "26", "35"],
+                                        ["S", "34", "28", "37"],
+                                        ["M", "36", "30", "39"],
+                                        ["L", "38", "32", "41"],
+                                        ["XL", "40", "34", "43"],
+                                        ["XXL", "42", "36", "45"],
+                                        ["3XL", "44", "38", "47"],
+                                    ].filter(r => availableSizes.some(s => s.toUpperCase() === r[0]))}
+                                />
+                            </div>
+                            <p className="text-xs" style={{ color: "#9B8B7A" }}>
+                                Tip: prefer the AI Size Finder above for a recommendation tailored to your height & weight.
+                            </p>
+                        </>
+                    ) : !cfg ? (
                         /* No specific chart — generic note */
                         <div className="rounded-xl p-5 text-sm" style={{ backgroundColor: "#FAF9F6", color: "#6B5E52" }}>
                             This item is available in <strong>Free Size</strong>. It fits most body types.

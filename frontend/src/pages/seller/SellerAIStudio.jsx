@@ -255,7 +255,7 @@ export default function SellerAIStudio() {
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {(prodResult.images || []).map((img, i) => (
-                      <ResultImage key={i} base64={img} label={["Hero Shot", "Detail Shot", "Lifestyle Shot"][i]} />
+                      <ResultImage key={i} base64={img} label={["Front View", "Back View", "Detail Shot"][i]} />
                     ))}
                   </div>
                 </div>
