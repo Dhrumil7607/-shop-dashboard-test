@@ -190,7 +190,7 @@ export default function AdminSettings() {
                                     Platform Fee (%)
                                 </label>
                                 <input
-                                    type="number" min="0" max="90" step="0.5"
+                                    type="number" min="0" max="90" step="any"
                                     name="platformFeePct"
                                     value={settings.platformFeePct}
                                     onChange={handleInputChange}
@@ -206,7 +206,7 @@ export default function AdminSettings() {
                                     Free Shipping Above (₹)
                                 </label>
                                 <input
-                                    type="number" min="0" step="100"
+                                    type="number" min="0" step="any"
                                     name="freeShippingThreshold"
                                     value={settings.freeShippingThreshold}
                                     onChange={handleInputChange}
@@ -222,7 +222,7 @@ export default function AdminSettings() {
                                     Domestic Flat Shipping (₹)
                                 </label>
                                 <input
-                                    type="number" min="0" step="10"
+                                    type="number" min="0" step="any"
                                     name="domesticFlat"
                                     value={settings.domesticFlat}
                                     onChange={handleInputChange}
@@ -254,7 +254,7 @@ export default function AdminSettings() {
                                     Video Call Rate (₹)
                                 </label>
                                 <input
-                                    type="number" min="0" step="50"
+                                    type="number" min="0" step="any"
                                     name="videoCallRate"
                                     value={settings.videoCallRate}
                                     onChange={handleInputChange}

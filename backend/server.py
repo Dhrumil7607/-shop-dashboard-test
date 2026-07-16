@@ -1418,9 +1418,13 @@ async def razorpay_booking_link(request: Request, body: BookingLinkIn, payload: 
             raise HTTPException(404, "Slot not found")
         if slot.get("status") != "available":
             raise HTTPException(409, "Slot no longer available")
-    amount_paise = int(body.amount_paise or 69900)
-    if amount_paise <= 0:
-        raise HTTPException(400, "Invalid amount")
+    # The session fee is authoritative from admin Settings (video_call_rate),
+    # never trusted from the client.
+    try:
+        _rate = int(round(float(_site_settings().get("video_call_rate") or 699)))
+    except (TypeError, ValueError):
+        _rate = 699
+    amount_paise = max(100, _rate * 100)
 
     user = mem_first("users", id=payload["sub"]) if payload else None
     booking_id = f"BK-{uuid.uuid4().hex[:6].upper()}"
@@ -2962,7 +2966,7 @@ def create_live_booking(body: LiveBookingIn, payload: dict = Depends(get_current
         "date": body.date or (slot or {}).get("date", ""),
         "time": body.time or (slot or {}).get("start_time", ""),
         "timezone": body.timezone,
-        "session_fee": body.session_fee,
+        "session_fee": int(_site_settings().get("video_call_rate") or body.session_fee or 699),
         "status": "pending", "payment_status": "paid",
         "google_meet_link": None,
         "appointmentIST": f"{body.date or (slot or {}).get('date','')}T{body.time or (slot or {}).get('start_time','')}:00.000+05:30",

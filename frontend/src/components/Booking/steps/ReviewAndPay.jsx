@@ -19,13 +19,14 @@
  * Requirements: 8.6, 8.7, 8.9, 12.7, 15.6
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Calendar, Clock, Globe, ShoppingBag, CreditCard, Store, Package } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { getPublicSettings } from "@/lib/api";
 
-const SESSION_FEE_INR = 699;
+const DEFAULT_SESSION_FEE_INR = 699;
 
 // Timezone offset map (minutes from UTC) — mirrors TimezoneSelector
 const TZ_OFFSETS = {
@@ -120,6 +121,14 @@ export default function ReviewAndPay({
 }) {
   const { isLoggedIn } = useAuth();
   const { formatPrice } = useCurrency();
+  const [sessionFee, setSessionFee] = useState(DEFAULT_SESSION_FEE_INR);
+
+  // The session fee is set by admin in Settings (video_call_rate).
+  useEffect(() => {
+    getPublicSettings().then((s) => {
+      if (s && s.video_call_rate != null) setSessionFee(Number(s.video_call_rate));
+    }).catch(() => {});
+  }, []);
 
   // Auth guard
   useEffect(() => {
@@ -148,7 +157,7 @@ export default function ReviewAndPay({
       ? istDisplay
       : formatInTimezone(appointmentDate, appointmentTime, userTzOffset, timezone);
 
-  const formattedFee = formatPrice(SESSION_FEE_INR);
+  const formattedFee = formatPrice(sessionFee);
 
   return (
     <div className="space-y-6">
@@ -290,7 +299,7 @@ export default function ReviewAndPay({
             disabled={isPaying}
             whileTap={{ scale: 0.97 }}
             className="w-full flex items-center justify-center gap-2 bg-maroon hover:bg-maroon/90 disabled:opacity-60 disabled:cursor-not-allowed text-ivory font-semibold py-3.5 rounded-xl transition-colors min-h-[44px]"
-            aria-label="Pay ₹699 and confirm booking"
+            aria-label={`Pay ${formattedFee} and confirm booking`}
           >
             {isPaying ? (
               <>
@@ -300,7 +309,7 @@ export default function ReviewAndPay({
             ) : (
               <>
                 <CreditCard size={18} />
-                Pay ₹699
+                Pay {formattedFee}
               </>
             )}
           </motion.button>
