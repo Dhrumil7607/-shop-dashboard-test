@@ -450,10 +450,9 @@ export default function ProductDetail() {
                 </div>
             </motion.div>
 
-            {/* One controlled Perfect Fit modal, mounted outside clipping containers. */}
-            {canUseFitFinder && (
+            {/* Perfect Fit modal — mounted only while open, same as Size Guide. */}
+            {canUseFitFinder && activeSizeModal === "fit" && (
                 <PerfectFitFinder
-                    open={activeSizeModal === "fit"}
                     onClose={() => setActiveSizeModal(null)}
                     product={product}
                     sizes={sizeList}
