@@ -22,7 +22,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
-import os, re, logging, uuid
+import os, re, logging, uuid, math
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Any, Dict
@@ -70,7 +70,7 @@ else:
     logger.info("[DB] Using in-memory database")
 
 # ── MongoDB-backed persistence ────────────────────────────────────────────────
-_COLLECTIONS = ["users", "shops", "products", "orders", "carts", "wishlists", "bookings", "waitlist", "slots", "seller_applications", "coupons", "returns", "email_log", "shipments", "categories", "ai_generations", "_meta"]
+_COLLECTIONS = ["users", "shops", "products", "orders", "carts", "wishlists", "bookings", "waitlist", "slots", "seller_applications", "coupons", "returns", "email_log", "shipments", "categories", "ai_generations", "size_profiles", "_meta"]
 
 def _load_from_mongo() -> Optional[Dict[str, list]]:
     """Load all collections from MongoDB."""
@@ -158,6 +158,7 @@ else:
         "bookings": [], "waitlist": [], "slots": [],
         "seller_applications": [], "coupons": [], "returns": [],
         "email_log": [], "shipments": [], "categories": [], "_meta": [],
+        "size_profiles": [],
     }
 
 ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "shoplivebharat-admin")
@@ -719,6 +720,10 @@ class ProductIn(BaseModel):
     sku: str = ""            # seller SKU reference
     images: List[str] = []   # gallery images (first = primary); image_url stays as primary
     weight_grams: int = 0    # shipping weight; 0 → derive default from category
+    # Seller size catalogue for AI size recommendation:
+    #   {"unit": "in"|"cm", "sizes": [{"size":"M","chest":38,"waist":32,"hip":40,
+    #     "shoulder":14.5,"sleeve":22,"length":40}, ...]}
+    size_chart: Optional[dict] = None
 
 class ProductOut(ProductIn):
     id: str; slug: str; shop_name: str = ""; created_at: str; updated_at: str
@@ -2751,7 +2756,7 @@ def seller_update_product(product_id: str, changes: dict, payload: dict = Depend
     prod = _owns_product(store_id, product_id)
     allowed = {"name","category","description","price","compare_at_price","image_url",
                "hover_image_url","stock","status","is_active","color","ready_to_ship",
-               "is_featured","badge","size_options","sku","images","weight_grams"}
+               "is_featured","badge","size_options","sku","images","weight_grams","size_chart"}
     patch = {k: v for k, v in changes.items() if k in allowed}
     # Keep stock/status coherent
     if patch.get("status") == "out_of_stock":
@@ -4288,6 +4293,434 @@ def _call_gemini_text(prompt_parts) -> Optional[str]:
     except Exception as e:
         logger.warning(f"[AI] Gemini text gen failed: {e}")
     return None
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SMART SIZE RECOMMENDATION
+# Customer enters height + weight and records a guided 360° scan. We estimate
+# body measurements (Gemini vision anchored on height/weight, with a
+# deterministic anthropometric fallback), compare against the seller's size
+# chart, and return a recommended size + confidence + expected fit.
+# Body-profile data is encrypted at rest; scan frames are NEVER stored and
+# NEVER shared with sellers.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _size_fernet():
+    """Derive a stable Fernet key from the server secret (no extra env needed)."""
+    try:
+        import hashlib as _hl, base64 as _b64
+        from cryptography.fernet import Fernet
+        digest = _hl.sha256((JWT_SECRET + "|" + HASH_SALT + "|bodyprofile").encode()).digest()
+        return Fernet(_b64.urlsafe_b64encode(digest))
+    except Exception as e:
+        logger.warning(f"[SIZE] Fernet unavailable ({e}); using obfuscated fallback.")
+        return None
+
+def _encrypt_profile(data: dict) -> str:
+    import json as _json, base64 as _b64
+    raw = _json.dumps(data).encode()
+    f = _size_fernet()
+    if f:
+        return "f1:" + f.encrypt(raw).decode()
+    return "b64:" + _b64.b64encode(raw).decode()
+
+def _decrypt_profile(token: str) -> Optional[dict]:
+    import json as _json, base64 as _b64
+    try:
+        if token.startswith("f1:"):
+            f = _size_fernet()
+            return _json.loads(f.decrypt(token[3:].encode()).decode()) if f else None
+        if token.startswith("b64:"):
+            return _json.loads(_b64.b64decode(token[4:]).decode())
+    except Exception as e:
+        logger.warning(f"[SIZE] decrypt error: {e}")
+    return None
+
+def _clamp(v, lo, hi):
+    return max(lo, min(hi, v))
+
+def _to_cm(value: float, unit: str) -> float:
+    return value * 2.54 if unit == "in" else value
+
+def _to_in(value: float, unit: str) -> float:
+    return value / 2.54 if unit == "cm" else value
+
+def _norm_gender(g: str) -> str:
+    g = (g or "").lower()
+    if g.startswith("m"):
+        return "male"
+    return "female"
+
+def _estimate_body_from_hw(height_cm: float, weight_kg: float, gender: str) -> dict:
+    """Deterministic anthropometric estimate (inches). Monotonic in height &
+    weight and clamped to plausible adult ranges. Used as a prior/fallback."""
+    h_m = max(1.2, height_cm / 100.0)
+    bmi = _clamp(weight_kg / (h_m * h_m), 14, 45)
+    if _norm_gender(gender) == "male":
+        chest = _clamp(34 + (bmi - 18) * 1.05, 32, 56)
+        waist = _clamp(chest - 8 + (bmi - 22) * 0.55, 26, 52)
+        hip = _clamp(chest - 2 + (bmi - 22) * 0.25, 30, 54)
+        shoulder = _clamp(16 + (height_cm - 160) * 0.03, 15, 20)
+        sleeve = _clamp(height_cm * 0.156 / 2.54, 22, 28)
+    else:
+        chest = _clamp(30 + (bmi - 17) * 0.98, 28, 52)
+        waist = _clamp(chest - 10 + (bmi - 21) * 0.45, 22, 48)
+        hip = _clamp(chest + 2 + (bmi - 21) * 0.25, 30, 56)
+        shoulder = _clamp(13 + (height_cm - 150) * 0.03, 12.5, 18)
+        sleeve = _clamp(height_cm * 0.145 / 2.54, 18, 26)
+    length = _clamp(height_cm * 0.42 / 2.54, 30, 60)
+    return {
+        "chest": round(chest, 1), "bust": round(chest, 1), "waist": round(waist, 1),
+        "hip": round(hip, 1), "shoulder": round(shoulder, 1), "sleeve": round(sleeve, 1),
+        "length": round(length, 1),
+    }
+
+def _analyze_scan_with_gemini(frames: list, height_cm: float, weight_kg: float, gender: str) -> Optional[dict]:
+    """Ask Gemini to estimate body measurements + quality flags from scan frames.
+    Returns dict with measurements (cm) and flags, or None if unavailable."""
+    if not GEMINI_API_KEY or not frames:
+        return None
+    try:
+        import json as _json
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        parts = [(
+            "You are a body-measurement estimation assistant for apparel sizing. "
+            f"The person is {height_cm:.0f} cm tall and weighs {weight_kg:.0f} kg, gender {_norm_gender(gender)}. "
+            "These frames are a guided 360-degree body scan (front, sides, back). "
+            "Estimate their body measurements in CENTIMETRES using the height as a scale reference. "
+            "Also judge scan quality. Respond with ONLY strict minified JSON, no prose, in this exact shape: "
+            '{"body_visible":true,"lighting_ok":true,"fitted_clothing":true,'
+            '"chest_cm":0,"waist_cm":0,"hip_cm":0,"shoulder_cm":0,"sleeve_cm":0,'
+            '"confidence":0.0}. confidence is 0..1.'
+        )]
+        for fb, mime in frames[:6]:
+            parts.append(types.Part.from_bytes(data=fb, mime_type=mime))
+        cached = _GEMINI_TEXT_MODEL_CACHE.get("name")
+        order = ([cached] if cached else []) + [m for m in _GEMINI_TEXT_MODELS if m != cached]
+        for model_name in order:
+            try:
+                resp = client.models.generate_content(model=model_name, contents=parts)
+                if resp and resp.text:
+                    _GEMINI_TEXT_MODEL_CACHE["name"] = model_name
+                    txt = resp.text.strip()
+                    s, e = txt.find("{"), txt.rfind("}")
+                    if s >= 0 and e > s:
+                        return _json.loads(txt[s:e + 1])
+            except Exception as inner:
+                msg = str(inner)
+                if "404" in msg or "not found" in msg.lower() or "not supported" in msg.lower():
+                    continue
+                break
+    except Exception as e:
+        logger.warning(f"[SIZE] Gemini scan error: {e}")
+    return None
+
+def _blend_measurements(est: dict, gem: Optional[dict]) -> tuple:
+    """Blend Gemini estimate (cm) with the anthropometric prior (inches).
+    Returns (measurements_in_inches, confidence_str, source)."""
+    if not gem:
+        return est, "medium", "estimate"
+    keys = [("chest", "chest_cm"), ("waist", "waist_cm"), ("hip", "hip_cm"), ("shoulder", "shoulder_cm"), ("sleeve", "sleeve_cm")]
+    out = dict(est)
+    agree = 0
+    counted = 0
+    for ik, ck in keys:
+        gv_cm = gem.get(ck)
+        if not gv_cm or gv_cm <= 0:
+            continue
+        gv_in = gv_cm / 2.54
+        prior = est.get(ik, gv_in)
+        counted += 1
+        # Reject wild hallucinations: keep within ±35% of the prior.
+        lo, hi = prior * 0.65, prior * 1.35
+        if lo <= gv_in <= hi:
+            out[ik] = round(0.6 * gv_in + 0.4 * prior, 1)
+            if abs(gv_in - prior) <= prior * 0.12:
+                agree += 1
+        else:
+            out[ik] = round(prior, 1)
+    out["bust"] = out.get("chest", out.get("bust"))
+    gem_conf = float(gem.get("confidence") or 0)
+    quality_ok = bool(gem.get("body_visible")) and bool(gem.get("lighting_ok"))
+    if quality_ok and gem_conf >= 0.7 and counted and agree >= max(1, counted - 1):
+        conf = "high"
+    elif quality_ok and counted:
+        conf = "medium"
+    else:
+        conf = "low"
+    return out, conf, "scan"
+
+# ── Backend size charts (fallback when a seller hasn't uploaded one) ──────────
+def _backend_size_type(category: str) -> str:
+    c = (category or "").lower()
+    if any(k in c for k in ["jewel", "accessor", "bag", "wallet", "belt", "cap", "sock", "home", "fabric", "dupatta", "shawl", "footwear", "saree"]):
+        return "none"
+    if any(k in c for k in ["sherwani", "kurta", "shirt", "jacket", "waistcoat", "blazer", "men"]):
+        return "men"
+    if "kid" in c:
+        return "kids"
+    return "women"
+
+def _default_size_chart(category: str) -> Optional[dict]:
+    """A reasonable garment chart (inches) per category, monotonic across sizes."""
+    t = _backend_size_type(category)
+    if t == "none":
+        return None
+    if t == "men":
+        base = [("S", 38), ("M", 40), ("L", 42), ("XL", 44), ("XXL", 46)]
+        sizes = [{"size": s, "chest": ch, "waist": ch - 6, "hip": ch - 2,
+                  "shoulder": round(16 + i * 0.4, 1), "sleeve": round(23 + i * 0.4, 1),
+                  "length": round(28 + i * 0.6, 1)} for i, (s, ch) in enumerate(base)]
+    elif t == "kids":
+        base = [("2-3Y", 22), ("4-5Y", 24), ("6-7Y", 26), ("8-9Y", 28), ("10-11Y", 30)]
+        sizes = [{"size": s, "chest": ch, "waist": ch - 2, "hip": ch + 2,
+                  "shoulder": round(10 + i * 0.4, 1), "length": round(20 + i * 3, 1)} for i, (s, ch) in enumerate(base)]
+    else:
+        base = [("XS", 32), ("S", 34), ("M", 36), ("L", 38), ("XL", 40), ("XXL", 42)]
+        sizes = [{"size": s, "bust": b, "chest": b, "waist": b - 4, "hip": b + 2,
+                  "shoulder": round(13 + i * 0.35, 1), "sleeve": round(18 + i * 0.3, 1),
+                  "length": round(38 + i * 0.5, 1)} for i, (s, b) in enumerate(base)]
+    return {"unit": "in", "sizes": sizes}
+
+def _chart_rows_in_inches(chart: dict) -> list:
+    """Normalise a chart's rows to inches, keeping only measured girths."""
+    unit = (chart.get("unit") or "in").lower()
+    rows = []
+    for row in chart.get("sizes", []):
+        label = row.get("size") or row.get("label")
+        if not label:
+            continue
+        r = {"size": str(label)}
+        for k in ("chest", "bust", "waist", "hip", "shoulder", "sleeve", "length"):
+            v = row.get(k)
+            try:
+                if v not in (None, "", 0, "0"):
+                    r[k] = _to_in(float(v), unit)
+            except (TypeError, ValueError):
+                continue
+        rows.append(r)
+    return rows
+
+def _recommend_size(measurements_in: dict, chart: dict, category: str) -> Optional[dict]:
+    """Compare body girths (inches) to a garment chart (inches) and pick a size.
+    Uses ease allowances on the primary girths (bust/chest, waist, hip)."""
+    rows = _chart_rows_in_inches(chart or {})
+    if not rows:
+        return None
+    gender = "male" if _backend_size_type(category) == "men" else "female"
+    primary = "chest" if gender == "male" else "bust"
+    # metric -> (ideal ease inches, weight)
+    metric_cfg = {primary: (2.5, 3.0), "waist": (2.0, 2.0), "hip": (2.5, 2.0)}
+    body = dict(measurements_in)
+    body.setdefault("bust", body.get("chest"))
+    body.setdefault("chest", body.get("bust"))
+
+    scored = []
+    for row in rows:
+        total_w = 0.0
+        total_score = 0.0
+        too_tight = False
+        eases = {}
+        for metric, (ideal, w) in metric_cfg.items():
+            g = row.get(metric)
+            b = body.get(metric)
+            if g is None or b is None:
+                continue
+            ease = g - b
+            eases[metric] = ease
+            # Gaussian closeness to the ideal ease; hard penalty if garment < body.
+            if ease < 0:
+                too_tight = True
+                s = max(0.0, 1.0 - (abs(ease) / 3.0)) * 0.35
+            else:
+                s = math.exp(-((ease - ideal) ** 2) / (2 * (2.2 ** 2)))
+            total_score += s * w
+            total_w += w
+        if total_w == 0:
+            continue
+        scored.append({"size": row["size"], "score": total_score / total_w,
+                       "primary_ease": eases.get(primary), "too_tight": too_tight})
+    if not scored:
+        return None
+    order = [r["size"] for r in rows]
+    scored.sort(key=lambda x: x["score"], reverse=True)
+    best = scored[0]
+    second = scored[1] if len(scored) > 1 else None
+
+    # Expected fit from ease on the primary girth.
+    pe = best.get("primary_ease")
+    if pe is None:
+        fit = "Regular"
+    elif pe < 1.5:
+        fit = "Slim"
+    elif pe <= 4.5:
+        fit = "Regular"
+    else:
+        fit = "Loose"
+
+    # Confidence from score strength + separation from the runner-up.
+    margin = (best["score"] - second["score"]) if second else 0.4
+    if best["score"] >= 0.7 and margin >= 0.12 and not best["too_tight"]:
+        confidence = "High"
+    elif best["score"] >= 0.45 and not best["too_tight"]:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+
+    # Alternative: one size up for a looser fit (or down if already loose).
+    idx = order.index(best["size"]) if best["size"] in order else -1
+    alt = None
+    if idx >= 0:
+        if fit in ("Slim", "Regular") and idx + 1 < len(order):
+            alt = {"size": order[idx + 1], "note": "for a looser fit"}
+        elif fit == "Loose" and idx - 1 >= 0:
+            alt = {"size": order[idx - 1], "note": "for a slimmer fit"}
+    return {"recommended_size": best["size"], "confidence": confidence,
+            "fit": fit, "alternative": alt, "score": round(best["score"], 3)}
+
+
+class SizeRecommendIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    product_id: Optional[str] = None
+    category: Optional[str] = None
+    measurements: Optional[dict] = None   # inches; if omitted, uses saved profile
+    size_chart: Optional[dict] = None     # optional inline chart override
+
+
+@api.post("/size/scan")
+@limiter.limit("20/minute")
+async def size_scan(request: Request,
+                    height: float = Form(...), weight: float = Form(...),
+                    height_unit: str = Form("cm"), weight_unit: str = Form("kg"),
+                    gender: str = Form("female"), consent_save: bool = Form(False),
+                    frames: List[UploadFile] = File(default=[]),
+                    payload: Optional[dict] = Depends(optional_user)):
+    """Estimate body measurements from a guided 360° scan + height/weight."""
+    if height_unit == "ft":
+        height_cm = float(height) * 30.48      # value given in decimal feet
+    elif height_unit == "in":
+        height_cm = float(height) * 2.54
+    else:
+        height_cm = float(height)
+    weight_kg = float(weight) * 0.453592 if weight_unit == "lbs" else float(weight)
+    if not (120 <= height_cm <= 220):
+        raise HTTPException(400, "Please enter a valid height.")
+    if not (25 <= weight_kg <= 250):
+        raise HTTPException(400, "Please enter a valid weight.")
+
+    # Read + lightly validate frames (never stored).
+    frame_data = []
+    dark_frames = 0
+    for f in frames[:8]:
+        if f.content_type not in ("image/jpeg", "image/png", "image/webp"):
+            continue
+        b = await f.read()
+        if not b or len(b) > 5 * 1024 * 1024:
+            continue
+        frame_data.append((b, f.content_type))
+        try:
+            from PIL import Image as _PILImage
+            import io as _io
+            im = _PILImage.open(_io.BytesIO(b)).convert("L").resize((64, 64))
+            px = list(im.getdata())
+            if (sum(px) / len(px)) < 42:
+                dark_frames += 1
+        except Exception:
+            pass
+
+    if frame_data and dark_frames >= max(2, len(frame_data) - 1):
+        return {"ok": False, "retry": True,
+                "reason": "The scan looks too dark. Please move to a well-lit area and try again."}
+
+    est = _estimate_body_from_hw(height_cm, weight_kg, gender)
+    gem = _analyze_scan_with_gemini(frame_data, height_cm, weight_kg, gender) if frame_data else None
+    if gem and (gem.get("body_visible") is False):
+        return {"ok": False, "retry": True,
+                "reason": "We couldn't see your full body. Stand 2–3 m back so your whole body is visible, then rescan."}
+    measurements, confidence, source = _blend_measurements(est, gem)
+
+    saved = False
+    if payload and consent_save:
+        profile = {
+            "measurements": measurements, "confidence": confidence, "source": source,
+            "height_cm": round(height_cm, 1), "weight_kg": round(weight_kg, 1),
+            "gender": _norm_gender(gender), "updated_at": _now(),
+        }
+        existing = mem_first("size_profiles", user_id=payload["sub"])
+        enc = _encrypt_profile(profile)
+        if existing:
+            mem_update("size_profiles", existing["id"], {"enc": enc, "updated_at": _now()})
+        else:
+            mem_insert("size_profiles", {"id": str(uuid.uuid4()), "user_id": payload["sub"],
+                                         "enc": enc, "updated_at": _now()})
+        saved = True
+
+    return {"ok": True, "measurements": measurements, "confidence": confidence,
+            "source": source, "saved": saved}
+
+
+@api.post("/size/recommend")
+async def size_recommend(body: SizeRecommendIn, payload: Optional[dict] = Depends(optional_user)):
+    """Return a size recommendation for a product given body measurements."""
+    measurements = body.measurements
+    if not measurements and payload:
+        prof = mem_first("size_profiles", user_id=payload["sub"])
+        if prof:
+            dec = _decrypt_profile(prof.get("enc", ""))
+            if dec:
+                measurements = dec.get("measurements")
+    if not measurements:
+        raise HTTPException(400, "No measurements provided. Please run a scan first.")
+
+    category = body.category or ""
+    chart = body.size_chart if (body.size_chart and body.size_chart.get("sizes")) else None
+    used_seller_chart = bool(chart)
+    if not chart and body.product_id:
+        prod = mem_first("products", id=body.product_id)
+        if prod:
+            category = category or prod.get("category", "")
+            pc = prod.get("size_chart")
+            if isinstance(pc, dict) and pc.get("sizes"):
+                chart = pc
+                used_seller_chart = True
+    if not chart:
+        chart = _default_size_chart(category)
+        used_seller_chart = False
+    if not chart:
+        raise HTTPException(400, "This product category does not use sizes.")
+
+    result = _recommend_size(measurements, chart, category)
+    if not result and used_seller_chart:
+        # Seller chart had no usable girths — fall back to the category default.
+        dc = _default_size_chart(category)
+        if dc:
+            result = _recommend_size(measurements, dc, category)
+            used_seller_chart = False
+    if not result:
+        raise HTTPException(422, "Could not compute a recommendation for this size chart.")
+    result["used_seller_chart"] = used_seller_chart
+    return result
+
+
+@api.get("/size/profile")
+async def size_get_profile(payload: dict = Depends(get_current_user)):
+    """Return the caller's saved body profile (measurements only — never images)."""
+    prof = mem_first("size_profiles", user_id=payload["sub"])
+    if not prof:
+        return {"exists": False}
+    dec = _decrypt_profile(prof.get("enc", "")) or {}
+    return {"exists": True, "profile": dec, "updated_at": prof.get("updated_at")}
+
+
+@api.delete("/size/profile")
+async def size_delete_profile(payload: dict = Depends(get_current_user)):
+    """Delete the caller's saved body profile permanently."""
+    prof = mem_first("size_profiles", user_id=payload["sub"])
+    if prof:
+        mem_delete("size_profiles", prof["id"])
+    return {"success": True, "deleted": bool(prof)}
+
 
 @api.get("/seller/ai/usage")
 async def ai_usage(payload: dict = Depends(require_seller)):

@@ -421,6 +421,32 @@ export async function fetchSellerMe() {
     return data;
 }
 
+// ── Smart Size Recommendation ───────────────────────────────────────────────
+export async function analyzeBodyScan(formData) {
+    // formData: height, weight, height_unit, weight_unit, gender, consent_save, frames[]
+    const { data } = await api.post("/size/scan", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        timeout: 90000,
+    });
+    return data;
+}
+export async function recommendSize(payload) {
+    const { data } = await api.post("/size/recommend", payload);
+    return data;
+}
+export async function getBodyProfile() {
+    try {
+        const { data } = await api.get("/size/profile");
+        return data;
+    } catch {
+        return { exists: false };
+    }
+}
+export async function deleteBodyProfile() {
+    const { data } = await api.delete("/size/profile");
+    return data;
+}
+
 export async function fetchSellerProducts() {
     try {
         const { data } = await api.get("/seller/products");

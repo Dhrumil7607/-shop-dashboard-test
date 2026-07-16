@@ -29,7 +29,7 @@ import MultiImageUploader from "@/components/ProductStudio/MultiImageUploader";
 import AIModelGenerator from "@/components/ProductStudio/AIModelGenerator";
 import { uploadImage as sellerUploadImage, adminUploadImage } from "@/lib/api";
 import {
-  ALL_CATEGORIES, getSizeType, getDefaultSizeOptions,
+  ALL_CATEGORIES, getSizeType, getDefaultSizeOptions, parseSizeOptions,
   MENS_STANDARD_SIZES, MENS_NUMERIC_SIZES, WOMENS_STANDARD_SIZES, KIDS_SIZES,
 } from "@/lib/sizeConfig";
 
@@ -54,7 +54,95 @@ const EMPTY = {
   badge: "", is_featured: false, is_active: true,
   color: "", size_options: "", sku: "",
   ready_to_ship: false, status: "live", weight_grams: "", images: [],
+  size_chart: null,
 };
+
+// Garment-measurement fields for the seller size catalogue, per body type.
+const SIZE_CHART_FIELDS = {
+  women: [["bust", "Bust"], ["waist", "Waist"], ["hip", "Hip"], ["shoulder", "Shoulder"], ["sleeve", "Sleeve"], ["length", "Length"]],
+  men: [["chest", "Chest"], ["waist", "Waist"], ["hip", "Hip"], ["shoulder", "Shoulder"], ["sleeve", "Sleeve"], ["length", "Length"]],
+  kids: [["chest", "Chest"], ["waist", "Waist"], ["hip", "Hip"], ["length", "Length"]],
+};
+
+function SizeChartEditor({ sizeType, sizeOptions, value, onChange }) {
+  const labels = parseSizeOptions(sizeOptions);
+  const type = ["men", "kids"].includes(sizeType) ? sizeType : "women";
+  const fields = SIZE_CHART_FIELDS[type];
+  const unit = value?.unit || "in";
+  const bySize = {};
+  (value?.sizes || []).forEach((r) => { if (r.size) bySize[r.size] = r; });
+
+  if (!labels.length) {
+    return (
+      <div className="flex items-center gap-2 p-3 rounded-xl" style={{ backgroundColor: C.cream }}>
+        <Info size={14} style={{ color: C.muted }} />
+        <p className="text-xs" style={{ color: C.muted }}>Select available sizes above to add garment measurements.</p>
+      </div>
+    );
+  }
+
+  const rebuild = (nextUnit, mutate) => {
+    const sizes = labels.map((l) => {
+      const row = { ...(bySize[l] || {}), size: l };
+      if (mutate) mutate(l, row);
+      return row;
+    });
+    onChange({ unit: nextUnit, sizes });
+  };
+  const update = (size, key, v) => rebuild(unit, (l, row) => {
+    if (l === size) { if (v === "") delete row[key]; else row[key] = Number(v); }
+  });
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.border }}>
+      <div className="flex items-center justify-between px-3 py-2" style={{ backgroundColor: C.surface }}>
+        <p className="text-[11px] font-semibold" style={{ color: C.stone }}>
+          Garment measurements — powers AI “Find My Perfect Size”
+        </p>
+        <div className="flex overflow-hidden rounded-lg border" style={{ borderColor: C.border }}>
+          {["in", "cm"].map((u) => (
+            <button key={u} type="button" onClick={() => rebuild(u)}
+              className="px-2.5 py-1 text-[11px] font-semibold transition"
+              style={{ background: unit === u ? C.espresso : "white", color: unit === u ? "white" : C.stone }}>
+              {u}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ backgroundColor: C.cream }}>
+              <th className="px-2 py-2 text-left font-semibold" style={{ color: C.espresso }}>Size</th>
+              {fields.map(([k, l]) => (
+                <th key={k} className="px-2 py-2 text-left font-semibold whitespace-nowrap" style={{ color: C.espresso }}>{l}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {labels.map((size) => (
+              <tr key={size} className="border-t" style={{ borderColor: C.border }}>
+                <td className="px-2 py-1.5 font-bold" style={{ color: C.espresso }}>{size}</td>
+                {fields.map(([k]) => (
+                  <td key={k} className="px-1 py-1.5">
+                    <input type="number" inputMode="decimal"
+                      value={bySize[size]?.[k] ?? ""} onChange={(e) => update(size, k, e.target.value)}
+                      placeholder="—"
+                      className="w-16 rounded-lg border px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-amber-400"
+                      style={{ borderColor: C.border }} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="px-3 py-2 text-[10px]" style={{ color: C.muted }}>
+        Enter finished garment measurements ({unit}). Leave blank if not applicable. The AI compares these to the customer’s body scan.
+      </p>
+    </div>
+  );
+}
 
 // ── Shared input ──────────────────────────────────────────────────────────────
 const Field = memo(({ label, hint, required, error, children }) => (
@@ -466,6 +554,9 @@ export default function ProductStudio({
         sku: form.sku || "",
         color: form.color || "",
         size_options: form.size_options || "",
+        size_chart: (form.size_chart && Array.isArray(form.size_chart.sizes)
+          && form.size_chart.sizes.some(r => ["bust","chest","waist","hip","shoulder","sleeve","length"].some(k => r[k] != null)))
+          ? form.size_chart : null,
         weight_grams: form.weight_grams ? Number(form.weight_grams) : 0,
         images: form.images || [],
         image_url: (form.images && form.images[0]) || form.image_url,
@@ -717,6 +808,12 @@ export default function ProductStudio({
                       <SizeChips sizeType={sizeType} category={form.category}
                         value={form.size_options} onChange={v => set("size_options", v)} />
                     </Field>
+                    {sizeType !== "none" && (
+                      <Field label="Size Chart (for AI recommendations)" hint="Optional but recommended — lets customers get an AI-matched size">
+                        <SizeChartEditor sizeType={sizeType} sizeOptions={form.size_options}
+                          value={form.size_chart} onChange={v => set("size_chart", v)} />
+                      </Field>
+                    )}
                   </>
                 ) : (
                   <div className="flex items-center gap-2 p-3 rounded-xl" style={{ backgroundColor: C.cream }}>
