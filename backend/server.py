@@ -1841,7 +1841,14 @@ _DEFAULT_SHIPPING_CONFIG = {
 }
 
 def _shipping_config() -> dict:
-    return mem.get("_shipping_config") or _DEFAULT_SHIPPING_CONFIG
+    cfg = dict(mem.get("_shipping_config") or _DEFAULT_SHIPPING_CONFIG)
+    # The admin Settings page drives the free-shipping threshold + domestic flat.
+    s = _site_settings()
+    if s.get("free_shipping_threshold") is not None:
+        cfg["free_over_inr"] = int(s["free_shipping_threshold"])
+    if s.get("domestic_flat") is not None:
+        cfg["domestic_flat"] = int(s["domestic_flat"])
+    return cfg
 
 # Default weights (grams) by category keyword — used when a product has none set.
 def _default_weight(category: str) -> int:
@@ -1937,6 +1944,57 @@ def admin_update_shipping_config(body: dict):
     mem["_shipping_config"] = cfg
     _persist_db()
     return {"success": True, "config": cfg}
+
+# ── Global site settings (store info, currency, platform fee, free shipping) ──
+@api.get("/settings/public")
+def get_public_settings():
+    """Public subset used by the storefront (checkout, product studio)."""
+    s = _site_settings()
+    return {
+        "store_name": s.get("store_name"),
+        "store_email": s.get("store_email"),
+        "store_phone": s.get("store_phone"),
+        "store_location": s.get("store_location"),
+        "default_currency": s.get("default_currency"),
+        "platform_fee_rate": s.get("platform_fee_rate"),
+        "free_shipping_threshold": s.get("free_shipping_threshold"),
+        "domestic_flat": s.get("domestic_flat"),
+        "video_call_rate": s.get("video_call_rate"),
+    }
+
+@api.get("/admin/settings", dependencies=[Depends(require_admin)])
+def admin_get_settings():
+    return _site_settings()
+
+@api.put("/admin/settings", dependencies=[Depends(require_admin)])
+def admin_update_settings(body: dict):
+    """Admin: update global site settings. Only known keys are accepted and
+    values are coerced/validated. Persists in the _meta collection."""
+    changes = {}
+    for k, v in (body or {}).items():
+        if k not in _SITE_SETTINGS_DEFAULTS:
+            continue
+        if k == "platform_fee_rate":
+            try:
+                changes[k] = max(0.0, min(0.9, float(v)))
+            except (TypeError, ValueError):
+                continue
+        elif k in ("free_shipping_threshold", "domestic_flat", "video_call_rate"):
+            try:
+                changes[k] = max(0, int(float(v)))
+            except (TypeError, ValueError):
+                continue
+        else:
+            changes[k] = str(v)[:200]
+    if not changes:
+        raise HTTPException(400, "No valid settings provided.")
+    changes["updated_at"] = _now()
+    existing = mem_first("_meta", id="site_settings")
+    if existing:
+        mem_update("_meta", "site_settings", changes)
+    else:
+        mem_insert("_meta", {"id": "site_settings", **changes})
+    return {"success": True, "settings": _site_settings()}
 
 # ── Products ──────────────────────────────────────────────────────────────────
 @api.get("/products")
@@ -3064,22 +3122,66 @@ def seller_update_order(order_id: str, changes: dict, payload: dict = Depends(re
 # customer's total (the customer pays products + shipping − discounts).
 PLATFORM_FEE_RATE = float(os.environ.get("PLATFORM_FEE_RATE", "0.12"))
 
+# ── Global site settings (admin-editable, persisted in the _meta collection) ──
+_SITE_SETTINGS_DEFAULTS = {
+    "store_name": "ShopLive Bharat",
+    "store_email": "support@shoplivebharat.com",
+    "store_phone": "+91 98765 43210",
+    "store_location": "Worldwide",
+    "default_currency": "INR",
+    "shipping_policy": "Free shipping above the threshold",
+    "platform_fee_rate": PLATFORM_FEE_RATE,   # 0..0.9 (fraction)
+    "free_shipping_threshold": 15000,         # ₹ — India free-shipping threshold
+    "domestic_flat": 499,                     # ₹ — India flat rate below threshold
+    "video_call_rate": 2999,                  # ₹ — default live session fee
+}
+
+def _site_settings() -> dict:
+    doc = mem_first("_meta", id="site_settings") or {}
+    merged = dict(_SITE_SETTINGS_DEFAULTS)
+    merged.update({k: v for k, v in doc.items() if k not in ("id", "updated_at")})
+    return merged
+
+def _platform_fee_rate() -> float:
+    try:
+        r = float(_site_settings().get("platform_fee_rate", PLATFORM_FEE_RATE))
+        return max(0.0, min(0.9, r))
+    except (TypeError, ValueError):
+        return PLATFORM_FEE_RATE
+
 def _item_line_total(it: dict) -> int:
     lt = it.get("line_total")
     if lt is not None:
         return int(lt)
     return int(it.get("price", 0)) * int(it.get("quantity", 1))
 
-def _platform_fee(subtotal) -> int:
-    return int(round((subtotal or 0) * PLATFORM_FEE_RATE))
+def _item_is_main_store(it: dict) -> bool:
+    """True if an order item belongs to the ShopLiveBharat main/admin store
+    (which is exempt from the platform fee — it's our own store)."""
+    prod = mem_first("products", id=it.get("product_id"))
+    shop_id = (prod or {}).get("shop_id")
+    if shop_id == "shop-shoplivebharat":
+        return True
+    if shop_id:
+        shop = mem_first("shops", id=shop_id)
+        if shop and shop.get("is_admin_store"):
+            return True
+    return False
 
 def _fee_breakdown(items: list) -> dict:
-    """Product subtotal, 12% platform fee and seller earnings for a set of items."""
-    subtotal = sum(_item_line_total(it) for it in (items or []))
-    fee = _platform_fee(subtotal)
+    """Product subtotal, platform fee and seller earnings for a set of items.
+    The rate is admin-configurable; the ShopLiveBharat main store pays 0%."""
+    rate = _platform_fee_rate()
+    subtotal = 0
+    fee = 0
+    for it in (items or []):
+        lt = _item_line_total(it)
+        subtotal += lt
+        if not _item_is_main_store(it):
+            fee += int(round(lt * rate))
     return {
         "products_subtotal": subtotal,
-        "platform_fee_rate": PLATFORM_FEE_RATE,
+        "platform_fee_rate": rate,
         "platform_fee": fee,
         "seller_earnings": subtotal - fee,
     }

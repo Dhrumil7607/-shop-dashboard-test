@@ -2,16 +2,19 @@ import { useState, useEffect, useCallback } from "react";
 import { Save, AlertCircle, Plus, X, GripVertical } from "lucide-react";
 import AdminLayout from "@/layouts/AdminLayout";
 import ChangePasswordCard from "@/components/ChangePasswordCard";
-import { adminChangePassword, api } from "@/lib/api";
+import { adminChangePassword, api, getAdminSettings, updateAdminSettings } from "@/lib/api";
 import { toast } from "sonner";
 
 const DEFAULT_SETTINGS = {
-    storeName: "ShopLiveBharat",
+    storeName: "ShopLive Bharat",
     storeEmail: "support@shoplivebharat.com",
     storePhone: "+91 98765 43210",
     storeLocation: "Worldwide",
-    shippingCost: "Free above ₹5,000",
-    videoCallRate: "₹1,500",
+    shippingCost: "Free shipping above the threshold",
+    platformFeePct: 12,
+    freeShippingThreshold: 15000,
+    domesticFlat: 499,
+    videoCallRate: 2999,
     videoCallCredit: "₹500 on purchase",
     maintenanceMode: false,
     enableNewsletter: true,
@@ -19,6 +22,8 @@ const DEFAULT_SETTINGS = {
     maxProductsPerPage: 12,
     defaultCurrency: "INR",
 };
+
+const ADMIN_KEY = localStorage.getItem("slb_admin_key") || "shoplivebharat-admin";
 
 export default function AdminSettings() {
     const [settings, setSettings] = useState(() => {
@@ -33,6 +38,26 @@ export default function AdminSettings() {
     });
 
     const [isSaving, setIsSaving] = useState(false);
+
+    // Load the persisted global settings from the backend on mount.
+    useEffect(() => {
+        getAdminSettings(ADMIN_KEY).then((s) => {
+            if (!s || !Object.keys(s).length) return;
+            setSettings(prev => ({
+                ...prev,
+                storeName: s.store_name ?? prev.storeName,
+                storeEmail: s.store_email ?? prev.storeEmail,
+                storePhone: s.store_phone ?? prev.storePhone,
+                storeLocation: s.store_location ?? prev.storeLocation,
+                defaultCurrency: s.default_currency ?? prev.defaultCurrency,
+                shippingCost: s.shipping_policy ?? prev.shippingCost,
+                platformFeePct: s.platform_fee_rate != null ? Math.round(s.platform_fee_rate * 100) : prev.platformFeePct,
+                freeShippingThreshold: s.free_shipping_threshold ?? prev.freeShippingThreshold,
+                domesticFlat: s.domestic_flat ?? prev.domesticFlat,
+                videoCallRate: s.video_call_rate ?? prev.videoCallRate,
+            }));
+        }).catch(() => {});
+    }, []);
 
     // Ensure maintenance mode is explicitly false on load
     useEffect(() => {
@@ -56,8 +81,22 @@ export default function AdminSettings() {
         e.preventDefault();
         setIsSaving(true);
         try {
+            // Persist the global settings to the backend (drives fees + shipping site-wide).
+            await updateAdminSettings({
+                store_name: settings.storeName,
+                store_email: settings.storeEmail,
+                store_phone: settings.storePhone,
+                store_location: settings.storeLocation,
+                default_currency: settings.defaultCurrency,
+                shipping_policy: settings.shippingCost,
+                platform_fee_rate: (Number(settings.platformFeePct) || 0) / 100,
+                free_shipping_threshold: Number(settings.freeShippingThreshold) || 0,
+                domestic_flat: Number(settings.domesticFlat) || 0,
+                video_call_rate: Number(settings.videoCallRate) || 0,
+            }, ADMIN_KEY);
+            // UI-only toggles stay local.
             localStorage.setItem("slb_admin_settings", JSON.stringify(settings));
-            toast.success("Settings saved successfully!");
+            toast.success("Settings saved and applied site-wide!");
         } catch {
             toast.error("Failed to save settings");
         } finally {
@@ -148,15 +187,50 @@ export default function AdminSettings() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <label className="block text-sm font-semibold text-espresso mb-2">
-                                    Shipping Policy
+                                    Platform Fee (%)
                                 </label>
                                 <input
-                                    type="text"
-                                    name="shippingCost"
-                                    value={settings.shippingCost}
+                                    type="number" min="0" max="90" step="0.5"
+                                    name="platformFeePct"
+                                    value={settings.platformFeePct}
                                     onChange={handleInputChange}
                                     className="w-full px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
                                 />
+                                <p className="text-xs mt-1 text-espresso/60">
+                                    Commission taken per product sold. The ShopLive Bharat main store is exempt (0%).
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-espresso mb-2">
+                                    Free Shipping Above (₹)
+                                </label>
+                                <input
+                                    type="number" min="0" step="100"
+                                    name="freeShippingThreshold"
+                                    value={settings.freeShippingThreshold}
+                                    onChange={handleInputChange}
+                                    className="w-full px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
+                                />
+                                <p className="text-xs mt-1 text-espresso/60">
+                                    India orders at or above this subtotal ship free.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-espresso mb-2">
+                                    Domestic Flat Shipping (₹)
+                                </label>
+                                <input
+                                    type="number" min="0" step="10"
+                                    name="domesticFlat"
+                                    value={settings.domesticFlat}
+                                    onChange={handleInputChange}
+                                    className="w-full px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
+                                />
+                                <p className="text-xs mt-1 text-espresso/60">
+                                    India shipping charged below the free-shipping threshold.
+                                </p>
                             </div>
 
                             <div>
@@ -177,10 +251,10 @@ export default function AdminSettings() {
 
                             <div>
                                 <label className="block text-sm font-semibold text-espresso mb-2">
-                                    Video Call Rate
+                                    Video Call Rate (₹)
                                 </label>
                                 <input
-                                    type="text"
+                                    type="number" min="0" step="50"
                                     name="videoCallRate"
                                     value={settings.videoCallRate}
                                     onChange={handleInputChange}
@@ -190,12 +264,12 @@ export default function AdminSettings() {
 
                             <div>
                                 <label className="block text-sm font-semibold text-espresso mb-2">
-                                    Video Call Purchase Credit
+                                    Shipping Policy (display text)
                                 </label>
                                 <input
                                     type="text"
-                                    name="videoCallCredit"
-                                    value={settings.videoCallCredit}
+                                    name="shippingCost"
+                                    value={settings.shippingCost}
                                     onChange={handleInputChange}
                                     className="w-full px-4 py-2 border border-line-soft rounded-lg focus:border-maroon outline-none"
                                 />

@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import MultiImageUploader from "@/components/ProductStudio/MultiImageUploader";
 import AIModelGenerator from "@/components/ProductStudio/AIModelGenerator";
 import AIVideoUploader from "@/components/ProductStudio/AIVideoUploader";
-import { uploadImage as sellerUploadImage, adminUploadImage } from "@/lib/api";
+import { uploadImage as sellerUploadImage, adminUploadImage, getPublicSettings } from "@/lib/api";
 import {
   ALL_CATEGORIES, getSizeType, getDefaultSizeOptions, parseSizeOptions,
   MENS_STANDARD_SIZES, MENS_NUMERIC_SIZES, WOMENS_STANDARD_SIZES, KIDS_SIZES,
@@ -426,13 +426,14 @@ function ColorTags({ value, onChange }) {
 }
 
 // ── Profit calculator ─────────────────────────────────────────────────────────
-const PLATFORM_FEE_RATE = 0.12; // 12% marketplace commission per product
+const PLATFORM_FEE_RATE = 0.12; // default; overridden by live site settings
 
-function ProfitCalculator({ price, comparePrice }) {
+function ProfitCalculator({ price, comparePrice, rate = PLATFORM_FEE_RATE }) {
   const p = Number(price) || 0;
   const c = Number(comparePrice) || 0;
-  const platform = Math.round(p * PLATFORM_FEE_RATE); // 12% platform fee
+  const platform = Math.round(p * rate);
   const payout = p - platform;
+  const pct = Math.round(rate * 1000) / 10; // e.g. 12 or 12.5
 
   if (!p) return null;
   return (
@@ -445,7 +446,7 @@ function ProfitCalculator({ price, comparePrice }) {
       <div className="grid grid-cols-3 gap-2">
         {[
           { label: "You Earn", value: `₹${payout.toLocaleString("en-IN")}`, color: "#2D7A3A" },
-          { label: "Platform Fee 12%", value: `−₹${platform.toLocaleString("en-IN")}`, color: C.muted },
+          { label: rate > 0 ? `Platform Fee ${pct}%` : "Platform Fee (exempt)", value: rate > 0 ? `−₹${platform.toLocaleString("en-IN")}` : "₹0", color: C.muted },
           { label: c > 0 ? `Discount ${Math.round(((c-p)/c)*100)}%` : "No Discount", value: c > 0 ? `-₹${(c-p).toLocaleString("en-IN")}` : "—", color: c > 0 ? C.maroon : C.muted },
         ].map(({ label, value, color }) => (
           <div key={label} className="text-center">
@@ -473,6 +474,14 @@ export default function ProductStudio({
   const accentColor = mode === "admin" ? C.maroon : C.rose;
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
+  const [feeRate, setFeeRate] = useState(PLATFORM_FEE_RATE);
+
+  // Live platform-fee rate from admin settings (main store is exempt).
+  useEffect(() => {
+    getPublicSettings().then((s) => {
+      if (s && s.platform_fee_rate != null) setFeeRate(Number(s.platform_fee_rate));
+    }).catch(() => {});
+  }, []);
   const [form, setForm] = useState(() => {
     if (!editProduct) return { ...EMPTY, shop_id: storeId };
     // Back-compat: derive the images[] gallery from an older single-image product.
@@ -807,7 +816,8 @@ export default function ProductStudio({
                     </div>
                   </Field>
                 </div>
-                <ProfitCalculator price={form.price} comparePrice={form.compare_at_price} />
+                <ProfitCalculator price={form.price} comparePrice={form.compare_at_price}
+                  rate={(mode === "admin" ? form.shop_id : storeId) === "shop-shoplivebharat" ? 0 : feeRate} />
               </div>
             </Section>
 

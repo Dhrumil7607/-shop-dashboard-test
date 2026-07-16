@@ -755,6 +755,22 @@ export async function updateShippingConfig(config, adminKey) {
     return data;
 }
 
+// ── Global site settings ──────────────────────────────────────────────────────
+export async function getPublicSettings() {
+    try {
+        const { data } = await api.get("/settings/public");
+        return data || {};
+    } catch { return {}; }
+}
+export async function getAdminSettings(adminKey) {
+    const { data } = await api.get("/admin/settings", adminHeaders(adminKey));
+    return data || {};
+}
+export async function updateAdminSettings(body, adminKey) {
+    const { data } = await api.put("/admin/settings", body, adminHeaders(adminKey));
+    return data;
+}
+
 // ── AI Model Generator (seller product photos) ─────────────────────────────────
 export async function aiModelUsage() {
     const { data } = await api.get("/ai/model-usage");

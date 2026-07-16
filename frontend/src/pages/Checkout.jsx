@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import SizeProfileSelector from "@/components/SizeProfile/SizeProfileSelector";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import PhoneInput from "@/components/PhoneInput";
-import { quoteShipping } from "@/lib/api";
+import { quoteShipping, getPublicSettings } from "@/lib/api";
 
 /* ─── Design tokens ─────────────────────────────────────────── */
 const GOLD = "#C8A146";
@@ -229,6 +229,8 @@ export default function Checkout() {
     // ── Backend-authoritative weight-based shipping ──────────────────────────
     const [shippingQuote, setShippingQuote] = useState(null);
     const [shippingLoading, setShippingLoading] = useState(false);
+    const [siteSettings, setSiteSettings] = useState(null);
+    useEffect(() => { getPublicSettings().then(setSiteSettings).catch(() => {}); }, []);
     useEffect(() => {
         if (!cartItems.length) { setShippingQuote(null); return; }
         let cancelled = false;
@@ -241,7 +243,9 @@ export default function Checkout() {
         return () => { cancelled = true; };
     }, [cartItems, form.country, subtotal]);
 
-    const shipping = shippingQuote ? shippingQuote.amount : (subtotal > 15000 ? 0 : 499);
+    const _freeThreshold = siteSettings?.free_shipping_threshold ?? 15000;
+    const _flat = siteSettings?.domestic_flat ?? 499;
+    const shipping = shippingQuote ? shippingQuote.amount : (subtotal >= _freeThreshold ? 0 : _flat);
     const discount = Math.round(subtotal * couponDiscount / 100);
     const total = subtotal + shipping - discount;
 
