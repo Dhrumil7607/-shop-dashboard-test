@@ -203,26 +203,25 @@ export default function HomePage() {
           <Heading eyebrow="Curated Collections" title="Trending Categories"
             sub="From the looms of Banaras to the mirrors of Kutch — explore India's finest."
             right={<Link to="/marketplace" className="hidden items-center gap-1.5 text-sm font-semibold md:inline-flex" style={{ color: INK }}>View all <ArrowUpRight size={15} /></Link>} />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:grid-rows-2" style={{ minHeight: 420 }}>
-            {categories.slice(0, 6).map((c, i) => {
-              const big = i === 0 || i === 3;
-              return (
-                <motion.div key={c.id || c.label} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }}
-                  className={big ? "md:col-span-2 md:row-span-1" : ""}>
-                  <Link to={`/marketplace?category=${encodeURIComponent(c.label)}`}
-                    className="group relative block h-full min-h-[200px] overflow-hidden rounded-2xl">
-                    <img src={catImg(c)} alt={c.label} loading="lazy"
-                      className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=600&q=60"; }} />
-                    <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(20,18,16,0.75), transparent 55%)" }} />
-                    <div className="absolute bottom-0 left-0 right-0 p-5">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {categories.slice(0, 6).map((c, i) => (
+              <motion.div key={c.id || c.label} {...rise} transition={{ ...rise.transition, delay: i * 0.05 }}>
+                <Link to={`/marketplace?category=${encodeURIComponent(c.label)}`}
+                  className="group relative block aspect-[4/5] overflow-hidden rounded-2xl">
+                  <img src={catImg(c)} alt={c.label} loading="lazy"
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1619516388835-2b60acc4049e?w=600&q=60"; }} />
+                  <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(20,18,16,0.78), transparent 58%)" }} />
+                  <div className="absolute inset-x-0 bottom-0 flex items-end justify-between p-5">
+                    <div>
                       <p className="text-[9px] uppercase tracking-[0.24em]" style={{ color: "rgba(255,255,255,0.6)" }}>Discover</p>
                       <p className="mt-0.5 font-serif text-xl text-white">{c.label}</p>
                     </div>
-                  </Link>
-                </motion.div>
-              );
-            })}
+                    <ArrowUpRight size={16} className="mb-1 flex-shrink-0 text-white transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </div>
+                </Link>
+              </motion.div>
+            ))}
           </div>
         </section>
 
