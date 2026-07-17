@@ -27,6 +27,22 @@ export default function BrandLogo({ variant = "full", height = 40, dark = false 
     </span>
   );
 
+  // Icon-only — just the logo mark, no wordmark text. Falls back to an "S" badge.
+  if (variant === "icon") {
+    if (failed) {
+      return (
+        <span className="rounded-full border-2 flex items-center justify-center"
+          style={{ borderColor: "#C9A84C", width: height, height }}>
+          <span className="font-serif font-bold" style={{ color: "#C9A84C", fontSize: height * 0.5 }}>S</span>
+        </span>
+      );
+    }
+    return (
+      <img src={MARK_SRC} alt="ShopLiveBharat" style={{ height, width: "auto", display: "block" }}
+        onError={() => setFailed(true)} />
+    );
+  }
+
   if (failed) {
     // Text-only fallback
     return (

@@ -1,15 +1,34 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import MarketplaceLayout from "@/layouts/MarketplaceLayout";
 import { useCart } from "@/contexts/CartContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { fetchProducts } from "@/lib/api";
 import { setMetaTags } from "@/lib/seo";
+
+// Determine whether a cart item is still purchasable against live product data.
+function itemStatus(item, productMap, loaded) {
+    if (!loaded) return { ok: true };
+    const p = productMap[item.id];
+    if (!p) return { ok: false, label: "No longer available" };
+    const st = p.status || "live";
+    if (["removed", "hidden", "draft"].includes(st) || p.is_active === false) {
+        return { ok: false, label: "No longer available" };
+    }
+    if (st === "out_of_stock" || (p.stock ?? 1) <= 0) {
+        return { ok: false, label: "Out of stock" };
+    }
+    return { ok: true };
+}
 
 export default function Cart() {
     const navigate = useNavigate();
-    const { cartItems, removeFromCart, updateQuantity, getTotalPrice, getTotalItems } = useCart();
+    const { cartItems, removeFromCart, updateQuantity } = useCart();
     const { formatPrice } = useCurrency();
+    const [productMap, setProductMap] = useState({});
+    const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
         // Set SEO meta tags for cart page
@@ -20,6 +39,22 @@ export default function Cart() {
             url: "https://shoplivebharat.com/cart",
             type: "website",
         });
+    }, []);
+
+    // Cross-check cart items against live products so deleted / out-of-stock
+    // items are flagged instead of silently checked out.
+    useEffect(() => {
+        let alive = true;
+        fetchProducts({ limit: 500, active_only: false })
+            .then((prods) => {
+                if (!alive) return;
+                const map = {};
+                (prods || []).forEach((p) => { map[p.id] = p; });
+                setProductMap(map);
+            })
+            .catch(() => {})
+            .finally(() => { if (alive) setLoaded(true); });
+        return () => { alive = false; };
     }, []);
 
     if (cartItems.length === 0) {
@@ -47,10 +82,22 @@ export default function Cart() {
         );
     }
 
-    const subtotal = getTotalPrice();
+    // Only purchasable items count toward totals; deleted / out-of-stock items
+    // are excluded and block checkout until removed.
+    const availableItems = cartItems.filter((it) => itemStatus(it, productMap, loaded).ok);
+    const unavailableCount = cartItems.length - availableItems.length;
+    const subtotal = availableItems.reduce((s, it) => s + it.price * it.quantity, 0);
+    const availableCount = availableItems.reduce((s, it) => s + it.quantity, 0);
     // Shipping is weight- and destination-based; it's calculated at checkout.
-    // No tax. Total shown here is products only (shipping added at checkout).
     const total = subtotal;
+
+    const goToCheckout = () => {
+        if (unavailableCount > 0) {
+            toast.error("Please remove unavailable items before checking out.");
+            return;
+        }
+        navigate("/checkout");
+    };
 
     return (
         <MarketplaceLayout>
@@ -70,33 +117,50 @@ export default function Cart() {
                     {/* Cart Items */}
                     <div className="lg:col-span-2">
                         <div className="space-y-3 md:space-y-4">
-                            {cartItems.map((item) => (
+                            {cartItems.map((item) => {
+                                const status = itemStatus(item, productMap, loaded);
+                                const unavailable = !status.ok;
+                                return (
                                 <div
                                     key={item.id}
-                                    className="flex gap-4 p-4 md:p-6 border border-line-soft rounded-lg hover:shadow-md transition"
+                                    className="flex gap-4 p-4 md:p-6 border rounded-lg transition"
+                                    style={{ borderColor: unavailable ? "rgba(192,57,43,0.35)" : "#E8E4DF", background: unavailable ? "rgba(192,57,43,0.03)" : "white" }}
                                 >
-                                    {/* Image */}
-                                    <div className="h-24 w-24 md:h-32 md:w-32 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                                    {/* Image — clickable to the product page */}
+                                    <Link
+                                        to={`/product/${item.id}`}
+                                        className="h-24 w-24 md:h-32 md:w-32 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 block"
+                                    >
                                         <img
                                             src={item.image_url}
                                             alt={item.name}
-                                            className="w-full h-full object-cover"
+                                            className="w-full h-full object-cover transition hover:opacity-90"
+                                            style={{ opacity: unavailable ? 0.5 : 1 }}
                                         />
-                                    </div>
+                                    </Link>
 
                                     {/* Details + Controls */}
                                     <div className="flex-1 min-w-0 flex flex-col justify-between gap-2">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
-                                                <h3 className="font-semibold text-sm md:text-lg text-espresso leading-snug line-clamp-2">
-                                                    {item.name}
-                                                </h3>
+                                                <Link to={`/product/${item.id}`} className="group">
+                                                    <h3 className="font-semibold text-sm md:text-lg text-espresso leading-snug line-clamp-2 group-hover:text-maroon transition">
+                                                        {item.name}
+                                                    </h3>
+                                                </Link>
                                                 <p className="text-xs md:text-sm text-espresso/60 mt-0.5">
                                                     {item.category}
                                                 </p>
+                                                {unavailable && (
+                                                    <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-bold px-2 py-0.5 rounded-full"
+                                                        style={{ backgroundColor: "rgba(192,57,43,0.1)", color: "#C0392B" }}>
+                                                        <AlertTriangle size={11} /> {status.label}
+                                                    </span>
+                                                )}
                                             </div>
                                             <button
                                                 onClick={() => removeFromCart(item.id)}
+                                                aria-label="Remove item"
                                                 className="text-maroon hover:text-maroon/70 transition p-1.5 flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
                                             >
                                                 <Trash2 size={18} />
@@ -104,9 +168,18 @@ export default function Cart() {
                                         </div>
 
                                         <div className="flex items-center justify-between gap-2">
-                                            <p className="font-serif text-base md:text-xl font-bold text-maroon">
+                                            <p className="font-serif text-base md:text-xl font-bold" style={{ color: unavailable ? "#9B8B7A" : "#8B3A3A" }}>
                                                 {formatPrice(item.price)}
                                             </p>
+                                            {unavailable ? (
+                                                <button
+                                                    onClick={() => removeFromCart(item.id)}
+                                                    className="text-xs font-semibold px-3 py-2 rounded-lg border transition hover:bg-gray-50"
+                                                    style={{ borderColor: "#E8E4DF", color: "#C0392B" }}
+                                                >
+                                                    Remove
+                                                </button>
+                                            ) : (
                                             <div className="flex items-center border border-line-soft rounded-lg">
                                                 <button
                                                     onClick={() => updateQuantity(item.id, item.quantity - 1)}
@@ -124,10 +197,12 @@ export default function Cart() {
                                                     <Plus size={16} />
                                                 </button>
                                             </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Continue Shopping */}
@@ -147,7 +222,7 @@ export default function Cart() {
 
                             <div className="space-y-4 mb-6 pb-6 border-b border-line-soft">
                                 <div className="flex justify-between text-espresso">
-                                    <span>Subtotal ({getTotalItems()} items)</span>
+                                    <span>Subtotal ({availableCount} items)</span>
                                     <span className="font-medium">
                                         {formatPrice(subtotal)}
                                     </span>
@@ -159,6 +234,13 @@ export default function Cart() {
                                     </span>
                                 </div>
                             </div>
+
+                            {unavailableCount > 0 && (
+                                <div className="flex items-start gap-2 mb-5 rounded-lg p-3 text-xs" style={{ backgroundColor: "rgba(192,57,43,0.08)", color: "#C0392B" }}>
+                                    <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                                    <span>{unavailableCount} item{unavailableCount > 1 ? "s are" : " is"} no longer available. Remove {unavailableCount > 1 ? "them" : "it"} to continue.</span>
+                                </div>
+                            )}
 
                             <div className="flex justify-between mb-6">
                                 <span className="font-serif text-xl text-espresso">Total</span>
@@ -172,9 +254,10 @@ export default function Cart() {
                             </p>
 
                             <button
-                                onClick={() => navigate("/checkout")}
+                                onClick={goToCheckout}
+                                disabled={unavailableCount > 0 || availableItems.length === 0}
                                 aria-label="Proceed to checkout"
-                                className="w-full py-3 bg-espresso text-ivory rounded-lg font-medium hover:bg-opacity-90 transition mb-3"
+                                className="w-full py-3 bg-espresso text-ivory rounded-lg font-medium hover:bg-opacity-90 transition mb-3 disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 Proceed to Checkout
                             </button>
