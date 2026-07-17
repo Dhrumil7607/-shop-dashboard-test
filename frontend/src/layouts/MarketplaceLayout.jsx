@@ -123,16 +123,16 @@ export default function MarketplaceLayout({ children, hideFooter = false }) {
                     boxShadow: scrolled ? "0 2px 20px rgba(44,36,27,0.06), 0 1px 0 rgba(255,255,255,0.8)" : "none",
                 }}
             >
-                <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap min-w-0">
+                <div className="max-w-7xl mx-auto px-6 py-2 flex items-center justify-between gap-4 flex-wrap min-w-0">
 
     {/* Logo */}
-                    <Link to="/" className="flex items-center gap-2.5 flex-shrink-0 min-w-0 group">
+                    <Link to="/" className="flex items-center flex-shrink-0 min-w-0 group -my-1">
                         <motion.div
                             whileHover={{ scale: 1.04 }}
                             transition={{ type: "spring", stiffness: 400, damping: 20 }}
                             className="flex items-center"
                         >
-                            <BrandLogo variant="icon" className="h-10 sm:h-12 md:h-[52px] lg:h-14 w-auto" />
+                            <BrandLogo variant="icon" className="h-12 sm:h-14 md:h-[60px] lg:h-16 w-auto" />
                         </motion.div>
                     </Link>
 
