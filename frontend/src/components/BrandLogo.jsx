@@ -15,7 +15,7 @@ import { useState } from "react";
 
 const BASE = process.env.PUBLIC_URL || "";
 const FULL_SRC = `${BASE}/brand-logo.png`;
-const MARK_SRC = `${BASE}/brand-mark.png?v=2`; // v2 = icon-only (wordmark text removed)
+const MARK_SRC = `${BASE}/brand-mark.png?v=3`; // v3 = icon-only, tightly cropped
 
 export default function BrandLogo({ variant = "full", height = 40, dark = false }) {
   const [failed, setFailed] = useState(false);
