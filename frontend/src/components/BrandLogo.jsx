@@ -15,9 +15,9 @@ import { useState } from "react";
 
 const BASE = process.env.PUBLIC_URL || "";
 const FULL_SRC = `${BASE}/brand-logo.png`;
-const MARK_SRC = `${BASE}/brand-mark.png?v=3`; // v3 = icon-only, tightly cropped
+const MARK_SRC = `${BASE}/brand-mark.png?v=4`; // v4 = high-res icon, bg removed, tightly cropped
 
-export default function BrandLogo({ variant = "full", height = 40, dark = false }) {
+export default function BrandLogo({ variant = "full", height = 40, dark = false, className = "" }) {
   const [failed, setFailed] = useState(false);
 
   const Wordmark = () => (
@@ -28,6 +28,8 @@ export default function BrandLogo({ variant = "full", height = 40, dark = false 
   );
 
   // Icon-only — just the logo mark, no wordmark text. Falls back to an "S" badge.
+  // When `className` is passed, responsive Tailwind height classes control size
+  // (retina-crisp because the source PNG is high-resolution).
   if (variant === "icon") {
     if (failed) {
       return (
@@ -38,7 +40,9 @@ export default function BrandLogo({ variant = "full", height = 40, dark = false 
       );
     }
     return (
-      <img src={MARK_SRC} alt="ShopLiveBharat" style={{ height, width: "auto", display: "block" }}
+      <img src={MARK_SRC} alt="ShopLiveBharat" decoding="async"
+        className={className || undefined}
+        style={className ? { display: "block" } : { height, width: "auto", display: "block" }}
         onError={() => setFailed(true)} />
     );
   }
