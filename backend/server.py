@@ -2400,6 +2400,52 @@ def admin_reset_user_password(user_id: str, body: dict):
 def admin_orders():
     return {"orders": [_enrich_order(o) for o in mem["orders"]]}
 
+@api.post("/admin/factory-reset", dependencies=[Depends(require_admin)])
+def admin_factory_reset(body: dict):
+    """DESTRUCTIVE: wipe all marketplace data for go-live. Keeps ONLY:
+      • admin accounts (admin panel login preserved),
+      • the ShopLiveBharat main store + its seller account (same credentials),
+      • categories and site settings (config).
+    Everything else (products, orders, carts, wishlists, bookings, slots,
+    applications, coupons, returns, emails, shipments, AI data, other sellers &
+    customers) is permanently erased. Requires confirm == 'ERASE-ALL-DATA'."""
+    if (body or {}).get("confirm") != "ERASE-ALL-DATA":
+        raise HTTPException(400, "Confirmation required: send {\"confirm\": \"ERASE-ALL-DATA\"}.")
+
+    # Preserve admin accounts + the main store seller.
+    mem["users"] = [
+        u for u in mem.get("users", [])
+        if u.get("role") == "admin"
+        or u.get("id") == "seller-main-store"
+        or u.get("store_id") == "shop-shoplivebharat"
+    ]
+    # Preserve only the ShopLiveBharat main/admin store.
+    mem["shops"] = [
+        s for s in mem.get("shops", [])
+        if s.get("id") == "shop-shoplivebharat" or s.get("is_admin_store")
+    ]
+    # Erase all transactional / seller / customer data.
+    for coll in ("products", "orders", "carts", "wishlists", "bookings", "waitlist",
+                 "slots", "seller_applications", "coupons", "returns", "email_log",
+                 "shipments", "ai_generations", "size_profiles", "ai_training",
+                 "payment_alerts"):
+        mem[coll] = []
+    mem["image_store"] = {}
+
+    # Guarantee the main store + its seller exist with their credentials intact.
+    _ensure_main_store()
+    _persist_db()
+
+    return {
+        "success": True,
+        "message": "Marketplace reset complete. Only the ShopLiveBharat main store and admin accounts remain.",
+        "admins_kept": len([u for u in mem["users"] if u.get("role") == "admin"]),
+        "users_kept": len(mem["users"]),
+        "shops_kept": len(mem["shops"]),
+        "products": len(mem["products"]),
+        "orders": len(mem["orders"]),
+    }
+
 @api.get("/admin/bookings", dependencies=[Depends(require_admin)])
 def admin_bookings():
     return {"bookings": mem["bookings"]}
